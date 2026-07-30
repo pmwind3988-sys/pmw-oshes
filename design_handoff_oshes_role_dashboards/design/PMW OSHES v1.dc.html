@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="styles.css">
+<style>
+@keyframes slideIn { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+body { margin: 0; }
+a { color: var(--color-accent-700); }
+a:hover { color: var(--color-accent); }
+</style>
+</helmet>
+
+<div style="display:flex; min-height:100vh; background:var(--color-bg); color:var(--color-text); font-family:var(--font-body)">
+
+  <nav style="width:214px; flex:none; border-right:1px solid var(--color-divider); display:flex; flex-direction:column; padding:var(--space-4) 0">
+    <div style="padding:0 var(--space-4) var(--space-6)">
+      <div style="font-family:var(--font-heading); font-weight:600; font-size:19px; letter-spacing:-0.01em">PMW OSHES</div>
+      <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Safety · Health · Environment · Security</div>
+    </div>
+    <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+      <button onClick="{{ item.go }}" style="display:flex; align-items:center; gap:10px; width:100%; background:transparent; border:0; padding:9px var(--space-4); font-family:var(--font-heading); font-weight:600; font-size:15px; text-align:left; cursor:pointer; color:{{ item.color }}" style-hover="background:color-mix(in srgb, var(--color-text) 5%, transparent)">
+        <i style="width:2px; height:16px; flex:none; background:{{ item.bar }}"></i>
+        <span style="flex:1">{{ item.label }}</span>
+        <span style="font-size:11px; font-family:var(--font-body); color:var(--color-neutral-600)">{{ item.count }}</span>
+      </button>
+    </sc-for>
+    <div style="margin-top:auto; padding:var(--space-4); border-top:1px solid var(--color-divider); display:flex; flex-direction:column; gap:2px">
+      <div style="font-size:13px; font-weight:500">Nurul Aziz</div>
+      <div style="font-size:11px; color:var(--color-neutral-600)">Safety Officer · Port Klang</div>
+    </div>
+  </nav>
+
+  <main style="flex:1; min-width:0; padding:var(--space-6) var(--space-8) var(--space-8); max-width:1360px">
+
+    <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <header style="display:flex; align-items:flex-end; gap:var(--space-6); margin-bottom:var(--space-6)">
+          <div style="flex:1">
+            <h1 style="font-size:34px; margin:0">Today</h1>
+            <div style="font-size:13px; color:var(--color-neutral-600)">Thursday 30 July · 47 submissions received · {{ breachCount }} approvals past SLA</div>
+          </div>
+          <button onClick="{{ exportCsv }}" class="btn btn-secondary" style="white-space:nowrap; flex:none">Export view to CSV</button>
+        </header>
+
+        <div style="display:flex; flex-direction:column; gap:var(--space-8)">
+
+          <section class="card blueprint" style="order:{{ sevOrder }}; padding:var(--space-4) var(--space-6) var(--space-6); gap:var(--space-4)">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display:flex; align-items:baseline; gap:10px">
+              <h2 style="font-size:22px; margin:0">High severity · last 24 hours</h2>
+              <span style="font-size:12px; color:var(--color-neutral-600)">paged to duty officer on receipt</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:var(--space-4)">
+              <sc-for list="{{ severe }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.open }}" style="text-align:left; background:transparent; border:1px solid var(--color-divider); padding:var(--space-3); display:flex; flex-direction:column; gap:8px; cursor:pointer; font:inherit; color:inherit" style-hover="background:color-mix(in srgb, var(--color-accent) 7%, transparent)">
+                  <div style="display:flex; align-items:center; gap:8px">
+                    <span style="display:inline-flex; align-items:center; white-space:nowrap; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; padding:3px 8px; color:{{ s.sevFg }}; background:{{ s.sevBg }}; border:1px solid {{ s.sevBd }}">{{ s.severity }}</span>
+                    <span style="font-size:11px; color:var(--color-neutral-600); margin-left:auto">{{ s.ago }}</span>
+                  </div>
+                  <div style="font-family:var(--font-heading); font-weight:600; font-size:17px; line-height:1.2">{{ s.summary }}</div>
+                  <div style="font-size:12px; color:var(--color-neutral-700)">{{ s.where }}</div>
+                  <div style="font-size:11px; color:var(--color-neutral-600); border-top:1px solid var(--color-divider); padding-top:7px; display:flex; gap:8px">
+                    <span>{{ s.ref }}</span><span>·</span><span>{{ s.stage }}</span>
+                  </div>
+                </button>
+              </sc-for>
+            </div>
+          </section>
+
+          <section class="card blueprint" style="order:{{ stuckOrder }}; padding:var(--space-4) var(--space-6) var(--space-6); gap:var(--space-4)">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display:flex; align-items:baseline; gap:10px">
+              <h2 style="font-size:22px; margin:0">Stuck approvals</h2>
+              <span style="font-size:12px; color:var(--color-neutral-600)">oldest first · age measured on the current layer only</span>
+              <span style="margin-left:auto; font-size:12px; color:var(--color-neutral-600)">{{ stuckLabel }}</span>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:118px">Reference</th>
+                  <th>Form</th>
+                  <th style="width:180px">Waiting on</th>
+                  <th style="width:96px">Layer</th>
+                  <th style="width:130px">Age on layer</th>
+                  <th style="width:170px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ stuck }}" as="r" hint-placeholder-count="5">
+                  <tr>
+                    <td><button onClick="{{ r.open }}" class="btn btn-ghost" style="padding:0; font-size:13px; font-family:var(--font-body)">{{ r.ref }}</button></td>
+                    <td>{{ r.form }}<div style="font-size:11px; color:var(--color-neutral-600)">{{ r.subject }}</div></td>
+                    <td>{{ r.approver }}<div style="font-size:11px; color:var(--color-neutral-600)">{{ r.approverRole }}</div></td>
+                    <td style="font-size:13px">{{ r.layer }}</td>
+                    <td>
+                      <div style="font-weight:500">{{ r.age }}</div>
+                      <div style="font-size:11px; color:{{ r.slaFg }}">{{ r.slaNote }}</div>
+                    </td>
+                    <td style="text-align:right; white-space:nowrap">
+                      <span style="display:inline-flex; gap:6px">
+                        <button onClick="{{ r.nudge }}" class="btn btn-secondary" style="font-size:12px; padding:4px 9px">Nudge</button>
+                        <button onClick="{{ r.reassign }}" class="btn btn-secondary" style="font-size:12px; padding:4px 9px">Reassign</button>
+                      </span>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </section>
+
+          <div style="order:3; display:grid; grid-template-columns:1fr 1fr; gap:var(--space-8)">
+            <section class="card blueprint" style="padding:var(--space-4) var(--space-6) var(--space-6); gap:var(--space-3)">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="display:flex; align-items:baseline; gap:10px">
+                <h2 style="font-size:22px; margin:0">Awaiting your signature</h2>
+                <span style="margin-left:auto; font-family:var(--font-heading); font-size:22px">{{ mineCount }}</span>
+              </div>
+              <sc-for list="{{ mine }}" as="m" hint-placeholder-count="4">
+                <div style="display:flex; align-items:center; gap:var(--space-3); padding:10px 0; border-top:1px solid color-mix(in srgb, var(--color-text) 8%, transparent)">
+                  <div style="flex:1; min-width:0">
+                    <div style="font-size:14px; font-weight:500">{{ m.subject }}</div>
+                    <div style="font-size:11px; color:var(--color-neutral-600)">{{ m.ref }} · {{ m.form }} · {{ m.layer }} · waiting {{ m.age }}</div>
+                  </div>
+                  <button onClick="{{ m.open }}" class="btn btn-primary" style="font-size:12px; padding:5px 11px">Review</button>
+                </div>
+              </sc-for>
+            </section>
+
+            <section class="card blueprint" style="padding:var(--space-4) var(--space-6) var(--space-6); gap:var(--space-3)">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <sc-if value="{{ showBottlenecks }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-size:22px; margin:0 0 4px">Where work is sitting</h2>
+                  <div style="font-size:12px; color:var(--color-neutral-600); margin-bottom:var(--space-3)">approvers ranked by median time on layer</div>
+                  <sc-for list="{{ bottlenecks }}" as="b" hint-placeholder-count="3">
+                    <div style="padding:10px 0; border-top:1px solid color-mix(in srgb, var(--color-text) 8%, transparent); display:flex; flex-direction:column; gap:6px">
+                      <div style="display:flex; align-items:baseline; gap:8px">
+                        <span style="font-size:14px; font-weight:500">{{ b.name }}</span>
+                        <span style="font-size:11px; color:var(--color-neutral-600)">{{ b.role }}</span>
+                        <span style="margin-left:auto; font-family:var(--font-heading); font-size:15px">{{ b.median }}</span>
+                      </div>
+                      <div style="height:6px; background:color-mix(in srgb, var(--color-text) 8%, transparent)">
+                        <div style="height:6px; width:{{ b.bar }}; background:var(--color-accent)"></div>
+                      </div>
+                      <div style="font-size:11px; color:var(--color-neutral-600)">{{ b.open }} open · {{ b.breached }} past SLA</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </section>
+          </div>
+
+          <section class="card blueprint" style="order:4; padding:var(--space-4) var(--space-6) var(--space-6); gap:var(--space-4)">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display:flex; align-items:baseline; gap:10px">
+              <h2 style="font-size:22px; margin:0">Inbound today, by form</h2>
+              <span style="font-size:12px; color:var(--color-neutral-600)">form types are configured in the catalogue — this list follows it</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:2px var(--space-8)">
+              <sc-for list="{{ inbound }}" as="f" hint-placeholder-count="10">
+                <div style="display:flex; align-items:center; gap:var(--space-3); padding:6px 0">
+                  <span style="width:200px; flex:none; font-size:13px">{{ f.name }}</span>
+                  <span style="flex:1; height:10px; background:color-mix(in srgb, var(--color-text) 7%, transparent)">
+                    <span style="display:block; height:10px; width:{{ f.bar }}; background:{{ f.fill }}"></span>
+                  </span>
+                  <span style="width:26px; text-align:right; font-family:var(--font-heading); font-size:15px">{{ f.today }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSubs }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <header style="margin-bottom:var(--space-6)">
+          <h1 style="font-size:34px; margin:0">Submissions</h1>
+          <div style="font-size:13px; color:var(--color-neutral-600)">every form instance, whichever door it came through</div>
+        </header>
+        <div style="display:flex; align-items:flex-end; gap:var(--space-4); margin-bottom:var(--space-4); flex-wrap:wrap">
+          <div class="field" style="width:220px">
+            <label>Form type</label>
+            <select class="input" value="{{ filterForm }}" onChange="{{ setFilterForm }}">
+              <option value="all">All form types</option>
+              <sc-for list="{{ catalogue }}" as="c" hint-placeholder-count="6">
+                <option value="{{ c.name }}">{{ c.name }}</option>
+              </sc-for>
+            </select>
+          </div>
+          <div class="field" style="width:190px">
+            <label>Status</label>
+            <select class="input" value="{{ filterStatus }}" onChange="{{ setFilterStatus }}">
+              <option value="all">Any status</option>
+              <option value="In approval">In approval</option>
+              <option value="Past SLA">Past SLA</option>
+              <option value="Approved">Approved</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1; min-width:200px">
+            <label>Search reference or subject</label>
+            <input class="input" placeholder="INC-2607…" value="{{ query }}" onChange="{{ setQuery }}">
+          </div>
+          <button onClick="{{ exportCsv }}" class="btn btn-secondary" style="white-space:nowrap; flex:none">Export {{ rowCount }} rows to CSV</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:120px">Reference</th>
+              <th>Form / subject</th>
+              <th style="width:150px">Source</th>
+              <th style="width:170px">Stage</th>
+              <th style="width:140px">Status</th>
+              <th style="width:110px">Filed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+              <tr onClick="{{ r.open }}" style="cursor:pointer">
+                <td style="font-size:13px">{{ r.ref }}</td>
+                <td>{{ r.form }}<div style="font-size:11px; color:var(--color-neutral-600)">{{ r.subject }}</div></td>
+                <td style="font-size:12px; color:var(--color-neutral-700)">{{ r.source }}</td>
+                <td style="font-size:12px">{{ r.stage }}</td>
+                <td><span style="display:inline-flex; align-items:center; white-space:nowrap; font-size:11px; letter-spacing:0.02em; padding:3px 10px; color:{{ r.stFg }}; background:{{ r.stBg }}; border:1px solid {{ r.stBd }}">{{ r.status }}</span></td>
+                <td style="font-size:12px; color:var(--color-neutral-700)">{{ r.filed }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <sc-if value="{{ noRows }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:var(--space-8); text-align:center; color:var(--color-neutral-600); font-size:14px">No submissions match that filter.</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCat }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <header style="display:flex; align-items:flex-end; gap:var(--space-6); margin-bottom:var(--space-4)">
+          <div style="flex:1">
+            <h1 style="font-size:34px; margin:0">Form catalogue</h1>
+            <div style="font-size:13px; color:var(--color-neutral-600)">the form set is not fixed in the product — an administrator defines it here, and the rest of the system follows</div>
+          </div>
+          <button onClick="{{ openAdd }}" class="btn btn-primary blueprint" style="position:relative; white-space:nowrap; flex:none">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            Add form type
+          </button>
+        </header>
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:64px">Code</th>
+              <th style="width:230px">Form type</th>
+              <th>Approval chain</th>
+              <th style="width:120px">SLA per layer</th>
+              <th style="width:110px">Public link</th>
+              <th style="width:110px">Severity field</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ catalogue }}" as="c" hint-placeholder-count="10">
+              <tr>
+                <td style="font-family:var(--font-heading); font-size:14px">{{ c.code }}</td>
+                <td style="font-size:14px">{{ c.name }}<div style="font-size:11px; color:var(--color-neutral-600)">{{ c.volume }} in the last 30 days</div></td>
+                <td>
+                  <span style="display:flex; flex-wrap:wrap; gap:5px">
+                    <sc-for list="{{ c.chain }}" as="step" hint-placeholder-count="3">
+                      <span style="display:inline-flex; align-items:center; white-space:nowrap; font-size:11px; padding:3px 9px; border:1px solid var(--color-divider); color:var(--color-neutral-800)">{{ step }}</span>
+                    </sc-for>
+                  </span>
+                </td>
+                <td>
+                  <span style="display:inline-flex; align-items:center; gap:6px">
+                    <input class="input" style="width:52px; min-height:30px; text-align:center" value="{{ c.sla }}" onChange="{{ c.setSla }}">
+                    <span style="font-size:11px; color:var(--color-neutral-600)">days</span>
+                  </span>
+                </td>
+                <td>
+                  <button onClick="{{ c.togglePublic }}" style="background:transparent; border:1px solid var(--color-divider); padding:4px 10px; font:inherit; font-size:11px; cursor:pointer; color:{{ c.pubFg }}; background:{{ c.pubBg }}">{{ c.pubLabel }}</button>
+                </td>
+                <td style="font-size:12px; color:var(--color-neutral-700)">{{ c.severity }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <p style="margin-top:var(--space-6); font-size:12px; color:var(--color-neutral-600); max-width:62ch">SLA per layer is new data — it does not exist in the current catalogue schema. It is what makes “overdue” computable per form type instead of one global constant; unset types fall back to {{ slaDefault }} working days.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isPub }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <header style="margin-bottom:var(--space-6)">
+          <h1 style="font-size:34px; margin:0">Public entry</h1>
+          <div style="font-size:13px; color:var(--color-neutral-600)">what a contractor or visitor meets after scanning a poster — no account, phone in one hand</div>
+        </header>
+        <div style="display:flex; gap:var(--space-6); align-items:flex-start; flex-wrap:wrap">
+          <div style="display:flex; gap:8px; flex-direction:column; width:150px; flex:none">
+            <sc-for list="{{ pubSteps }}" as="p" hint-placeholder-count="4">
+              <button onClick="{{ p.go }}" style="text-align:left; background:transparent; border:0; border-left:2px solid {{ p.bar }}; padding:6px 10px; cursor:pointer; font-family:var(--font-heading); font-weight:600; font-size:14px; color:{{ p.color }}">{{ p.label }}</button>
+            </sc-for>
+          </div>
+
+          <div class="blueprint" style="width:390px; flex:none; background:var(--color-bg); padding:0">
+            <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+            <div style="display:flex; align-items:center; gap:8px; padding:8px var(--space-4); border-bottom:1px solid var(--color-divider); font-size:11px; color:var(--color-neutral-600)">
+              <span>oshes.pmw.gov.my</span><span style="margin-left:auto">{{ pubChrome }}</span>
+            </div>
+
+            <sc-if value="{{ pubIsQr }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:var(--space-6) var(--space-4) var(--space-8)">
+                <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-accent-700)">Scanned poster</div>
+                <h2 style="font-size:26px; margin:2px 0 2px">Jetty 3 · Berth C</h2>
+                <div style="font-size:13px; color:var(--color-neutral-700); margin-bottom:var(--space-6)">PMW Port Klang · location filled in for you</div>
+                <div style="font-size:12px; color:var(--color-neutral-600); margin-bottom:8px">What are you reporting?</div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <sc-for list="{{ publicForms }}" as="f" hint-placeholder-count="4">
+                    <button onClick="{{ f.pick }}" style="display:flex; align-items:center; gap:10px; text-align:left; background:transparent; border:1px solid var(--color-divider); padding:var(--space-3); cursor:pointer; font:inherit; min-height:52px" style-hover="background:color-mix(in srgb, var(--color-accent) 8%, transparent)">
+                      <span style="flex:1">
+                        <span style="display:block; font-family:var(--font-heading); font-weight:600; font-size:16px">{{ f.name }}</span>
+                        <span style="display:block; font-size:11px; color:var(--color-neutral-600)">{{ f.hint }}</span>
+                      </span>
+                      <span style="font-size:16px; color:var(--color-accent)">→</span>
+                    </button>
+                  </sc-for>
+                </div>
+                <p style="font-size:11px; color:var(--color-neutral-600); margin-top:var(--space-6)">A poster can also encode one specific form and skip this step. Anything urgent — call 999 first, then file.</p>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pubIsForm }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-4) var(--space-4) var(--space-8)">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:var(--space-4)">
+                  <button onClick="{{ backToQr }}" class="btn btn-ghost" style="padding:0; font-size:13px">← Back</button>
+                  <span style="margin-left:auto; font-size:11px; color:var(--color-neutral-600)">{{ draftLabel }}</span>
+                </div>
+                <h2 style="font-size:24px; margin:0 0 var(--space-4)">Incident report</h2>
+                <div style="display:flex; flex-direction:column; gap:var(--space-4)">
+                  <div class="field">
+                    <label>Where did it happen?</label>
+                    <input class="input" style="min-height:44px" value="{{ fLocation }}" onChange="{{ setLocation }}">
+                  </div>
+                  <div class="field">
+                    <label>How bad was the outcome?</label>
+                    <div style="display:flex; flex-direction:column; gap:6px">
+                      <sc-for list="{{ sevOptions }}" as="o" hint-placeholder-count="4">
+                        <button onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:10px; text-align:left; padding:11px var(--space-3); min-height:48px; cursor:pointer; font:inherit; border:1px solid {{ o.bd }}; background:{{ o.bg }}; color:{{ o.fg }}">
+                          <span style="width:14px; height:14px; flex:none; border:1.5px solid currentColor; background:{{ o.dot }}"></span>
+                          <span style="flex:1">
+                            <span style="display:block; font-size:14px; font-weight:500">{{ o.label }}</span>
+                            <span style="display:block; font-size:11px; opacity:0.75">{{ o.hint }}</span>
+                          </span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <sc-if value="{{ sevWarning }}" hint-placeholder-val="{{ false }}">
+                    <div style="border:1px solid var(--color-accent); background:var(--color-accent-100); padding:var(--space-3); font-size:12px; color:var(--color-accent-800)">This pages the duty safety officer the moment you submit, and starts a 24-hour investigation clock. Keep the area as it is if it is safe to do so.</div>
+                  </sc-if>
+                  <div class="field">
+                    <label>What happened?</label>
+                    <textarea class="input" style="min-height:96px" placeholder="A sentence or two is enough." value="{{ fDesc }}" onChange="{{ setDesc }}"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Photos</label>
+                    <button onClick="{{ addPhoto }}" style="width:100%; min-height:70px; border:1px dashed var(--color-neutral-400); background:transparent; cursor:pointer; font:inherit; font-size:13px; color:var(--color-neutral-700)">{{ photoLabel }}</button>
+                  </div>
+                  <div class="field">
+                    <label>Your name</label>
+                    <input class="input" style="min-height:44px" placeholder="Optional — you can report anonymously" value="{{ fName }}" onChange="{{ setName }}">
+                  </div>
+                  <div class="field">
+                    <label>Email, if you want a copy</label>
+                    <input class="input" style="min-height:44px" placeholder="Optional" value="{{ fEmail }}" onChange="{{ setEmail }}">
+                  </div>
+                  <button onClick="{{ submitForm }}" disabled="{{ submitDisabled }}" class="btn btn-primary" style="min-height:48px; font-size:16px">Submit report</button>
+                  <p style="font-size:11px; color:var(--color-neutral-600); margin:0">Saved on this device as you type, so a dropped signal at the jetty does not lose the entry.</p>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pubIsDone }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-8) var(--space-4)">
+                <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-accent-700)">Received</div>
+                <h2 style="font-size:26px; margin:2px 0 var(--space-4)">Your report is with the safety team.</h2>
+                <div class="blueprint" style="padding:var(--space-4); text-align:center; margin-bottom:var(--space-6)">
+                  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600)">Reference — photograph this</div>
+                  <div style="font-family:var(--font-heading); font-weight:600; font-size:34px; letter-spacing:0.02em">{{ newRef }}</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <button onClick="{{ toast_pdf }}" class="btn btn-secondary" style="min-height:46px">Download a PDF of what you sent</button>
+                  <button onClick="{{ goTrack }}" class="btn btn-secondary" style="min-height:46px">Track this report without signing in</button>
+                </div>
+                <p style="font-size:12px; color:var(--color-neutral-700); margin-top:var(--space-6)">{{ emailNote }}</p>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ pubIsTrack }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:var(--space-6) var(--space-4) var(--space-8)">
+                <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600)">{{ newRef }}</div>
+                <h2 style="font-size:24px; margin:2px 0 var(--space-6)">Fall from height · Jetty 3</h2>
+                <sc-for list="{{ trackSteps }}" as="t" hint-placeholder-count="4">
+                  <div style="display:flex; gap:var(--space-3); align-items:flex-start">
+                    <span style="display:flex; flex-direction:column; align-items:center; flex:none; width:14px">
+                      <span style="width:11px; height:11px; border:1.5px solid var(--color-accent); background:{{ t.dot }}"></span>
+                      <span style="width:1px; flex:1; min-height:34px; background:{{ t.line }}"></span>
+                    </span>
+                    <span style="padding-bottom:var(--space-4)">
+                      <span style="display:block; font-size:14px; font-weight:500; color:{{ t.fg }}">{{ t.label }}</span>
+                      <span style="display:block; font-size:11px; color:var(--color-neutral-600)">{{ t.when }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+                <p style="font-size:12px; color:var(--color-neutral-700); margin-top:var(--space-4)">Names of approvers are not shown on the public view — only where it is in the chain.</p>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="max-width:300px; font-size:12px; color:var(--color-neutral-700); display:flex; flex-direction:column; gap:var(--space-4)">
+            <p style="margin:0">The public path never asks for an account. Location comes from the poster's code, severity is the only forced choice, and everything else can be skipped.</p>
+            <p style="margin:0">Anonymous is allowed on purpose — an under-reported hazard is worse than an unattributed one.</p>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </main>
+
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:color-mix(in srgb, var(--color-neutral-900) 42%, transparent); display:flex; justify-content:flex-end; animation:fadeIn 140ms ease-out; z-index:20">
+      <div onClick="{{ closeDrawer }}" style="flex:1"></div>
+      <div style="width:min(560px, 92vw); background:var(--color-bg); border-left:1px solid var(--color-divider); overflow:auto; animation:slideIn 180ms ease-out; padding:var(--space-6)">
+        <div style="display:flex; align-items:flex-start; gap:var(--space-4); margin-bottom:var(--space-4)">
+          <div style="flex:1">
+            <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--color-neutral-600)">{{ d_ref }} · {{ d_form }}</div>
+            <h2 style="font-size:26px; margin:2px 0 0">{{ d_subject }}</h2>
+          </div>
+          <button onClick="{{ closeDrawer }}" class="btn btn-secondary btn-icon">✕</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3) var(--space-4); padding:var(--space-4) 0; border-top:1px solid var(--color-divider); border-bottom:1px solid var(--color-divider); margin-bottom:var(--space-4)">
+          <sc-for list="{{ d_fields }}" as="f" hint-placeholder-count="6">
+            <div>
+              <div style="font-size:11px; color:var(--color-neutral-600)">{{ f.k }}</div>
+              <div style="font-size:14px">{{ f.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <h3 style="font-size:18px; margin:0 0 var(--space-3)">Approval chain</h3>
+        <sc-for list="{{ d_chain }}" as="c" hint-placeholder-count="3">
+          <div style="display:flex; gap:var(--space-3); align-items:flex-start">
+            <span style="display:flex; flex-direction:column; align-items:center; flex:none; width:12px">
+              <span style="width:11px; height:11px; border:1.5px solid var(--color-accent); background:{{ c.dot }}"></span>
+              <span style="width:1px; flex:1; min-height:42px; background:{{ c.line }}"></span>
+            </span>
+            <span style="flex:1; padding-bottom:var(--space-4)">
+              <span style="display:flex; align-items:baseline; gap:8px">
+                <span style="font-size:14px; font-weight:500">{{ c.who }}</span>
+                <span style="font-size:11px; color:var(--color-neutral-600)">{{ c.role }}</span>
+                <span style="margin-left:auto; font-size:11px; color:{{ c.stFg }}">{{ c.status }}</span>
+              </span>
+              <span style="display:block; font-size:11px; color:var(--color-neutral-600)">{{ c.when }}</span>
+              <sc-if value="{{ c.note }}" hint-placeholder-val="{{ false }}">
+                <span style="display:block; font-size:12px; margin-top:5px; padding:8px 10px; border-left:2px solid var(--color-divider); color:var(--color-neutral-800)">{{ c.note }}</span>
+              </sc-if>
+            </span>
+          </div>
+        </sc-for>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; padding-top:var(--space-4); border-top:1px solid var(--color-divider); white-space:nowrap">
+          <button onClick="{{ d_sign }}" class="btn btn-primary">Sign this layer</button>
+          <button onClick="{{ d_nudge }}" class="btn btn-secondary">Nudge approver</button>
+          <button onClick="{{ d_reassign }}" class="btn btn-secondary">Reassign layer</button>
+          <button onClick="{{ toast_pdf }}" class="btn btn-secondary">Download PDF</button>
+          <button onClick="{{ d_cancel }}" class="btn btn-ghost" style="margin-left:auto">Cancel submission</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ reassignOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:30; animation:fadeIn 120ms ease-out">
+      <div class="dialog blueprint" style="background:var(--color-bg); box-shadow:var(--shadow-lg); width:min(420px, 100%)">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div class="dialog-title">Reassign {{ reassignRef }}</div>
+        <div class="dialog-body">Layer {{ reassignLayer }} moves to a different approver. The original approver is told why, and the age on this layer keeps running.</div>
+        <div style="display:flex; flex-direction:column; gap:8px">
+          <sc-for list="{{ reassignOptions }}" as="o" hint-placeholder-count="3">
+            <label class="radio" style="padding:7px 0">
+              <input type="radio" name="reassign" checked="{{ o.checked }}" onChange="{{ o.pick }}">
+              <span class="dot"></span>
+              <span style="flex:1">{{ o.name }} <span style="font-size:11px; color:var(--color-neutral-600)">{{ o.role }} · {{ o.load }}</span></span>
+            </label>
+          </sc-for>
+        </div>
+        <div class="dialog-actions" style="white-space:nowrap">
+          <button onClick="{{ closeReassign }}" class="btn btn-secondary">Keep as is</button>
+          <button onClick="{{ confirmReassign }}" class="btn btn-primary">Reassign</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:30; animation:fadeIn 120ms ease-out">
+      <div class="dialog blueprint" style="background:var(--color-bg); box-shadow:var(--shadow-lg); width:min(440px, 100%)">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div class="dialog-title">Add a form type</div>
+        <div class="dialog-body">It appears in the catalogue, on the dashboard's inbound list, and — if public — in the QR picker.</div>
+        <div class="field"><label>Name</label><input class="input" value="{{ newName }}" onChange="{{ setNewName }}" placeholder="e.g. Confined Space Entry"></div>
+        <div style="display:flex; gap:var(--space-3)">
+          <div class="field" style="width:90px"><label>Code</label><input class="input" value="{{ newCode }}" onChange="{{ setNewCode }}" placeholder="CSE"></div>
+          <div class="field" style="width:110px"><label>Layers</label><input class="input" value="{{ newLayers }}" onChange="{{ setNewLayers }}"></div>
+          <div class="field" style="width:110px"><label>SLA (days)</label><input class="input" value="{{ newSla }}" onChange="{{ setNewSla }}"></div>
+        </div>
+        <div class="dialog-actions" style="white-space:nowrap">
+          <button onClick="{{ closeAdd }}" class="btn btn-secondary">Cancel</button>
+          <button onClick="{{ confirmAdd }}" class="btn btn-primary">Add form type</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ confirmCancelOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:30; animation:fadeIn 120ms ease-out">
+      <div class="dialog blueprint" style="background:var(--color-bg); box-shadow:var(--shadow-lg); width:min(420px, 100%)">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div class="dialog-title">Cancel {{ d_ref }}?</div>
+        <div class="dialog-body">The record stays and keeps its reference — it is marked cancelled with your name against it. Anyone already in the chain is told. This cannot be undone from here.</div>
+        <div class="field"><label>Reason, for the record</label><input class="input" value="{{ cancelReason }}" onChange="{{ setCancelReason }}" placeholder="Duplicate of INC-2607-0140"></div>
+        <div class="dialog-actions" style="white-space:nowrap">
+          <button onClick="{{ closeConfirmCancel }}" class="btn btn-secondary">Keep it open</button>
+          <button onClick="{{ doCancel }}" class="btn btn-primary">Mark cancelled</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; bottom:var(--space-6); left:50%; transform:translateX(-50%); background:var(--color-accent-900); color:var(--color-bg); padding:11px var(--space-4); font-size:13px; z-index:40; animation:fadeIn 120ms ease-out; max-width:520px">{{ toast }}</div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;severityFirst&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Dashboard priority&quot;},&quot;stuckFilter&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;all&quot;,&quot;breached&quot;],&quot;default&quot;:&quot;all&quot;,&quot;tsType&quot;:&quot;\&quot;all\&quot; | \&quot;breached\&quot;&quot;,&quot;section&quot;:&quot;Dashboard priority&quot;},&quot;showBottlenecks&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Dashboard priority&quot;},&quot;slaDefaultDays&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;min&quot;:1,&quot;max&quot;:10,&quot;unit&quot;:&quot;days&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Rules&quot;}}">
+const CATALOGUE = [
+  { code: "INC", name: "Incident Report", chain: ["Supervisor", "Safety Officer", "Ops Manager"], sla: 1, pub: true, sev: "Required", volume: 41, today: 6 },
+  { code: "NM", name: "Near-Miss Report", chain: ["Safety Officer", "Ops Manager"], sla: 2, pub: true, sev: "Required", volume: 88, today: 8 },
+  { code: "HZO", name: "Hazard Observation", chain: ["Safety Officer", "Site Lead"], sla: 3, pub: true, sev: "Optional", volume: 213, today: 12 },
+  { code: "PTW", name: "Permit to Work", chain: ["Supervisor", "Ops Manager", "Safety Officer", "Site Lead"], sla: 1, pub: false, sev: "—", volume: 64, today: 4 },
+  { code: "CHA", name: "Chemical Handling Approval", chain: ["Safety Officer", "Environment Lead", "Occupational Health"], sla: 3, pub: false, sev: "—", volume: 19, today: 1 },
+  { code: "CSE", name: "Contractor Site Entry", chain: ["Security Lead", "Safety Officer"], sla: 1, pub: true, sev: "—", volume: 302, today: 7 },
+  { code: "PPE", name: "PPE Request", chain: ["Supervisor", "Stores"], sla: 5, pub: false, sev: "—", volume: 77, today: 5 },
+  { code: "ENV", name: "Environmental Spill Report", chain: ["Safety Officer", "Environment Lead", "Ops Manager"], sla: 1, pub: true, sev: "Required", volume: 11, today: 0 },
+  { code: "SEC", name: "Security Breach Report", chain: ["Security Lead", "Safety Officer", "Ops Manager"], sla: 1, pub: true, sev: "Required", volume: 23, today: 1 },
+  { code: "MSI", name: "Monthly Safety Inspection", chain: ["Safety Officer", "Site Lead"], sla: 5, pub: false, sev: "—", volume: 12, today: 3 }
+];
+
+const SEVERE = [
+  { ref: "INC-2607-0142", severity: "Major · LTI", tone: "high", summary: "Fall from height, 2.4 m, from scaffold platform", where: "Jetty 3 · Berth C · contractor, Marine Kita Sdn Bhd", ago: "41 min ago", stage: "Layer 1 of 3 · you" },
+  { ref: "INC-2607-0139", severity: "Serious", tone: "mid", summary: "Hand laceration — machine guard found removed", where: "Workshop B · fitter, PMW staff", ago: "3 h ago", stage: "Layer 2 of 3 · Faizal M." },
+  { ref: "NM-2607-0088", severity: "High potential", tone: "mid", summary: "Suspended load swung over a live walkway", where: "Yard A · reported anonymously", ago: "6 h ago", stage: "Layer 1 of 2 · you" }
+];
+
+const STUCK = [
+  { ref: "PTW-2607-0031", form: "Permit to Work", subject: "Hot work, Tank 4 shell repair", approver: "Faizal Mokhtar", approverRole: "Ops Manager", layer: "2 of 4", ageH: 148, sla: 1 },
+  { ref: "CHA-2607-0012", form: "Chemical Handling", subject: "Sodium hypochlorite, 200 L transfer", approver: "Dr. Lim Suan", approverRole: "Occupational Health", layer: "3 of 3", ageH: 121, sla: 3 },
+  { ref: "INC-2607-0104", form: "Incident Report", subject: "Forklift struck racking, no injury", approver: "Faizal Mokhtar", approverRole: "Ops Manager", layer: "2 of 3", ageH: 105, sla: 1 },
+  { ref: "CSE-2607-0210", form: "Contractor Site Entry", subject: "Scaffolding crew, 6 persons, 4 days", approver: "Rosnah Kamal", approverRole: "Security Lead", layer: "1 of 2", ageH: 74, sla: 1 },
+  { ref: "ENV-2607-0009", form: "Spill Report", subject: "Hydraulic oil, ~15 L, quay apron", approver: "Faizal Mokhtar", approverRole: "Ops Manager", layer: "2 of 3", ageH: 54, sla: 1 }
+];
+
+const MINE = [
+  { ref: "INC-2607-0142", form: "Incident Report", subject: "Fall from height, 2.4 m", layer: "Layer 1 of 3", age: "41 min" },
+  { ref: "NM-2607-0088", form: "Near-Miss Report", subject: "Suspended load over walkway", layer: "Layer 1 of 2", age: "6 h" },
+  { ref: "PPE-2607-0455", form: "PPE Request", subject: "Cut-resistant gloves, 12 pairs", layer: "Layer 2 of 2", age: "1 d 3 h" },
+  { ref: "MSI-2607-0021", form: "Monthly Safety Inspection", subject: "July walkthrough, Workshop B", layer: "Layer 1 of 2", age: "2 d 1 h" }
+];
+
+const BOTTLENECKS = [
+  { name: "Faizal Mokhtar", role: "Ops Manager", medianH: 98, open: 9, breached: 3 },
+  { name: "Dr. Lim Suan", role: "Occupational Health", medianH: 121, open: 3, breached: 1 },
+  { name: "Rosnah Kamal", role: "Security Lead", medianH: 58, open: 5, breached: 1 }
+];
+
+const ROWS = [
+  { ref: "INC-2607-0142", form: "Incident Report", subject: "Fall from height, 2.4 m", source: "QR · Jetty 3 poster", stage: "Layer 1 of 3", status: "In approval", filed: "41 min ago" },
+  { ref: "HZO-2607-0781", form: "Hazard Observation", subject: "Unlit stairwell, Store 2", source: "QR · anonymous", stage: "Layer 1 of 2", status: "In approval", filed: "1 h ago" },
+  { ref: "INC-2607-0139", form: "Incident Report", subject: "Hand laceration, guard removed", source: "Staff app", stage: "Layer 2 of 3", status: "In approval", filed: "3 h ago" },
+  { ref: "NM-2607-0088", form: "Near-Miss Report", subject: "Suspended load over walkway", source: "QR · anonymous", stage: "Layer 1 of 2", status: "In approval", filed: "6 h ago" },
+  { ref: "CSE-2607-0210", form: "Contractor Site Entry", subject: "Scaffolding crew, 6 persons", source: "Public link", stage: "Layer 1 of 2", status: "Past SLA", filed: "3 d ago" },
+  { ref: "PTW-2607-0031", form: "Permit to Work", subject: "Hot work, Tank 4 shell repair", source: "Staff app", stage: "Layer 2 of 4", status: "Past SLA", filed: "7 d ago" },
+  { ref: "MSI-2607-0019", form: "Monthly Safety Inspection", subject: "June walkthrough, Jetty 3", source: "Staff app", stage: "Complete", status: "Approved", filed: "26 d ago" },
+  { ref: "INC-2607-0121", form: "Incident Report", subject: "Duplicate of INC-2607-0119", source: "QR · Yard A poster", stage: "Withdrawn", status: "Cancelled", filed: "12 d ago" }
+];
+
+const APPROVERS = [
+  { name: "Hafiz Rahman", role: "Deputy Ops Manager", load: "2 open, median 9 h" },
+  { name: "Siti Noor", role: "Ops Manager, night shift", load: "1 open, median 14 h" },
+  { name: "Rosnah Kamal", role: "Security Lead", load: "5 open, median 2 d 10 h" }
+];
+
+const SEV_OPTIONS = [
+  { key: "near", label: "No one was hurt", hint: "Near-miss or hazard only" },
+  { key: "minor", label: "First aid was enough", hint: "Back to work the same day" },
+  { key: "serious", label: "Needed medical treatment", hint: "Clinic, hospital, or time off" },
+  { key: "major", label: "Serious injury or worse", hint: "Lost time, amputation, fatality" }
+];
+
+const DRAFT_KEY = "pmw-oshes-public-draft-v1";
+
+function hrs(h) {
+  const d = Math.floor(h / 24), r = h % 24;
+  return d > 0 ? (r > 0 ? d + " d " + r + " h" : d + " d") : h + " h";
+}
+
+class Component extends DCLogic {
+  state = {
+    screen: "dash",
+    catalogue: CATALOGUE.map(c => Object.assign({}, c)),
+    drawer: null,
+    reassign: null,
+    addOpen: false,
+    confirmCancel: false,
+    cancelReason: "",
+    reassignPick: "Hafiz Rahman",
+    toast: "",
+    nudged: {},
+    filterForm: "all",
+    filterStatus: "all",
+    query: "",
+    rows: ROWS.map(r => Object.assign({}, r)),
+    newName: "", newCode: "", newLayers: "2", newSla: "3",
+    pub: "qr",
+    form: { location: "Jetty 3 · Berth C", sev: "", desc: "", name: "", email: "", photos: 0 },
+    savedAt: 0, tick: 0,
+    newRef: "INC-2607-0143"
+  };
+
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && d.form) this.setState({ form: Object.assign({}, this.state.form, d.form), savedAt: d.savedAt || 0 });
+      }
+    } catch (e) {}
+    this.timer = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 5000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.toastTimer); }
+
+  say(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.setState({ toast: "" }), 3200);
+  }
+
+  saveDraft(form) {
+    const savedAt = Date.now();
+    this.setState({ form, savedAt });
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, savedAt })); } catch (e) {}
+  }
+  setField(k, v) { this.saveDraft(Object.assign({}, this.state.form, { [k]: v })); }
+
+  slaTone(over) {
+    return over
+      ? { fg: "var(--color-accent-900)", bg: "var(--color-accent-200)", bd: "var(--color-accent-700)" }
+      : { fg: "var(--color-neutral-800)", bg: "transparent", bd: "var(--color-divider)" };
+  }
+
+  openRef(ref) {
+    this.setState({ drawer: ref });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const slaDefault = this.props.slaDefaultDays ?? 3;
+    const onlyBreached = (this.props.stuckFilter ?? "all") === "breached";
+    const severityFirst = this.props.severityFirst ?? true;
+
+    const nav = [
+      { key: "dash", label: "Today", count: "" },
+      { key: "subs", label: "Submissions", count: s.rows.length },
+      { key: "cat", label: "Form catalogue", count: s.catalogue.length },
+      { key: "pub", label: "Public entry", count: "" }
+    ];
+    const navItems = nav.map(n => ({
+      label: n.label, count: n.count,
+      color: s.screen === n.key ? "var(--color-accent-800)" : "var(--color-text)",
+      bar: s.screen === n.key ? "var(--color-accent)" : "transparent",
+      go: () => this.setState({ screen: n.key })
+    }));
+
+    const sevTone = t => t === "high"
+      ? { sevFg: "var(--color-bg)", sevBg: "var(--color-accent-900)", sevBd: "var(--color-accent-900)" }
+      : { sevFg: "var(--color-accent-900)", sevBg: "var(--color-accent-200)", sevBd: "var(--color-accent-400)" };
+
+    const severe = SEVERE.map(x => Object.assign({}, x, sevTone(x.tone), { open: () => this.openRef(x.ref) }));
+
+    const stuckAll = STUCK.map(r => {
+      const overH = r.ageH - r.sla * 24;
+      const over = overH > 0;
+      const tone = this.slaTone(over);
+      return Object.assign({}, r, {
+        age: hrs(r.ageH),
+        slaNote: over ? hrs(overH) + " past a " + r.sla + "-day SLA" : "within a " + r.sla + "-day SLA",
+        slaFg: over ? "var(--color-accent-800)" : "var(--color-neutral-600)",
+        over,
+        open: () => this.openRef(r.ref),
+        nudge: () => {
+          this.setState(st => ({ nudged: Object.assign({}, st.nudged, { [r.ref]: true }) }));
+          this.say("Reminder sent to " + r.approver + " for " + r.ref + ". Next automatic reminder in 24 h.");
+        },
+        reassign: () => this.setState({ reassign: r })
+      });
+    });
+    const stuck = onlyBreached ? stuckAll.filter(r => r.over) : stuckAll;
+    const breachCount = stuckAll.filter(r => r.over).length;
+
+    const mine = MINE.map(m => Object.assign({}, m, { open: () => this.openRef(m.ref) }));
+
+    const maxMedian = Math.max.apply(null, BOTTLENECKS.map(b => b.medianH));
+    const bottlenecks = BOTTLENECKS.slice().sort((a, b) => b.medianH - a.medianH).map(b => ({
+      name: b.name, role: b.role, open: b.open, breached: b.breached,
+      median: hrs(b.medianH), bar: Math.round((b.medianH / maxMedian) * 100) + "%"
+    }));
+
+    const maxToday = Math.max.apply(null, s.catalogue.map(c => c.today).concat([1]));
+    const inbound = s.catalogue.slice().sort((a, b) => b.today - a.today).map(c => ({
+      name: c.name, today: c.today,
+      bar: Math.round((c.today / maxToday) * 100) + "%",
+      fill: c.today === 0 ? "transparent" : "var(--color-accent)"
+    }));
+
+    const stTone = st => st === "Past SLA"
+      ? { stFg: "var(--color-bg)", stBg: "var(--color-accent-900)", stBd: "var(--color-accent-900)" }
+      : st === "Cancelled"
+        ? { stFg: "var(--color-neutral-700)", stBg: "transparent", stBd: "var(--color-neutral-400)" }
+        : st === "Approved"
+          ? { stFg: "var(--color-neutral-800)", stBg: "var(--color-neutral-100)", stBd: "var(--color-neutral-300)" }
+          : { stFg: "var(--color-accent-800)", stBg: "var(--color-accent-100)", stBd: "var(--color-accent-300)" };
+
+    const q = s.query.trim().toLowerCase();
+    const rows = s.rows.filter(r =>
+      (s.filterForm === "all" || r.form === s.filterForm) &&
+      (s.filterStatus === "all" || r.status === s.filterStatus) &&
+      (!q || (r.ref + " " + r.subject).toLowerCase().indexOf(q) >= 0)
+    ).map(r => Object.assign({}, r, stTone(r.status), { open: () => this.openRef(r.ref) }));
+
+    const catalogue = s.catalogue.map((c, i) => ({
+      code: c.code, name: c.name, chain: c.chain, sla: c.sla, volume: c.volume,
+      severity: c.sev,
+      pubLabel: c.pub ? "Public" : "Internal",
+      pubFg: c.pub ? "var(--color-accent-900)" : "var(--color-neutral-700)",
+      pubBg: c.pub ? "var(--color-accent-100)" : "transparent",
+      togglePublic: () => this.setState(st => {
+        const next = st.catalogue.slice();
+        next[i] = Object.assign({}, next[i], { pub: !next[i].pub });
+        return { catalogue: next };
+      }),
+      setSla: e => {
+        const v = e.target.value.replace(/[^0-9]/g, "");
+        this.setState(st => {
+          const next = st.catalogue.slice();
+          next[i] = Object.assign({}, next[i], { sla: v === "" ? "" : parseInt(v, 10) });
+          return { catalogue: next };
+        });
+      }
+    }));
+
+    const d = s.drawer;
+    const dRow = s.rows.find(r => r.ref === d) || STUCK.find(r => r.ref === d) || MINE.find(r => r.ref === d) || {};
+    const dSevere = SEVERE.find(r => r.ref === d);
+    const dFields = d ? [
+      { k: "Filed", v: dRow.filed || dRow.age || "41 min ago" },
+      { k: "Source", v: dRow.source || "QR · Jetty 3 poster" },
+      { k: "Location", v: dSevere ? dSevere.where.split(" · ").slice(0, 2).join(" · ") : "Jetty 3 · Berth C" },
+      { k: "Reported by", v: dSevere && dSevere.where.indexOf("anonymous") >= 0 ? "Anonymous" : "Sazali Rahim · Marine Kita Sdn Bhd" },
+      { k: "Severity", v: dSevere ? dSevere.severity : "Not applicable to this form" },
+      { k: "Photos", v: "2 attached" }
+    ] : [];
+    const dChain = [
+      { who: "Nurul Aziz", role: "Safety Officer", status: "Awaiting you", stFg: "var(--color-accent-800)", when: "in your queue 41 min", dot: "transparent", line: "var(--color-divider)", note: "" },
+      { who: "Faizal Mokhtar", role: "Ops Manager", status: "Not started", stFg: "var(--color-neutral-600)", when: "opens when layer 1 is signed", dot: "transparent", line: "var(--color-divider)", note: "" },
+      { who: "Zulkifli Hassan", role: "Site Lead", status: "Not started", stFg: "var(--color-neutral-600)", when: "final sign-off", dot: "transparent", line: "transparent", note: "" }
+    ];
+    if (d) {
+      dChain[0] = Object.assign({}, dChain[0], { note: "First reviewer also confirms whether the site was made safe." });
+    }
+
+    const reassignOptions = APPROVERS.map(a => Object.assign({}, a, {
+      checked: s.reassignPick === a.name,
+      pick: () => this.setState({ reassignPick: a.name })
+    }));
+
+    const form = s.form;
+    const secsAgo = s.savedAt ? Math.max(1, Math.round((Date.now() - s.savedAt) / 1000)) : 0;
+    const sevOptions = SEV_OPTIONS.map(o => {
+      const on = form.sev === o.key;
+      return {
+        label: o.label, hint: o.hint,
+        bd: on ? "var(--color-accent)" : "var(--color-divider)",
+        bg: on ? "var(--color-accent-100)" : "transparent",
+        fg: on ? "var(--color-accent-900)" : "var(--color-text)",
+        dot: on ? "var(--color-accent)" : "transparent",
+        pick: () => this.setField("sev", o.key)
+      };
+    });
+
+    const publicForms = s.catalogue.filter(c => c.pub).map(c => ({
+      name: c.name,
+      hint: c.sev === "Required" ? "Severity is asked · " + c.chain.length + " approval layers" : c.chain.length + " approval layers",
+      pick: () => this.setState({ pub: "form" })
+    }));
+
+    const pubOrder = [
+      { key: "qr", label: "1 · Scan lands" },
+      { key: "form", label: "2 · Fill it in" },
+      { key: "done", label: "3 · Received" },
+      { key: "track", label: "4 · Track it" }
+    ];
+    const pubSteps = pubOrder.map(p => ({
+      label: p.label,
+      bar: s.pub === p.key ? "var(--color-accent)" : "var(--color-divider)",
+      color: s.pub === p.key ? "var(--color-accent-800)" : "var(--color-neutral-700)",
+      go: () => this.setState({ pub: p.key })
+    }));
+
+    const trackSteps = [
+      { label: "Received", when: "Today, 09:14", done: true },
+      { label: "With the safety officer", when: "Since 09:14 · reviewed within 1 working day", done: true },
+      { label: "With operations", when: "Not started", done: false },
+      { label: "Closed out", when: "You get an email if you left one", done: false }
+    ].map((t, i, all) => ({
+      label: t.label, when: t.when,
+      dot: t.done ? "var(--color-accent)" : "transparent",
+      line: i === all.length - 1 ? "transparent" : "var(--color-divider)",
+      fg: t.done ? "var(--color-text)" : "var(--color-neutral-600)"
+    }));
+
+    return {
+      navItems,
+      isDash: s.screen === "dash", isSubs: s.screen === "subs", isCat: s.screen === "cat", isPub: s.screen === "pub",
+      sevOrder: severityFirst ? 1 : 2,
+      stuckOrder: severityFirst ? 2 : 1,
+      showBottlenecks: this.props.showBottlenecks ?? true,
+      severe, stuck, mine, bottlenecks, inbound, catalogue, rows,
+      mineCount: MINE.length,
+      breachCount,
+      stuckLabel: onlyBreached ? "showing breached only" : stuckAll.length + " open past their first reminder",
+      slaDefault,
+      rowCount: rows.length,
+      noRows: rows.length === 0,
+      filterForm: s.filterForm, filterStatus: s.filterStatus, query: s.query,
+      setFilterForm: e => this.setState({ filterForm: e.target.value }),
+      setFilterStatus: e => this.setState({ filterStatus: e.target.value }),
+      setQuery: e => this.setState({ query: e.target.value }),
+      exportCsv: () => this.say("Exporting " + rows.length + " rows with the columns you can see, plus approval history. Emailed to you when ready."),
+
+      drawerOpen: !!d,
+      closeDrawer: () => this.setState({ drawer: null }),
+      d_ref: d || "", d_form: dRow.form || "Incident Report",
+      d_subject: dRow.subject || (dSevere ? dSevere.summary : ""),
+      d_fields: dFields, d_chain: dChain,
+      d_sign: () => { this.setState({ drawer: null }); this.say("Signed. " + d + " moves to layer 2 — Faizal Mokhtar, due in 1 working day."); },
+      d_nudge: () => this.say("Reminder sent for " + d + "."),
+      d_reassign: () => this.setState({ reassign: { ref: d, layer: dRow.layer || "2 of 3" } }),
+      d_cancel: () => this.setState({ confirmCancel: true }),
+      toast_pdf: () => this.say("PDF generated — the form as submitted, with the approval trail."),
+
+      reassignOpen: !!s.reassign,
+      reassignRef: s.reassign ? s.reassign.ref : "",
+      reassignLayer: s.reassign ? s.reassign.layer : "",
+      reassignOptions,
+      closeReassign: () => this.setState({ reassign: null }),
+      confirmReassign: () => { const r = s.reassign; this.setState({ reassign: null }); this.say("Layer " + r.layer + " of " + r.ref + " reassigned to " + s.reassignPick + "."); },
+
+      confirmCancelOpen: s.confirmCancel,
+      cancelReason: s.cancelReason,
+      setCancelReason: e => this.setState({ cancelReason: e.target.value }),
+      closeConfirmCancel: () => this.setState({ confirmCancel: false }),
+      doCancel: () => {
+        const ref = d;
+        this.setState(st => ({
+          confirmCancel: false, drawer: null, cancelReason: "",
+          rows: st.rows.map(r => r.ref === ref ? Object.assign({}, r, { status: "Cancelled", stage: "Withdrawn" }) : r)
+        }));
+        this.say(ref + " marked cancelled. Everyone in the chain has been told.");
+      },
+
+      addOpen: s.addOpen,
+      openAdd: () => this.setState({ addOpen: true }),
+      closeAdd: () => this.setState({ addOpen: false }),
+      newName: s.newName, newCode: s.newCode, newLayers: s.newLayers, newSla: s.newSla,
+      setNewName: e => this.setState({ newName: e.target.value }),
+      setNewCode: e => this.setState({ newCode: e.target.value.toUpperCase().slice(0, 4) }),
+      setNewLayers: e => this.setState({ newLayers: e.target.value.replace(/[^0-9]/g, "") }),
+      setNewSla: e => this.setState({ newSla: e.target.value.replace(/[^0-9]/g, "") }),
+      confirmAdd: () => {
+        const name = s.newName.trim();
+        if (!name) { this.say("Give the form type a name first."); return; }
+        const n = Math.max(1, Math.min(6, parseInt(s.newLayers || "2", 10)));
+        const chain = ["Supervisor", "Safety Officer", "Ops Manager", "Site Lead", "Environment Lead", "Occupational Health"].slice(0, n);
+        this.setState(st => ({
+          addOpen: false, newName: "", newCode: "", newLayers: "2", newSla: "3",
+          catalogue: st.catalogue.concat([{
+            code: (s.newCode || name.slice(0, 3)).toUpperCase(), name, chain,
+            sla: parseInt(s.newSla || slaDefault, 10), pub: false, sev: "—", volume: 0, today: 0
+          }])
+        }));
+        this.say("“" + name + "” added. It is internal-only until you publish a link.");
+      },
+
+      pubIsQr: s.pub === "qr", pubIsForm: s.pub === "form", pubIsDone: s.pub === "done", pubIsTrack: s.pub === "track",
+      pubChrome: s.pub === "qr" ? "scanned 09:12" : s.pub === "form" ? "no sign-in needed" : "reference kept on this device",
+      pubSteps, publicForms, sevOptions, trackSteps,
+      backToQr: () => this.setState({ pub: "qr" }),
+      fLocation: form.location, fDesc: form.desc, fName: form.name, fEmail: form.email,
+      setLocation: e => this.setField("location", e.target.value),
+      setDesc: e => this.setField("desc", e.target.value),
+      setName: e => this.setField("name", e.target.value),
+      setEmail: e => this.setField("email", e.target.value),
+      addPhoto: () => this.setField("photos", form.photos + 1),
+      photoLabel: form.photos === 0 ? "Take a photo, or choose from your phone" : form.photos + (form.photos === 1 ? " photo attached" : " photos attached") + " · add another",
+      sevWarning: form.sev === "major" || form.sev === "serious",
+      draftLabel: s.savedAt ? (secsAgo < 60 ? "Draft saved " + secsAgo + "s ago" : "Draft saved " + Math.round(secsAgo / 60) + " min ago") : "Saves as you type",
+      submitDisabled: !(form.location.trim() && form.sev && form.desc.trim()),
+      submitForm: () => {
+        try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+        this.setState({ pub: "done", savedAt: 0 });
+      },
+      newRef: s.newRef,
+      goTrack: () => this.setState({ pub: "track" }),
+      emailNote: form.email.trim()
+        ? "A copy is on its way to " + form.email.trim() + "."
+        : "You did not leave an email, so the reference above is the only way back in — photograph it.",
+      toast: s.toast
+    };
+  }
+}
+
+</script>
+</body>
+</html>

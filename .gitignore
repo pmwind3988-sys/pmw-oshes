@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.local
+.vercel/
+*.log
+tmp/
+
+# Reference template retained for comparison only.
+pmw-hrform/
+
+# Legacy static prototype files retained during migration.
+app.js
+styles.css
+dev-server.js
+assets/
+stitch-export/

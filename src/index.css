@@ -1,0 +1,92 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--pmw-font-main) !important;
+}
+
+:root {
+  --pmw-font-main: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  --pmw-ink: #101010;
+  --pmw-muted: #5f646d;
+  --pmw-paper: #f7f5ef;
+  --pmw-panel: #ffffff;
+  --pmw-blue: #0078d4;
+  --pmw-blue-dark: #005a9e;
+  --pmw-purple: #6264a7;
+  --pmw-purple-dark: #4b4d89;
+  --pmw-sky: #bfddf4;
+  --pmw-sky-soft: #eaf5fc;
+  --pmw-blue-wash: #eaf5fc;
+  --pmw-purple-wash: #f1f0fa;
+  --pmw-yellow: #fff546;
+  --pmw-border: #d6dce5;
+  --app-bg-fallback: linear-gradient(180deg, #eaf5fc 0%, #f7fafd 48%, #ffffff 100%);
+}
+
+body {
+  margin: 0;
+  font-family: var(--pmw-font-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--app-bg, var(--app-bg-fallback));
+  color: var(--pmw-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--pmw-font-main);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+
+p,
+li,
+figcaption,
+blockquote {
+  text-wrap: pretty;
+}
+
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+}
