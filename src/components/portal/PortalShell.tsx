@@ -14,8 +14,6 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     userName,
     userTitle,
     userEmail,
-    isAdmin,
-    canUseFormBuilder,
     screen,
     setScreen,
     records,
@@ -24,7 +22,6 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     catalogue,
     audit,
     onSignOut,
-    onOpenBuilder,
   } = usePortal();
 
   const items = portalNav(role, {
@@ -118,11 +115,6 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             {userTitle || userEmail}
           </Typography>
           <Stack spacing={0.75} sx={{ mt: 1.5 }}>
-            {isAdmin && canUseFormBuilder && (
-              <Button variant="outlined" size="small" onClick={onOpenBuilder} sx={{ minHeight: 36 }}>
-                Form builder
-              </Button>
-            )}
             <Button variant="outlined" size="small" onClick={onSignOut} sx={{ minHeight: 36 }}>
               Sign out
             </Button>

@@ -1,47 +1,22 @@
-import { useState } from "react";
-import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { PORTAL_SLA_DEFAULT_DAYS } from "../../config/oshes";
 import { usePortal } from "../../contexts/PortalContext";
 import { severityCaptureLabel } from "../../utils/portalCatalogue";
-import { addFormType, saveCatalogueSettings } from "../../utils/portalCatalogueWrite";
-import { writeAuditEntry } from "../../utils/portalAudit";
+import { saveCatalogueSettings } from "../../utils/portalCatalogueWrite";
 import type { CatalogueEntry } from "../../types";
-
-const DEFAULT_ROLES = [
-  "Supervisor",
-  "Safety Officer",
-  "Ops Manager",
-  "Site Lead",
-  "Environment Lead",
-  "Occupational Health",
-];
 
 /**
  * Form catalogue — the answer to "the form set must be configurable later".
  * Everything on this screen is data on the form's own LayerConfig, so nothing
  * downstream has to hard-code a form list.
+ *
+ * The form set itself is authored in the pmw-hrform builder, which owns every
+ * write that creates a form. This screen edits operational settings — SLA and
+ * the public flag — on forms that already exist.
  */
 export default function CatalogueScreen() {
-  const { catalogue, spClient, userName, userEmail, updateCatalogue, addCatalogueEntry, appendAudit, toast } = usePortal();
-  const [addOpen, setAddOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newCode, setNewCode] = useState("");
-  const [newLayers, setNewLayers] = useState("2");
-  const [newSla, setNewSla] = useState(String(PORTAL_SLA_DEFAULT_DAYS));
-  const [saving, setSaving] = useState(false);
-
-  const actor = { spClient, actorName: userName || userEmail, actorEmail: userEmail };
+  const { catalogue, spClient, updateCatalogue, toast } = usePortal();
 
   const persist = async (entry: CatalogueEntry, patch: Parameters<typeof saveCatalogueSettings>[2], optimistic: Partial<CatalogueEntry>) => {
     updateCatalogue(entry.listTitle, optimistic);
@@ -65,43 +40,6 @@ export default function CatalogueScreen() {
     if (slaDays > 0) void persist(entry, { slaDays }, { slaDays });
   };
 
-  const confirmAdd = async () => {
-    const name = newName.trim();
-    if (!name) {
-      toast("Give the form type a name first.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const layerCount = Math.max(1, Math.min(6, Number(newLayers) || 2));
-      const entry = await addFormType(spClient, {
-        name,
-        code: newCode,
-        layerCount,
-        slaDays: Number(newSla) || PORTAL_SLA_DEFAULT_DAYS,
-        roles: DEFAULT_ROLES,
-      });
-      addCatalogueEntry(entry);
-      appendAudit(
-        await writeAuditEntry(spClient, {
-          reference: entry.code,
-          who: actor.actorName,
-          event: `Form type “${name}” added to the catalogue · ${layerCount} layers`,
-        }),
-      );
-      setAddOpen(false);
-      setNewName("");
-      setNewCode("");
-      setNewLayers("2");
-      setNewSla(String(PORTAL_SLA_DEFAULT_DAYS));
-      toast(`“${name}” added. It is internal-only until you publish a link.`);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not add the form type.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <Box>
       <Stack direction="row" spacing={2} sx={{ alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", mb: 3 }}>
@@ -113,9 +51,6 @@ export default function CatalogueScreen() {
             the form set, its approval chain, per-layer SLA and public flag are data, not code
           </Typography>
         </Box>
-        <Button variant="contained" onClick={() => setAddOpen(true)} sx={{ minHeight: 40 }}>
-          Add form type
-        </Button>
       </Stack>
 
       <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflowX: "auto" }}>
@@ -221,55 +156,10 @@ export default function CatalogueScreen() {
         working days.
       </Typography>
 
-      <Dialog open={addOpen} onClose={saving ? undefined : () => setAddOpen(false)} fullWidth maxWidth="sm" transitionDuration={120}>
-        <DialogTitle sx={{ fontWeight: 800 }}>Add a form type</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
-            It appears in the catalogue, on the dashboard's inbound list, and — if public — in the QR picker.
-          </Typography>
-          <Stack spacing={2}>
-            <TextField
-              label="Name"
-              placeholder="e.g. Confined Space Entry"
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              fullWidth
-              autoFocus
-            />
-            <Stack direction="row" spacing={2}>
-              <TextField
-                label="Code"
-                placeholder="CSE"
-                value={newCode}
-                onChange={(event) => setNewCode(event.target.value.toUpperCase().slice(0, 4))}
-                sx={{ flex: 1 }}
-              />
-              <TextField
-                label="Layers"
-                value={newLayers}
-                onChange={(event) => setNewLayers(event.target.value.replace(/[^0-9]/g, ""))}
-                sx={{ flex: 1 }}
-                slotProps={{ htmlInput: { inputMode: "numeric" } }}
-              />
-              <TextField
-                label="SLA (days)"
-                value={newSla}
-                onChange={(event) => setNewSla(event.target.value.replace(/[^0-9]/g, ""))}
-                sx={{ flex: 1 }}
-                slotProps={{ htmlInput: { inputMode: "numeric" } }}
-              />
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setAddOpen(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={() => void confirmAdd()} disabled={saving}>
-            Add form type
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>
+        New form types are built in the PMW form builder, which is the single place any form is authored. Once a
+        form is published there it appears here, and its SLA and public link can be set from this screen.
+      </Typography>
     </Box>
   );
 }

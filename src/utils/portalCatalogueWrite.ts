@@ -1,10 +1,14 @@
-import { OSHES_LISTS } from "../config/oshes";
-import type { CatalogueEntry, LayerConfig, LayerConfigItem, SeverityCapture, SharePointClient } from "../types";
-import { slugify } from "./formBuilderSP";
+import type { CatalogueEntry, LayerConfig, SeverityCapture, SharePointClient } from "../types";
+
+const MASTER_FORM_LIST = "Master Form";
 
 /**
  * SLA and the public flag live on the form's own LayerConfig — the catalogue is
  * an editor for existing form-builder data, not a parallel store.
+ *
+ * Creating a form type is not done here. The pmw-hrform builder owns every write
+ * that brings a form into existence; this module only edits settings on forms
+ * that already exist.
  */
 export interface CatalogueSettingsPatch {
   slaDays?: number;
@@ -19,7 +23,7 @@ function masterFormFilter(listTitle: string): string {
 }
 
 async function readLayerConfig(spClient: SharePointClient, listTitle: string): Promise<LayerConfig | null> {
-  const items = await spClient.queryList(OSHES_LISTS.masterForm, {
+  const items = await spClient.queryList(MASTER_FORM_LIST, {
     select: ["Id", "Title", "LayerConfig"],
     filter: masterFormFilter(listTitle),
     top: 1,
@@ -53,82 +57,11 @@ export async function saveCatalogueSettings(
     }),
   };
 
-  await spClient.upsertListItem(OSHES_LISTS.masterForm, masterFormFilter(entry.listTitle), {
+  await spClient.upsertListItem(MASTER_FORM_LIST, masterFormFilter(entry.listTitle), {
     Title: entry.listTitle,
     LayerConfig: JSON.stringify(next),
     ...(patch.isPublic !== undefined ? { IsPublic: patch.isPublic } : {}),
   });
 
   return next;
-}
-
-export interface NewFormTypeInput {
-  name: string;
-  code: string;
-  layerCount: number;
-  slaDays: number;
-  /** Roles the new layers point at, in order. */
-  roles: string[];
-}
-
-/**
- * Add a form type. It appears in the catalogue, in "Inbound today" at zero, in
- * the QR picker once made public, and writes an audit entry — all because those
- * screens read the catalogue rather than a hard-coded list.
- */
-export async function addFormType(
-  spClient: SharePointClient,
-  input: NewFormTypeInput,
-): Promise<CatalogueEntry> {
-  const name = input.name.trim();
-  if (!name) throw new Error("Give the form type a name first.");
-
-  const layerCount = Math.max(1, Math.min(6, input.layerCount));
-  const code = (input.code.trim() || name.slice(0, 3)).toUpperCase().slice(0, 4);
-
-  const layers: LayerConfigItem[] = Array.from({ length: layerCount }, (_, index) => ({
-    layerNumber: index + 1,
-    type: "approval",
-    authMode: "365",
-    assignee: { type: "field-reference", value: `L${index + 1}_Email` },
-    confirmationType: "signature",
-    allowRejectionReason: true,
-    title: input.roles[index] ?? `Layer ${index + 1}`,
-    roleLabel: input.roles[index] ?? `Layer ${index + 1}`,
-    slaDays: input.slaDays,
-  }));
-
-  const layerConfig: LayerConfig = {
-    version: "1.0",
-    layers,
-    code,
-    slaDays: input.slaDays,
-    isPublic: false,
-    severityCapture: "none",
-  };
-
-  await spClient.upsertListItem(OSHES_LISTS.masterForm, masterFormFilter(name), {
-    Title: name,
-    FormID: code,
-    Slug: slugify(name),
-    NumberOfApprovalLayer: layerCount,
-    CurrentVersion: "1",
-    IsPublished: false,
-    IsPublic: false,
-    LayerConfig: JSON.stringify(layerConfig),
-  });
-
-  return {
-    listTitle: name,
-    code,
-    name,
-    chain: layers.map((layer) => layer.roleLabel ?? layer.title ?? ""),
-    layers,
-    slaDays: input.slaDays,
-    isPublic: false,
-    severityCapture: "none",
-    volume: 0,
-    today: 0,
-    firstApprover: input.roles[0] ?? "the first approver",
-  };
 }

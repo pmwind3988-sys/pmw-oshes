@@ -1,11 +1,10 @@
-import { Box, Grid, Typography, IconButton, Tooltip } from "@mui/material";
+import { Box, Grid, Typography } from "@mui/material";
 import {
   AccessTime as AccessTimeIcon,
   ArrowForward as ArrowForwardIcon,
   Cancel as CancelIcon,
   CheckCircle as CheckCircleIcon,
   Description as DescriptionIcon,
-  Edit as EditIcon,
 } from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
 import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
@@ -15,8 +14,6 @@ interface ListSummaryCardsProps {
   visibleLists: DiscoveredList[];
   listMetaMap: Record<string, ListMetaEntry>;
   isAdmin: boolean;
-  canUseFormBuilder: boolean;
-  onEditForm: (listTitle: string) => void;
 }
 
 export default function ListSummaryCards({
@@ -24,8 +21,6 @@ export default function ListSummaryCards({
   visibleLists,
   listMetaMap,
   isAdmin,
-  canUseFormBuilder,
-  onEditForm,
 }: ListSummaryCardsProps) {
   return (
     <Grid container spacing={2}>
@@ -67,7 +62,7 @@ export default function ListSummaryCards({
                 borderRadius: "8px",
                 boxShadow: editorialShadow,
                 p: { xs: 1.75, sm: 2 },
-                pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
+                pt: { xs: 1.75, sm: 2 },
                 position: "relative",
                 overflow: "hidden",
                 display: "flex",
@@ -124,40 +119,6 @@ export default function ListSummaryCards({
                     {meta.category} · {cardCaption}
                   </Typography>
                 </Box>
-                {canUseFormBuilder && (
-                  <Tooltip title={`Edit ${list.title}`}>
-                    <IconButton
-                      aria-label={`Edit ${list.title}`}
-                      onClick={() => onEditForm(list.title)}
-                      size="small"
-                      sx={{
-                        position: "absolute",
-                        top: 12,
-                        right: 12,
-                        width: 40,
-                        height: 40,
-                        borderRadius: "8px",
-                        backgroundColor: editorial.purpleWash,
-                        color: editorial.pmwPurpleDark,
-                        boxShadow: `inset 0 0 0 1px ${editorial.pmwPurpleSoft}`,
-                        transition: "background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease",
-                        "&:hover": {
-                          backgroundColor: editorial.pmwPurpleSoft,
-                          boxShadow: `inset 0 0 0 1px ${editorial.pmwPurple}`,
-                        },
-                        "&:active": {
-                          transform: "scale(0.96)",
-                        },
-                        "&:focus-visible": {
-                          outline: `3px solid ${editorial.pmwPurpleSoft}`,
-                          outlineOffset: 2,
-                        },
-                      }}
-                    >
-                      <EditIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
               </Box>
 
               <Box sx={{ mt: "auto" }}>
@@ -247,7 +208,7 @@ export default function ListSummaryCards({
                 </Typography>
               )}
 
-              {!isAdmin && !canUseFormBuilder && count > 0 && (
+              {!isAdmin && count > 0 && (
                 <Box
                   sx={{
                     display: "flex",

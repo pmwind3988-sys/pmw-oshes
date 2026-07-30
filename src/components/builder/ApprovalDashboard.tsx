@@ -610,15 +610,12 @@ export default function ApprovalDashboard() {
     if (!isAuthenticated) return;
 
     const client = createSpClient(instance, accounts);
-    Promise.all([
-      client.isGroupMember(SP_STATIC.adminGroup),
-      client.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
-    ])
-      .then(([admin, superuser]) => {
+    client.isGroupMember(SP_STATIC.adminGroup)
+      .then((admin) => {
         setIsAdmin(admin);
-        setIsSuperuser(superuser);
+        setIsSuperuser(admin);
         setAdminChecked(true);
-        if (!admin || !superuser) setLoading(false);
+        if (!admin) setLoading(false);
       })
       .catch(() => {
         setIsAdmin(false);

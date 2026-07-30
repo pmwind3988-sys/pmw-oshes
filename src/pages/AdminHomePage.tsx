@@ -168,7 +168,6 @@ export default function AdminHomePage() {
   const {
     userEmail,
     isAdmin,
-    canUseFormBuilder,
     submissions,
     visibleLists,
     listMetaMap,
@@ -189,8 +188,6 @@ export default function AdminHomePage() {
     sortedSubmissions,
     onSignOut,
     onSwitchAccount,
-    onOpenBuilder,
-    onEditForm,
     onHardDeleteSubmission,
   } = useDashboard();
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
@@ -205,8 +202,8 @@ export default function AdminHomePage() {
   const [exportCategoryFilter, setExportCategoryFilter] = useState("");
   const [exportSubmitterFilter, setExportSubmitterFilter] = useState("");
   const workspaceLabel = isAdmin ? "OSHES admin workspace" : "OSHES workspace";
-  const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
-  const canExportSubmissions = isAdmin || canUseFormBuilder;
+  const canHardDeleteSubmission = isAdmin;
+  const canExportSubmissions = isAdmin;
   const categoryOptions = Array.from(
     new Set(visibleLists.map((list) => listMetaMap[list.title]?.category).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b));
@@ -222,9 +219,7 @@ export default function AdminHomePage() {
     }),
   );
   const dashboardSubtitle = isAdmin
-    ? canUseFormBuilder
-      ? "Build operational forms, review submissions, monitor workflows, and maintain OSHES configurations."
-      : "Review submissions, monitor workflows, and manage OSHES operations."
+    ? "Review submissions, monitor workflows, and manage OSHES operations."
     : "Submit OSHES forms, track workflow status, and access your submission history.";
 
   const openDeleteDialog = (item: Submission) => {
@@ -288,10 +283,8 @@ export default function AdminHomePage() {
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
-        canUseFormBuilder={canUseFormBuilder}
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
-        onOpenBuilder={onOpenBuilder}
       />
 
       <Box
@@ -434,8 +427,6 @@ export default function AdminHomePage() {
               visibleLists={visibleLists}
               listMetaMap={listMetaMap}
               isAdmin={isAdmin}
-              canUseFormBuilder={canUseFormBuilder}
-              onEditForm={onEditForm}
             />
           </Box>
         )}

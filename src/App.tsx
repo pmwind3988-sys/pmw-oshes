@@ -264,7 +264,6 @@ function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
 const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
 const loadResponseViewer = () => import("./components/builder/ResponseViewer");
-const loadAdminFormBuilder = () => import("./pages/AdminFormBuilder");
 const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
@@ -602,7 +601,6 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const userEmail = activeAccount?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
-  const [canUseFormBuilder, setCanUseFormBuilder] = useState(false);
   /** Read-only OSHES group. Members see everything and can act on nothing. */
   const [isAuditor, setIsAuditor] = useState(false);
   const [authProfileStatus, setAuthProfileStatus] = useState<AuthProfileStatus>("unknown");
@@ -649,7 +647,6 @@ export default function App() {
     authProfileAccountRef.current = accountKey;
     setAuthProfileStatus("unknown");
     setIsAdmin(false);
-    setCanUseFormBuilder(false);
     setIsAuditor(false);
     setSubmissions([]);
     setVisibleLists([]);
@@ -850,14 +847,12 @@ export default function App() {
         setAuthLoadStep("permissions");
         setLoadStatus("Loading permissions and form configuration...");
         setLoadProgress(20);
-        const [adminResult, builderSuperuserResult, auditorResult, config] = await Promise.all([
+        const [adminResult, auditorResult, config] = await Promise.all([
           spClient.isGroupMember(SP_STATIC.adminGroup),
-          spClient.isGroupMember(SP_STATIC.formBuilderSuperuserGroup),
           spClient.isGroupMember(SP_STATIC.auditorGroup).catch(() => false),
           loadConfig(spClient),
         ]);
         if (cancelled) return;
-        const builderAccessResult = adminResult && builderSuperuserResult;
 
         let allLists: DiscoveredList[];
         try {
@@ -873,7 +868,6 @@ export default function App() {
         if (cancelled) return;
 
         setIsAdmin(adminResult);
-        setCanUseFormBuilder(builderAccessResult);
         setIsAuditor(auditorResult);
         setLoadedConfig(config);
         setLoadProgress(50);
@@ -1215,8 +1209,8 @@ export default function App() {
   );
 
   async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
-    if (!isAdmin && !canUseFormBuilder) {
-      throw new Error("Only OSHES Forms Owners or form builder superusers can delete submissions.");
+    if (!isAdmin) {
+      throw new Error("Only OSHES Forms Owners can delete submissions.");
     }
 
     const account = activeAccount ?? accounts[0] ?? null;
@@ -1331,14 +1325,12 @@ export default function App() {
           userEmail={userEmail}
           isAdmin={isAdmin}
           isAuditor={isAuditor}
-          canUseFormBuilder={canUseFormBuilder}
           submissions={submissions}
           visibleLists={visibleLists}
           loadedConfig={loadedConfig}
           spClient={portalSpClient}
           onSignOut={handleSignOut}
           onSwitchAccount={handleSwitchAccount}
-          onOpenBuilder={() => navigate("/admin/builder")}
           onRefresh={handleRefreshSubmissions}
         />
       </Suspense>
@@ -1351,7 +1343,6 @@ export default function App() {
       <DashboardProvider
         userEmail={userEmail}
         isAdmin={isAdmin}
-        canUseFormBuilder={canUseFormBuilder}
         submissions={submissions}
         visibleLists={visibleLists}
         listMetaMap={listMetaMap}
@@ -1372,8 +1363,6 @@ export default function App() {
         sortedSubmissions={sortedSubmissions}
         onSignOut={handleSignOut}
         onSwitchAccount={handleSwitchAccount}
-        onOpenBuilder={() => navigate("/admin/builder")}
-        onEditForm={(listTitle: string) => navigate(`/admin/builder/${encodeURIComponent(listTitle)}`)}
         onHardDeleteSubmission={handleHardDeleteSubmission}
       >
         <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
@@ -1424,7 +1413,7 @@ export default function App() {
           <Route
             path="/admin/submissions"
             element={
-              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+              <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
@@ -1436,7 +1425,7 @@ export default function App() {
           <Route
             path="/admin/approvals"
             element={
-              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
+              <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
@@ -1452,30 +1441,6 @@ export default function App() {
                 <ErrorBoundary>
                   <Box sx={{ minHeight: "100vh", background: APP_BG }}>
                     <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
-                  </Box>
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/admin/builder"
-            element={
-              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
-                <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh" }}>
-                    <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
-                  </Box>
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/admin/builder/:formTitle"
-            element={
-              <AdminGuard isAdmin={canUseFormBuilder} restrictedTo="the SharePoint superuser group">
-                <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh" }}>
-                    <LazyRoute load={loadAdminFormBuilder} fallback={<LoadingScreen status="Loading builder..." />} />
                   </Box>
                 </ErrorBoundary>
               </AdminGuard>

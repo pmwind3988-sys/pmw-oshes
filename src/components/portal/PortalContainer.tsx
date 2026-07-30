@@ -25,14 +25,12 @@ interface PortalContainerProps {
   userEmail: string;
   isAdmin: boolean;
   isAuditor: boolean;
-  canUseFormBuilder: boolean;
   submissions: Submission[];
   visibleLists: DiscoveredList[];
   loadedConfig: LoadedConfig | null;
   spClient: SharePointClient;
   onSignOut: () => void;
   onSwitchAccount: () => void;
-  onOpenBuilder: () => void;
   onRefresh: () => void;
 }
 
@@ -54,19 +52,16 @@ export default function PortalContainer({
   userEmail,
   isAdmin,
   isAuditor,
-  canUseFormBuilder,
   submissions,
   visibleLists,
   loadedConfig,
   spClient,
   onSignOut,
   onSwitchAccount,
-  onOpenBuilder,
   onRefresh,
 }: PortalContainerProps) {
   const [patched, setPatched] = useState<Record<string, Submission>>({});
   const [catalogueOverrides, setCatalogueOverrides] = useState<Record<string, Partial<CatalogueEntry>>>({});
-  const [addedForms, setAddedForms] = useState<CatalogueEntry[]>([]);
   const [sessionAudit, setSessionAudit] = useState<AuditEntry[]>([]);
   const [storedAudit, setStoredAudit] = useState<AuditEntry[]>([]);
   const [directory, setDirectory] = useState<PeopleDirectory>({});
@@ -117,8 +112,8 @@ export default function PortalContainer({
     for (const title of loadedConfig?.allowedTitles ?? []) titles.add(title);
 
     const base = buildCatalogue([...titles], loadedConfig?.layerConfigs, effectiveSubmissions, directory);
-    return [...base, ...addedForms].map((entry) => ({ ...entry, ...catalogueOverrides[entry.listTitle] }));
-  }, [visibleLists, loadedConfig, effectiveSubmissions, directory, addedForms, catalogueOverrides]);
+    return base.map((entry) => ({ ...entry, ...catalogueOverrides[entry.listTitle] }));
+  }, [visibleLists, loadedConfig, effectiveSubmissions, directory, catalogueOverrides]);
 
   const records = useMemo<PortalRecord[]>(() => {
     return effectiveSubmissions
@@ -167,7 +162,6 @@ export default function PortalContainer({
     userName: displayName(email, directory),
     userTitle: userEmail,
     isAdmin,
-    canUseFormBuilder,
     spClient,
     directory,
     records,
@@ -195,11 +189,9 @@ export default function PortalContainer({
     appendAudit: (entry: AuditEntry) => setSessionAudit((current) => [entry, ...current]),
     updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) =>
       setCatalogueOverrides((current) => ({ ...current, [listTitle]: { ...current[listTitle], ...changes } })),
-    addCatalogueEntry: (entry: CatalogueEntry) => setAddedForms((current) => [...current, entry]),
     toast: (message: string) => setToastMessage(message),
     onSignOut,
     onSwitchAccount,
-    onOpenBuilder,
   };
 
   return (

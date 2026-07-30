@@ -6,14 +6,12 @@
 | Task | File | Notes |
 |------|------|-------|
 | Admin dashboard | `AdminHomePage.tsx` | Route `/adminhomepage` and catch-all. Props: ~25 from `App.tsx` (prop-drilling). |
-| Form builder page | `AdminFormBuilder.tsx` | Routes `/admin/builder[/:formTitle]`. Form Builder Superuser-only: route guard and page backup check require HR Forms Owner + `superuser`. Hosts `FormBuilder` + `FormLibrary` + sidebar with Layers/Meta/Versions/Log/Publish tabs. Manages `showBanner`, `meta`, `layerConfig`, publish flow. |
+| Role-scoped portal | `PortalPage.tsx` + `portal/` | Route `/portal`. Screens are selected by the derived `PortalRole`; see `src/utils/portalRole.ts`. |
+| Public QR report flow | `PublicReportPage.tsx` | Routes `/report` and `/track`. Signed out, strictly linear: poster → form → reference. |
 | Public form renderer | `DynamicFormPage.tsx` | Route `/form/:formId`. Auth gate bypassed for public forms. SurveyJS model + theme + submission handler with LayerConfig-based layer resolution. Uses `onCompleting` (prevents auto-complete) + `useEffect` on `submitStatus` to trigger `doSubmitForm()`. `onComplete` is intentionally NOT registered. |
 | Evaluator interface | `EvaluationPage.tsx` | Routes `/eval/:token` (public) and `/eval/:formSlug/:responseId/:layerNumber` (365). Auth gate, layer action (approve/signature/checkbox/reject/confirm). |
-| Approval workspace | `ApprovalDashboard.tsx` | Routes `/admin/submissions` and `/admin/approvals`. Both are Form Builder Superuser-only; distinct from `/eval/...`, which is the assigned reviewer action page. |
+| Approval workspace | `ApprovalDashboard.tsx` | Routes `/admin/submissions` and `/admin/approvals`. Both are admin-only; distinct from `/eval/...`, which is the assigned reviewer action page. |
 | Privacy notice | `PrivacyNoticePage.tsx` | Route `/privacy`. Public page with PDPA privacy notice content. |
-| Job admin lists | `AdminJobsPage.tsx` | Route `/admin/career/applications`. Lists/manages job applications. |
-| Job admin manage | `AdminJobManagePage.tsx` | Route `/admin/career/opportunities`. CRUD for job listings. |
-| Career portal cards | `AdminCareerPortalCardsPage.tsx` | Route `/admin/career/cards`. Manages career portal hero/feature cards. |
 
 ## Conventions
 - **Prop-drilling**: `AdminHomePage` receives massive props from `App.tsx` — no context abstraction yet.
@@ -23,4 +21,6 @@
 
 ## Anti-Patterns
 - `DynamicFormPage.tsx` — has `console.error`/`console.warn` calls (remove or replace with proper logging).
-- `AdminFormBuilder.tsx` — has `console.error`/`console.warn` calls.
+
+## Not in this app
+There is no form builder page. Forms are authored in `pmw-hrform`; adding authoring UI here reintroduces the duplicate this repo removed.

@@ -1,6 +1,5 @@
-import type { FormConfig, FormLogEntry, Submission, SurveyJson, LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
+import type { LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
-import { flattenQuestions, getSpColumnKind } from './FormBuilderEngine.ts';
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { OSHES_LISTS } from "../config/oshes";
 
@@ -221,6 +220,14 @@ async function setColumnIndexed(token: string, listTitle: string, fieldName: str
   }
 }
 
+const LIST_INDEXES: Record<string, string[]> = {
+  [OSHES_LISTS.masterForm]: ['Title', 'Slug', 'FormID', 'CurrentVersion'],
+  [OSHES_LISTS.approvers]: ['FormTitle', 'LayerNumber', 'ApproverEmail'],
+  [OSHES_LISTS.versions]: ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
+  [OSHES_LISTS.builderLog]: ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
+  [OSHES_LISTS.dashboardSettings]: ['BackgroundId', 'UpdatedAt'],
+};
+
 async function ensureIndexedColumns(
   token: string,
   listTitle: string,
@@ -292,143 +299,6 @@ async function getDigest(token: string): Promise<string> {
   return digestValue;
 }
 
-export async function getFormConfig(token: string, listTitle: string): Promise<FormConfigData | null> {
-  if (!await listExists(token, OSHES_LISTS.masterForm)) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
-  return data.value?.[0] || null;
-}
-
-export async function saveFormConfig(
-  config: Omit<FormConfig, 'Id' | 'Created' | 'Modified'>,
-  token: string
-): Promise<FormConfig> {
-  const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items`;
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Content-Type': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-      'X-RequestDigest': digest,
-    },
-    body: JSON.stringify(config),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to save form config: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-export async function saveFormVersion(
-  token: string,
-  params: {
-    listTitle: string;
-    slug: string;
-    version: string;
-    surveyJson: unknown;
-    meta: unknown;
-    changedBy: string;
-    layerConfig?: unknown;
-  }
-): Promise<void> {
-  await ensureListExists(token, OSHES_LISTS.versions);
-  const jsonStr = JSON.stringify({
-    surveyJson: params.surveyJson, meta: params.meta, version: params.version,
-    savedAt: new Date().toISOString(), changedBy: params.changedBy,
-    layerConfig: params.layerConfig,
-  }, null, 2);
-  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(params.listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(params.version))}'&$select=Id&$top=1`).catch(() => ({ value: [] })) as { value?: { Id: number }[] };
-  const body = {
-    Title: `${params.listTitle} v${params.version}`,
-    FormTitle: params.listTitle,
-    FormSlug: params.slug,
-    FormVersion: params.version,
-    SurveyJSON: jsonStr,
-    PublishedBy: params.changedBy,
-    PublishedAt: new Date().toISOString(),
-  };
-  if (existing.value?.length && existing.value[0].Id) {
-    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${existing.value[0].Id})`, body);
-  } else {
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items`, body);
-  }
-}
-
-export async function logFormAction(
-  logEntry: Omit<FormLogEntry, 'Id' | 'Timestamp'>,
-  token: string
-): Promise<FormLogEntry> {
-  const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items`;
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Content-Type': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-      'X-RequestDigest': digest,
-    },
-    body: JSON.stringify(logEntry),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to log form action: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-export async function getFormSubmissions(formId: string, token: string): Promise<Submission[]> {
-  const encodedFormId = sanitizeODataValue(formId);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Submissions')/items?$filter=FormId eq '${encodedFormId}'&$orderby=Created desc`;
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch form submissions: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.value || [];
-}
-
-export async function submitFormResponse(
-  formId: string,
-  responseData: unknown,
-  token: string
-): Promise<Submission> {
-  const digest = await getDigest(token);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('Submissions')/items`;
-  const body = {
-    FormId: formId,
-    Response: JSON.stringify(responseData),
-    Submitted: new Date().toISOString(),
-  };
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Content-Type': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-      'X-RequestDigest': digest,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to submit form response: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
 export async function getSharePointChoices(
   listTitle: string,
   fieldName: string,
@@ -458,64 +328,6 @@ export async function getSharePointChoices(
     return [];
   }
   return Array.isArray(choices) ? choices : (choices.results || []);
-}
-
-export async function getSharePointLists(token: string): Promise<{ title: string; id: string }[]> {
-  const url = `${SP_SITE_URL}/_api/web/lists?$select=Id,Title,Hidden&$filter=Hidden eq false&$top=500`;
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch SharePoint lists: ${response.status} ${response.statusText}`);
-  }
-  const data = await response.json();
-  return (data.value || [])
-    .filter((list: { Title?: string }) => !!list.Title)
-    .map((list: { Title: string; Id: string }) => ({ title: list.Title, id: list.Id }));
-}
-
-export async function getChoiceColumnsForList(listTitle: string, token: string): Promise<{ title: string; typeKind: number; choices: string[] }[]> {
-  const encodedListTitle = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/fields?$select=Title,FieldTypeKind,Choices&$filter=FieldTypeKind eq 6 or FieldTypeKind eq 15`;
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch choice columns: ${response.status} ${response.statusText}`);
-  }
-  const data = await response.json();
-  return (data.value || [])
-    .filter((field: { Title?: string }) => !!field.Title)
-    .map((field: { Title: string; FieldTypeKind: number; Choices?: { results?: string[] } | string[] }) => {
-      const rawChoices = field.Choices;
-      const choiceArr = Array.isArray(rawChoices)
-        ? rawChoices
-        : (rawChoices?.results || []);
-      return { title: field.Title, typeKind: field.FieldTypeKind, choices: choiceArr };
-    });
-}
-
-/**
- * Fetch all columns from a SharePoint list (not just choice columns).
- * Used for the filter column picker in Filtered List Source.
- */
-export async function getAllColumnsForList(listTitle: string, token: string): Promise<{ title: string; typeKind: number }[]> {
-  const encoded = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encoded}')/fields?$select=Title,FieldTypeKind&$filter=Hidden eq false and ReadOnlyField eq false`;
-  try {
-    const data = await spGet(token, url) as { value?: { Title?: string; FieldTypeKind: number }[] };
-    return (data.value || [])
-      .filter(f => !!f.Title && f.Title !== "Content Type" && f.Title !== "Title")
-      .map(f => ({ title: f.Title!, typeKind: f.FieldTypeKind }));
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -584,34 +396,11 @@ export function slugify(str: string): string {
     .replace(/^-|-$/g, '');
 }
 
-export async function checkSlugConflict(
-  token: string,
-  slug: string,
-  excludeFormTitle?: string | null
-): Promise<string | null> {
-  const slugToCheck = slugify(slug);
-  if (slugToCheck.length === 0) return null;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slugToCheck))}'&$select=Title,Slug&$top=5`).catch(() => ({ value: [] })) as { value?: { Title: string }[] };
-  const others = (data.value || []).filter(r => r.Title !== excludeFormTitle);
-  return others.length > 0 ? others[0].Title : null;
-}
-
-export async function getAllSlugs(token: string): Promise<{ Title: string; Slug: string; CurrentVersion: string }[]> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Title,Slug,CurrentVersion&$top=500`).catch(() => ({ value: [] })) as { value?: { Title: string; Slug: string; CurrentVersion: string }[] };
-  return data.value || [];
-}
-
 export async function spUploadFile(token: string, lib: string, filename: string, content: string | Uint8Array): Promise<unknown> {
   const digest = await getDigest(token);
   const r = await fetchWithTimeout(`${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(lib)}')/rootfolder/files/add(url='${encodeURIComponent(filename)}',overwrite=true)`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'X-RequestDigest': digest, 'Content-Type': 'application/octet-stream' }, body: (typeof content === 'string' ? new TextEncoder().encode(content) : content) as BodyInit });
   if (!r.ok) { const t = await r.text(); throw new Error(`Upload ${r.status}: ${t}`); }
   return r.json().catch(() => ({}));
-}
-
-export async function getFormLog(token: string, listTitle: string): Promise<FormLogEntry[]> {
-  if (!await listExists(token, OSHES_LISTS.builderLog)) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=EventType,ChangedBy,EventSummary,BeforeJSON,AfterJSON,EventAt,Title&$orderby=EventAt desc&$top=200`).catch(() => ({ value: [] })) as { value?: FormLogEntry[] };
-  return data.value || [];
 }
 
 export async function getFormVersion(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
@@ -667,48 +456,6 @@ export async function ensureColumns(
     result.created.push(column.n);
   }
   return result;
-}
-
-export async function deleteListColumnsWhere(
-  listTitle: string,
-  filterExpr: string,
-  token: string
-): Promise<number> {
-  const encodedListTitle = encodeURIComponent(listTitle);
-  const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/Fields?$filter=${encodeURIComponent(filterExpr)}`;
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      'Accept': 'application/json;odata=nometadata',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  if (!response.ok) {
-    return 0;
-  }
-  const data = await response.json();
-  const columns = data.value || [];
-  let deleted = 0;
-  for (const item of columns) {
-    if (!item.Id) continue;
-    const encodedId = encodeURIComponent(item.Id.toString());
-    const deleteUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodedListTitle}')/Fields('${encodedId}')`;
-    const digest = await getDigest(token);
-    const deleteResponse = await fetchWithTimeout(deleteUrl, {
-      method: 'DELETE',
-      headers: {
-        'Accept': 'application/json;odata=nometadata',
-        'Authorization': `Bearer ${token}`,
-        'X-RequestDigest': digest,
-      },
-    });
-    if (deleteResponse.ok) {
-      deleted += 1;
-    }
-  }
-  if (deleted > 0) {
-    columnCache.delete(columnCacheKey(listTitle));
-  }
-  return deleted;
 }
 
 export async function createSpList(
@@ -784,29 +531,12 @@ export async function ensureListSchema(
   return result;
 }
 
-export function makeListSchema(
-  title: string,
-  columns: SpColumnSpec[],
-  options: { baseTemplate?: number; description?: string } = {},
-): SpListSchema {
-  return {
-    title,
-    baseTemplate: options.baseTemplate,
-    description: options.description,
-    columns,
-  };
-}
-
 export async function ensurePdpaColumns(token: string, listTitle: string): Promise<EnsureColumnsResult> {
   return ensureColumns(token, listTitle, PDPA_COLUMN_SPECS);
 }
 
 export async function ensurePdfUrlColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
   return ensureColumns(token, listTitle, [PDF_URL_COLUMN_SPEC]);
-}
-
-export async function ensureSelectedBranchColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
-  return ensureColumns(token, listTitle, [SELECTED_BRANCH_COLUMN_SPEC]);
 }
 
 export async function ensureDocumentLibrary(
@@ -949,34 +679,6 @@ export async function spDelete(token: string, url: string): Promise<void> {
   }
 }
 
-// ── Version helpers (from reference) ─────────────────────────────────────────
-function parseVersion(v: string): { major: number; minor: number } {
-  const [major = 1, minor = 0] = (v || '1.0').split('.').map(Number);
-  return { major, minor };
-}
-
-function formatVersion({ major, minor }: { major: number; minor: number }): string {
-  return `${major}.${minor}`;
-}
-
-export function incrementMinor(version: string): string {
-  const { major, minor } = parseVersion(version);
-  return formatVersion({ major, minor: minor + 1 });
-}
-
-export function incrementMajor(version: string): string {
-  return formatVersion({ major: parseVersion(version).major + 1, minor: 0 });
-}
-
-function compareVersions(a: string, b: string): number {
-  const pa = parseVersion(a), pb = parseVersion(b);
-  return pa.major !== pb.major ? pa.major - pb.major : pa.minor - pb.minor;
-}
-
-export function isVersionGreater(a: string, b: string): boolean {
-  return compareVersions(a, b) > 0;
-}
-
 // ── Form Config CRUD (from reference) ────────────────────────────────────────
 interface FormConfigData {
   Id?: string;
@@ -1004,112 +706,7 @@ export async function getFormConfigByTitle(token: string, listTitle: string): Pr
   return data.value?.[0] || null;
 }
 
-interface UpsertFormConfigParams {
-  formId?: string;
-  numLayers?: number;
-  slug?: string;
-  version?: string;
-  isPublished?: boolean;
-  isPublic?: boolean;
-  conditionField?: string;
-  approvalRules?: unknown;
-  layerConfig?: string;
-}
-
-export async function upsertFormConfig(
-  token: string,
-  listTitle: string,
-  config: UpsertFormConfigParams
-): Promise<string> {
-  await ensureListExists(token, OSHES_LISTS.masterForm);
-  const existing = await getFormConfigByTitle(token, listTitle);
-  const body: Record<string, unknown> = {
-    Title: listTitle,
-    FormID: config.formId || '',
-    NumberOfApprovalLayer: parseInt(String(config.numLayers), 10) || 0,
-    LayerConfig: config.layerConfig || '',
-    Slug: config.slug || '',
-    CurrentVersion: config.version || '1.0',
-    IsPublished: config.isPublished ?? true,
-    IsPublic: config.isPublic ?? true,
-    ConditionField: config.conditionField || '',
-    ApprovalRules: config.approvalRules ? JSON.stringify(config.approvalRules) : '',
-  };
-
-  if (existing?.Id) {
-    await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${existing.Id})`, body);
-    return existing.Id;
-  }
-  const result = await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items`, body) as { Id?: string };
-  if (!result.Id) throw new Error('upsertFormConfig: POST returned no Id');
-  return result.Id;
-}
-
-// ── Approvers (from reference) ─────────────────────────────────────────────
-interface ApproverLayer {
-  email: string;
-  name?: string;
-}
-
-export async function upsertApprovers(token: string, listTitle: string, layers: ApproverLayer[]): Promise<void> {
-  await ensureListExists(token, OSHES_LISTS.approvers);
-  const existing = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id&$top=500`) as { value?: { Id: string }[] };
-  for (const item of existing.value || []) {
-    await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items(${item.Id})`);
-  }
-  for (let i = 0; i < layers.length; i++) {
-    if (!layers[i]?.email) continue;
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items`, {
-      Title: `${listTitle} - Layer ${i + 1}`,
-      FormTitle: listTitle,
-      LayerNumber: i + 1,
-      ApproverEmail: layers[i].email,
-      ApproverName: layers[i].name || '',
-    });
-  }
-}
-
 // ── Form Deletion ─────────────────────────────────────────────────────────
-
-/**
- * Deletes all version records for a form from the Web Form Versions list.
- */
-export async function deleteFormVersions(token: string, formTitle: string): Promise<number> {
-  if (!await listExists(token, OSHES_LISTS.versions)) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
-  const items = data.value || [];
-  await Promise.all(items.map(item => spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items(${item.Id})`)));
-  return items.length;
-}
-
-/**
- * Deletes all audit log entries for a form from the Form Builder Log list.
- */
-export async function deleteFormLogEntries(token: string, formTitle: string): Promise<number> {
-  if (!await listExists(token, OSHES_LISTS.builderLog)) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
-  const items = data.value || [];
-  await Promise.all(items.map(item => spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items(${item.Id})`)));
-  return items.length;
-}
-
-/**
- * Deletes all approver records for a form from the Approvers list.
- */
-export async function deleteFormApprovers(token: string, formTitle: string): Promise<number> {
-  if (!await listExists(token, OSHES_LISTS.approvers)) return 0;
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}'&$select=Id&$top=500`) as { value?: { Id: number }[] };
-  const items = data.value || [];
-  await Promise.all(items.map(item => spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items(${item.Id})`)));
-  return items.length;
-}
-
-/**
- * Deletes the form config entry from the Master Form list.
- */
-export async function deleteFormConfig(token: string, formId: string): Promise<void> {
-  await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${formId})`);
-}
 
 export interface DeleteFormResult {
   configDeleted: boolean;
@@ -1118,120 +715,6 @@ export interface DeleteFormResult {
   approversDeleted: number;
   responseListDeleted?: boolean;
   responseItemsDeleted?: number;
-}
-
-/**
- * Master delete function — deletes a form and all related rows.
- * Cascades: Web Form Versions → Form Builder Log → Approvers → Master Form.
- * Does NOT delete the form's submission list or response list.
- */
-export async function deleteForm(token: string, formTitle: string, formId: string): Promise<DeleteFormResult> {
-  const [versionsDeleted, logEntriesDeleted, approversDeleted] = await Promise.all([
-    deleteFormVersions(token, formTitle),
-    deleteFormLogEntries(token, formTitle),
-    deleteFormApprovers(token, formTitle),
-  ]);
-  await deleteFormConfig(token, formId);
-  return { configDeleted: true, versionsDeleted, logEntriesDeleted, approversDeleted };
-}
-
-/**
- * Deletes the entire response list for a form (e.g. "Training Form Responses").
- * Uses SharePoint REST API to delete the list itself, not just its items.
- */
-export async function deleteResponseList(token: string, formTitle: string): Promise<boolean> {
-  const listName = `${formTitle} Responses`;
-  const exists = await listExists(token, listName);
-  if (!exists) return false;
-  await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')`);
-  columnCache.delete(columnCacheKey(listName));
-  return true;
-}
-
-/**
- * Hard-delete: deletes the form AND its entire response list with all submissions.
- * Use with extreme caution — data cannot be recovered.
- */
-export async function hardDeleteForm(token: string, formTitle: string, formId: string): Promise<DeleteFormResult> {
-  const baseResult = await deleteForm(token, formTitle, formId);
-  const responseListDeleted = await deleteResponseList(token, formTitle);
-  return { ...baseResult, responseListDeleted };
-}
-
-// ── Form Versions (from reference) ────────────────────────────────────────
-interface FormVersionRecord {
-  Title: string;
-  FormTitle: string;
-  FormSlug: string;
-  FormVersion: string;
-  SurveyJSON: string;
-  PublishedBy: string;
-  PublishedAt: string;
-}
-
-export async function getFormVersionHistory(token: string, listTitle: string): Promise<FormVersionRecord[]> {
-  if (!await listExists(token, OSHES_LISTS.versions)) return [];
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=FormVersion,PublishedAt,PublishedBy,Title&$orderby=PublishedAt desc&$top=100`) as { value?: FormVersionRecord[] };
-  return data.value || [];
-}
-
-export async function logEvent(
-  token: string,
-  params: {
-    formTitle: string;
-    eventType: string;
-    changedBy: string;
-    before?: unknown;
-    after?: unknown;
-    summary?: string;
-  }
-): Promise<void> {
-  try {
-    await ensureListExists(token, OSHES_LISTS.builderLog);
-    await spPost(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Form%20Builder%20Log')/items`, {
-      Title: `${params.formTitle} — ${params.eventType}`,
-      FormTitle: params.formTitle,
-      EventType: params.eventType,
-      ChangedBy: params.changedBy,
-      EventSummary: params.summary || '',
-      BeforeJSON: params.before ? JSON.stringify(params.before) : '',
-      AfterJSON: params.after ? JSON.stringify(params.after) : '',
-      EventAt: new Date().toISOString(),
-    });
-  } catch {
-    // Audit logging is best-effort and should not block builder actions.
-  }
-}
-
-// ── Diff helpers (from reference) ─────────────────────────────────────────
-export function diffSurveyJson(before: unknown, after: unknown): unknown[] {
-  if (!before) return [{ type: 'FORM_CREATED', summary: 'Form created' }];
-  const events: unknown[] = [];
-
-  const getAllElements = (json: unknown): unknown[] => {
-    const pages = (json as { pages?: { elements?: unknown[] }[] })?.pages || [];
-    return pages.flatMap(p => p.elements || []);
-  };
-
-  const bF = getAllElements(before);
-  const aF = getAllElements(after);
-  const bM = Object.fromEntries(bF.map((f: unknown) => [(f as { name?: string }).name, f]));
-  const aM = Object.fromEntries(aF.map((f: unknown) => [(f as { name?: string }).name, f]));
-  for (const f of aF) {
-    const fname = (f as { name?: string }).name;
-    if (fname && !bM[fname]) events.push({ type: 'FIELD_ADDED', summary: `Field added: "${fname}"`, before: null, after: f });
-  }
-  for (const f of bF) {
-    const fname = (f as { name?: string }).name;
-    if (fname && !aM[fname]) events.push({ type: 'FIELD_REMOVED', summary: `Field removed: "${fname}"`, before: f, after: null });
-  }
-  for (const f of aF) {
-    const fname = (f as { name?: string }).name;
-    if (!fname) continue;
-    const p = bM[fname];
-    if (p && JSON.stringify(p) !== JSON.stringify(f)) events.push({ type: 'FIELD_CHANGED', summary: `Field modified: "${fname}"`, before: p, after: f });
-  }
-  return events;
 }
 
 // ── Bootstrap (from reference) ──────────────────────────────────────────
@@ -1265,14 +748,6 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   ]},
 };
 
-const LIST_INDEXES: Record<string, string[]> = {
-  [OSHES_LISTS.masterForm]: ['Title', 'Slug', 'FormID', 'CurrentVersion'],
-  [OSHES_LISTS.approvers]: ['FormTitle', 'LayerNumber', 'ApproverEmail'],
-  [OSHES_LISTS.versions]: ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
-  [OSHES_LISTS.builderLog]: ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
-  [OSHES_LISTS.dashboardSettings]: ['BackgroundId', 'UpdatedAt'],
-};
-
 async function ensureListExists(token: string, listTitle: string): Promise<void> {
   const schema = LIST_SCHEMAS[listTitle];
   if (!schema) {
@@ -1289,19 +764,6 @@ async function ensureListExists(token: string, listTitle: string): Promise<void>
 
 export async function ensureDashboardBackgroundSettingsList(token: string): Promise<void> {
   await ensureListExists(token, OSHES_LISTS.dashboardSettings);
-}
-
-export async function bootstrapSystemLists(token: string, onLog?: (msg: string, type: string) => void): Promise<void> {
-  for (const [title, schema] of Object.entries(LIST_SCHEMAS)) {
-    onLog?.(`Checking "${title}"…`, 'info');
-    await ensureListSchema(token, {
-      title,
-      baseTemplate: schema.t,
-      description: schema.desc,
-      columns: schema.cols,
-    }, onLog);
-  }
-  onLog?.('Bootstrap complete ✓', 'ok');
 }
 
 // ── Get latest form by slug (from reference) ────────────────────────────────
@@ -1352,25 +814,6 @@ export interface MatrixChildParentSnapshot {
   submittedBy?: string;
 }
 
-interface ProvisionFormListOptions {
-  formTitle?: string;
-  numLayers?: number;
-  minLayerColumns?: number;
-  includePdpaColumns?: boolean;
-  includePdfUrl?: boolean;
-  includeFileLibrary?: boolean;
-}
-
-const BASE_RESPONSE_COLUMNS: SpColumnSpec[] = [
-  { n: 'SubmittedAt', k: SP_FIELD_KIND.dateTime },
-  { n: 'FormVersion', k: SP_FIELD_KIND.text },
-  { n: 'FormID', k: SP_FIELD_KIND.text },
-  { n: 'SubmittedBy', k: SP_FIELD_KIND.text },
-  { n: 'Status', k: SP_FIELD_KIND.text },
-  { n: 'CurrentApprovalLayer', k: SP_FIELD_KIND.number },
-  { n: 'RawJSON', k: SP_FIELD_KIND.note, ml: true },
-];
-
 const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'EvaluationData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowAssignmentData', k: SP_FIELD_KIND.note, ml: true },
@@ -1378,19 +821,6 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
-];
-
-const RESPONSE_INDEXED_COLUMNS = [
-  'SubmittedAt',
-  'FormVersion',
-  'FormID',
-  'SubmittedBy',
-  'Status',
-  'CurrentApprovalLayer',
-  'CurrentLayer',
-  'FormStatus',
-  'RetentionUntil',
-  'SelectedBranch',
 ];
 
 function dedupeColumnSpecs(columns: SpColumnSpec[]): SpColumnSpec[] {
@@ -1437,118 +867,6 @@ function matrixColumnSpec(col: MatrixColumnDef): SpColumnSpec {
   }
 }
 
-async function resolveChoiceValues(
-  token: string,
-  question: Record<string, unknown>,
-  onLog: (msg: string, type: string) => void,
-): Promise<string[] | undefined> {
-  const src = question.spChoicesSource as { list?: string; column?: string } | undefined;
-  const flSrc = question.spFilteredListSource as
-    | { list?: string; valueColumn?: string; filterColumn?: string; filterValue?: string }
-    | undefined;
-
-  if (src?.list && src?.column) {
-    try {
-      const choices = await getSharePointChoices(src.list, src.column, token);
-      onLog(`  Source choices: ${choices.length} from "${src.list}.${src.column}"`, 'info');
-      return choices;
-    } catch {
-      return [];
-    }
-  }
-
-  if (flSrc?.list && flSrc?.valueColumn) {
-    try {
-      const choices = await getFilteredListChoices(
-        flSrc.list,
-        flSrc.valueColumn,
-        token,
-        flSrc.filterColumn,
-        flSrc.filterValue,
-      );
-      onLog(`  Source choices: ${choices.length} from "${flSrc.list}.${flSrc.valueColumn}"`, 'info');
-      return choices;
-    } catch {
-      return [];
-    }
-  }
-
-  const rawChoices = question.choices as (string | { value?: string; text?: string })[] | undefined;
-  if (!Array.isArray(rawChoices) || rawChoices.length === 0) return undefined;
-  return rawChoices
-    .map((choice) => (typeof choice === 'string' ? choice : choice.value || choice.text || ''))
-    .filter(Boolean);
-}
-
-async function surveyQuestionColumnSpecs(
-  token: string,
-  surveyJson: SurveyJson,
-  onLog: (msg: string, type: string) => void,
-): Promise<{ columns: SpColumnSpec[]; matrixFields: { name: string; columns: MatrixColumnDef[] }[]; hasFileFields: boolean }> {
-  const columns: SpColumnSpec[] = [];
-  const matrixFields: { name: string; columns: MatrixColumnDef[] }[] = [];
-  const questions = flattenQuestions(surveyJson);
-  let hasFileFields = false;
-
-  for (const question of questions) {
-    if (!question.type || !question.name) continue;
-    if (question.type === 'file' || question.type === 'imageupload' || question.type === 'signaturepad') hasFileFields = true;
-
-    if (question.type === 'matrixdynamic' || question.type === 'tableinput' || question.type === 'dynamicmatrix') {
-      columns.push(
-        { n: `${question.name}_Response`, k: 3, ml: true, rt: true, label: 'matrix HTML' },
-        { n: `${question.name}_Html`, k: 3, ml: true, rt: true, label: 'matrix HTML fallback' },
-        { n: `${question.name}_Json`, k: 3, ml: true, label: 'matrix JSON' },
-        { n: `${question.name}_RowIds`, k: 3, ml: true, label: 'matrix child row IDs' },
-      );
-      const matrixCols = (question as unknown as Record<string, unknown>).columns as MatrixColumnDef[] | undefined;
-      if (Array.isArray(matrixCols) && matrixCols.length > 0) {
-        matrixFields.push({
-          name: question.name,
-          columns: matrixCols.filter((col) => col.name && col.title),
-        });
-      }
-      continue;
-    }
-
-    const isFormula = !!(question as unknown as Record<string, unknown>)._expression || question.type === 'expression';
-    if (isFormula) {
-      columns.push({ n: question.name, k: 9, label: 'Formula -> Number' });
-      continue;
-    }
-
-    const kind = getSpColumnKind(question);
-    if (!kind) continue;
-
-    let choices: string[] | undefined;
-    if (kind.FieldTypeKind === 6 || kind.FieldTypeKind === 15) {
-      choices = await resolveChoiceValues(token, question as unknown as Record<string, unknown>, onLog);
-    }
-
-    columns.push({
-      n: question.name,
-      k: kind.FieldTypeKind,
-      ml: kind.FieldTypeKind === 3,
-      choices,
-      label: kind.label,
-    });
-  }
-
-  return { columns: dedupeColumnSpecs(columns), matrixFields, hasFileFields };
-}
-
-function responseSystemColumnSpecs(options: ProvisionFormListOptions): SpColumnSpec[] {
-  const numLayers = options.numLayers ?? 0;
-  const layerCount = Math.max(numLayers, options.minLayerColumns ?? 0);
-  return dedupeColumnSpecs([
-    ...BASE_RESPONSE_COLUMNS,
-    ...(options.includePdpaColumns === false ? [] : PDPA_COLUMN_SPECS),
-    ...(options.includePdfUrl === false ? [] : [PDF_URL_COLUMN_SPEC]),
-    ...layerColumnSpecs(layerCount),
-    ...(layerCount > 0 ? ENHANCED_LAYER_COLUMNS : []),
-  ]);
-}
-
 /** Ensure workflow columns exist before branch selection or layer actions. */
 export async function ensureWorkflowColumns(
   token: string,
@@ -1576,61 +894,6 @@ function logEnsuredColumns(
     const suffix = column.label ? ` (${column.label})` : '';
     onLog(`  ${status}: ${column.n}${suffix}`, 'ok');
   }
-}
-
-/**
- * Provisions the actual form submission list used by published forms.
- * Fetches existing columns once, creates only missing fields, and keeps
- * matrix child-list schemas in sync when matrix columns change later.
- */
-export async function provisionFormList(
-  token: string,
-  listTitle: string,
-  surveyJson: unknown,
-  onLog: (msg: string, type: string) => void = () => {},
-  options: ProvisionFormListOptions = {},
-): Promise<void> {
-  const formTitle = options.formTitle || listTitle;
-  onLog(`Checking list "${listTitle}"...`, 'info');
-
-  if (!(await listExists(token, listTitle))) {
-    await createSpList(token, listTitle, 100, `Form responses for ${formTitle}`);
-    onLog(`Created list "${listTitle}"`, 'ok');
-  } else {
-    onLog('List exists', 'ok');
-  }
-
-  const systemColumns = responseSystemColumnSpecs(options);
-  const systemResult = await ensureColumns(token, listTitle, systemColumns);
-  logEnsuredColumns(systemColumns, systemResult, onLog);
-  await ensureIndexedColumns(token, listTitle, RESPONSE_INDEXED_COLUMNS, onLog);
-
-  if (!surveyJson || typeof surveyJson !== 'object') {
-    onLog('No survey JSON, skipped field columns', 'warn');
-    return;
-  }
-
-  const { columns, matrixFields, hasFileFields } = await surveyQuestionColumnSpecs(token, surveyJson as SurveyJson, onLog);
-  const fieldResult = await ensureColumns(token, listTitle, columns);
-  logEnsuredColumns(columns, fieldResult, onLog);
-
-  for (const matrix of matrixFields) {
-    try {
-      await ensureMatrixChildList(token, formTitle, matrix.name, matrix.columns, onLog);
-    } catch (e) {
-      onLog(`  Matrix child list for "${matrix.name}": ${(e as Error).message}`, 'warn');
-    }
-  }
-
-  if (hasFileFields && options.includeFileLibrary !== false) {
-    try {
-      await ensureDocLibrary(token, formTitle, (msg) => onLog(`  ${msg}`, 'info'));
-    } catch (e) {
-      onLog(`  Doc library: ${(e as Error).message}`, 'warn');
-    }
-  }
-
-  onLog('Provisioning complete', 'ok');
 }
 
 /**
@@ -1751,28 +1014,6 @@ export async function readMatrixChildItems(
 }
 
 // ── Response List Provisioning ────────────────────────────────────────────
-
-/**
- * Provisions a dedicated SP list for form responses.
- * Creates [FormTitle] Responses list with system columns + per-field columns.
- * Idempotent — safe to call multiple times.
- */
-export async function provisionResponseList(
-  token: string,
-  formTitle: string,
-  surveyJson: unknown,
-  onLog: (msg: string, type: string) => void = () => {},
-  numLayers?: number
-): Promise<void> {
-  const listName = `${formTitle} Responses`;
-  await provisionFormList(token, listName, surveyJson, onLog, {
-    formTitle,
-    numLayers,
-    minLayerColumns: 0,
-    includePdpaColumns: false,
-    includePdfUrl: false,
-  });
-}
 
 // ── Dynamic Matrix → HTML Serialization ────────────────────────────────────
 
@@ -2438,145 +1679,4 @@ export async function uploadFileToDocLib(
   const url = result.ServerRelativeUrl ?? `${sitePath}/${listName}/${fileName}`;
   onLog?.(`Uploaded "${fileName}" to "${listName}"`);
   return url;
-}
-
-/**
- * Migrates existing forms from legacy format (NumberOfApprovalLayer + ApprovalRules)
- * to the new LayerConfig JSON format.
- *
- * Also backfills FormStatus and CurrentLayer on response lists.
- *
- * Safe to call multiple times — idempotent for already-migrated forms.
- */
-export async function migrateExistingForms(
-  token: string,
-  onLog?: (msg: string) => void
-): Promise<{ migrated: number; backfilled: number }> {
-  const log = onLog || ((_msg: string) => { /* silent */ });
-  let migrated = 0;
-  let backfilled = 0;
-
-  // Step 1: Migrate Master Form items
-  log("Reading Master Form items...");
-  const allConfigs = await getAllFormConfigs(token);
-
-  for (const cfg of allConfigs) {
-    // Skip if already has LayerConfig
-    if (cfg.LayerConfig && cfg.LayerConfig.trim()) {
-      log(`  ✓ ${cfg.Title}: already has LayerConfig`);
-      continue;
-    }
-
-    const numLayers = cfg.NumberOfApprovalLayer || 0;
-    if (numLayers === 0) {
-      log(`  → ${cfg.Title}: no layers, skipping`);
-      continue;
-    }
-
-    // Build LayerConfig from legacy format
-    let approvalRules: Record<string, unknown> | null = null;
-    if (cfg.ApprovalRules && cfg.ApprovalRules.trim()) {
-      try { approvalRules = JSON.parse(cfg.ApprovalRules); } catch { /* ignore parse errors */ }
-    }
-
-    const layers: Record<string, unknown>[] = [];
-    for (let n = 1; n <= numLayers; n++) {
-      const layer: Record<string, unknown> = {
-        layerNumber: n,
-        type: "approval",
-        authMode: "365",
-        assignee: {
-          type: "field-reference",
-          value: `L${n}_Email`,
-        },
-        confirmationType: "signature",
-        allowRejectionReason: true,
-        title: `Layer ${n}`,
-        notifyOnComplete: true,
-      };
-      layers.push(layer);
-    }
-
-    const layerConfig: Record<string, unknown> = {
-      version: "1.0",
-      layers,
-    };
-
-    // Add conditional routing if present
-    if (approvalRules?.conditionField && approvalRules?.rules) {
-      layerConfig.routing = [{
-        conditionField: approvalRules.conditionField as string,
-        rules: (approvalRules.rules as Record<string, unknown>[]).map((r) => ({
-          when: r.when as string,
-          skipLayers: [],
-        })),
-      }];
-    }
-
-    // Write back to Master Form
-    const existing = await getFormConfigByTitle(token, cfg.Title);
-    if (existing?.Id) {
-      await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items(${existing.Id})`, {
-        LayerConfig: JSON.stringify(layerConfig),
-      });
-      log(`  ✓ ${cfg.Title}: migrated (${numLayers} layers)`);
-      migrated++;
-    }
-  }
-
-  // Step 2: Backfill FormStatus and CurrentLayer on response lists
-  log("Backfilling response lists...");
-  for (const cfg of allConfigs) {
-    if (!cfg.Title) continue;
-    const listName = `${cfg.Title} Responses`;
-
-    try {
-      // Check if list exists
-      if (!(await listExists(token, listName))) {
-        continue;
-      }
-
-      await ensureColumns(token, listName, [
-        { n: "FormStatus", k: SP_FIELD_KIND.text },
-        { n: "CurrentLayer", k: SP_FIELD_KIND.number },
-      ]);
-
-      // Query items that don't have FormStatus set
-      const items = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Status,CurrentApprovalLayer,CurrentLayer,FormStatus&$top=500&$filter=FormStatus eq null`) as { value?: Record<string, unknown>[] };
-
-      for (const item of items.value || []) {
-        const oldStatus = String(item.Status || "");
-        const oldLayer = Number(item.CurrentApprovalLayer || 0);
-        const patches: Record<string, unknown> = {};
-
-        // Derive FormStatus from old Status
-        const st = oldStatus.toLowerCase();
-        if (st === "fully approved" || st === "approved") {
-          patches.FormStatus = "Completed";
-        } else if (st.includes("reject")) {
-          patches.FormStatus = "Rejected";
-        } else if (st === "pending approval" || st.startsWith("approved layer")) {
-          patches.FormStatus = "In Review";
-        } else {
-          patches.FormStatus = "Submitted";
-        }
-
-        // Set CurrentLayer from CurrentApprovalLayer if not set
-        if (oldLayer > 0 && !item.CurrentLayer) {
-          patches.CurrentLayer = oldLayer;
-        }
-
-        if (Object.keys(patches).length > 0) {
-          await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${item.Id})`, patches);
-          backfilled++;
-        }
-      }
-      log(`  ✓ ${listName}: ${items.value?.length || 0} items backfilled`);
-    } catch (e) {
-      log(`  ⚠ ${listName}: error — ${(e as Error).message}`);
-    }
-  }
-
-  log(`Migration complete: ${migrated} forms migrated, ${backfilled} items backfilled`);
-  return { migrated, backfilled };
 }

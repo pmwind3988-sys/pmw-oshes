@@ -16,7 +16,6 @@ export interface PortalContextValue {
   userName: string;
   userTitle: string;
   isAdmin: boolean;
-  canUseFormBuilder: boolean;
   spClient: SharePointClient;
   directory: PeopleDirectory;
 
@@ -49,12 +48,10 @@ export interface PortalContextValue {
   applyPatch: (record: PortalRecord, fields: Record<string, unknown>) => void;
   appendAudit: (entry: AuditEntry) => void;
   updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) => void;
-  addCatalogueEntry: (entry: CatalogueEntry) => void;
 
   toast: (message: string) => void;
   onSignOut: () => void;
   onSwitchAccount: () => void;
-  onOpenBuilder: () => void;
 }
 
 const PortalContext = createContext<PortalContextValue | null>(null);

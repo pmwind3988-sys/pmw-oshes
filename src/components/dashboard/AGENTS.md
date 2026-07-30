@@ -5,9 +5,9 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Top bar / navigation | `Header.tsx` | Sticky, role badge, admin tools, Form Builder button (`canUseFormBuilder` only) |
+| Top bar / navigation | `Header.tsx` | Sticky, role badge, admin tools (`isAdmin` only) |
 | Stats summary | `StatsRow.tsx` | 4-column layout: Total / Approved / Pending / Rejected |
-| Form list cards | `ListSummaryCards.tsx` | Grid of cards with counts; edit button shown only with `canUseFormBuilder`, then `onEditForm` navigates to `/admin/builder/:listTitle` |
+| Form list cards | `ListSummaryCards.tsx` | Grid of cards with counts. Read-only — forms are edited in the pmw-hrform builder, not here |
 | Search / filters | `Toolbar.tsx` | List, status, sort, submitter dropdowns |
 | Submission rows | `SubmissionRow.tsx` | Responsive: desktop grid / mobile stacked; clickable |
 | Detail view | `DetailModal.tsx` | Full dialog with fields, signatures, approval chain |
@@ -19,9 +19,9 @@
 ## Component Data Flow
 ```
 App.tsx → DashboardProvider (context: submissions, filters, listMetaMap)
-  ├── Header (isAdmin, canUseFormBuilder, onOpenBuilder → navigate to /admin/builder)
+  ├── Header (isAdmin)
   ├── StatsRow (submissions)
-  ├── ListSummaryCards (visibleLists, canUseFormBuilder, onEditForm → navigate to /admin/builder/:listTitle)
+  ├── ListSummaryCards (visibleLists, isAdmin)
   ├── Toolbar (filters, onChange)
   └── SubmissionRow[] (submission, onClick)
         └── DetailModal (open, onClose, submissionData)

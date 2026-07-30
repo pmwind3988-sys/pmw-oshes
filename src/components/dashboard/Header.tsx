@@ -14,7 +14,6 @@ import {
 import {
   Person as PersonIcon,
   Logout as LogoutIcon,
-  Settings as SettingsIcon,
   Menu as MenuIcon,
   PrivacyTip as PrivacyIcon,
   Wallpaper as WallpaperIcon,
@@ -31,19 +30,15 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 interface HeaderProps {
   userEmail: string;
   isAdmin: boolean;
-  canUseFormBuilder: boolean;
   onLogout: () => void;
   onSwitch: () => void;
-  onOpenBuilder?: () => void;
 }
 
 export default function Header({
   userEmail,
   isAdmin,
-  canUseFormBuilder,
   onLogout,
   onSwitch,
-  onOpenBuilder,
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -218,15 +213,9 @@ export default function Header({
               <Divider sx={{ my: 0.5 }} />
 
               {/* 3. Privileged items */}
-              {(isAdmin || canUseFormBuilder) && (
+              {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {canUseFormBuilder && onOpenBuilder && (
-                    <MenuItem onClick={() => { handleMainMenuClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
-                      <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
-                      <Typography variant="body2">Form Builder</Typography>
-                    </MenuItem>
-                  )}
                   {isAdmin && (
                     <>
                       <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
@@ -304,15 +293,9 @@ export default function Header({
                   {userEmail}
                 </Typography>
               </MenuItem>
-              {(isAdmin || canUseFormBuilder) && (
+              {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {canUseFormBuilder && onOpenBuilder && (
-                    <MenuItem onClick={() => { handleProfileClose(); onOpenBuilder(); }} sx={{ py: 1.25, px: 2.5 }}>
-                      <SettingsIcon sx={menuIconSx(editorial.pmwPurpleDark)} />
-                      <Typography variant="body2">Form Builder</Typography>
-                    </MenuItem>
-                  )}
                   {isAdmin && (
                     <>
                       <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>

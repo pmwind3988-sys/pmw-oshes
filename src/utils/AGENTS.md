@@ -1,6 +1,10 @@
 # AGENTS.md — src/utils/
 
-**Scope:** SharePoint REST clients, form builder logic, config loading, auth persistence.
+**Scope:** SharePoint REST clients, form runtime logic, portal derivation, config loading, auth persistence.
+
+> `formBuilderSP.ts` keeps its historical name but holds only the **runtime** half:
+> reads, submission writes, workflow status, provisioning helpers for matrix child
+> lists and document libraries. Form authoring lives in `pmw-hrform`.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
@@ -26,7 +30,7 @@ Dashboard path:
   App.tsx → createSpClient(msalInstance, accounts) → sharepointClient.ts
 
 Builder path:
-  AdminFormBuilder.tsx → raw token (via msalInstance.acquireTokenSilent)
+  DynamicFormPage.tsx / EvaluationPage.tsx → raw token (via msalInstance.acquireTokenSilent)
     → formBuilderSP.ts (independent digest cache)
 ```
 - **Intentional separation**: builder uses raw token, dashboard uses MSAL instance
@@ -40,7 +44,7 @@ Builder path:
 - **OData**: `odata=nometadata` — responses use `data.value` not `data.d.results`
 
 ## SP Column Type Mapping
-`FormBuilderEngine.ts` `getSpColumnKind()` and `formBuilderSP.ts` `addColumn()` map SurveyJS types to SharePoint `FieldTypeKind`:
+`FormBuilderEngine.ts` `getSpColumnKind()` and `formBuilderSP.ts` `ensureColumns()` map SurveyJS types to SharePoint `FieldTypeKind`:
 - 2 = Text, 3 = Note, 4 = DateTime, 6 = Choice, 8 = Boolean, 9 = Number, 15 = MultiChoice, 11 = Image
 - `dynamicmatrix`/`tableinput` create `_Html` (richText) + `_Json` columns AND a child list `{FormTitle} Matrix {FieldName}` (primary storage). See `ensureMatrixChildList()`.
 - `spChoicesSource` fields fetch live choices from SP at publish time and pass them to `addColumn()`

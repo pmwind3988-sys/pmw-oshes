@@ -4,7 +4,6 @@ import type { Submission, DiscoveredList, ListMetaEntry, HardDeleteSubmissionRes
 export interface DashboardContextValue {
   userEmail: string;
   isAdmin: boolean;
-  canUseFormBuilder: boolean;
   submissions: Submission[];
   visibleLists: DiscoveredList[];
   listMetaMap: Record<string, ListMetaEntry>;
@@ -25,8 +24,6 @@ export interface DashboardContextValue {
   sortedSubmissions: Submission[];
   onSignOut: () => void;
   onSwitchAccount: () => void;
-  onOpenBuilder: () => void;
-  onEditForm: (listTitle: string) => void;
   onHardDeleteSubmission: (item: Submission) => Promise<HardDeleteSubmissionResult>;
 }
 

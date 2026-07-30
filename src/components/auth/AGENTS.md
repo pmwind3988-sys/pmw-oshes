@@ -39,5 +39,5 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 ## Anti-Patterns
 
 - `ChoiceScreen.tsx` has `console.log("Choice clicked")` — remove
-- `AdminGuard.tsx` receives the already-computed permission flag from `App.tsx` rather than checking group membership itself. Builder routes pass `canUseFormBuilder`; other admin routes pass `isAdmin`.
+- `AdminGuard.tsx` receives the already-computed permission flag from `App.tsx` rather than checking group membership itself. All admin routes pass `isAdmin`.
 - `WrongTenantScreen.tsx` exposes `accounts[0]?.tenantId` (the current tenant) — this is visible to the user; acceptable for debugging

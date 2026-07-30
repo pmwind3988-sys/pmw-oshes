@@ -2,7 +2,6 @@ import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, Lay
 import { OSHES_APP, OSHES_LISTS } from "../config/oshes";
 
 const ADMIN_GROUP = OSHES_APP.adminGroup;
-const FORM_BUILDER_SUPERUSER_GROUP = OSHES_APP.formBuilderGroup;
 const AUDITOR_GROUP = OSHES_APP.auditorGroup;
 
 const EXCLUDE_ALWAYS = [
@@ -23,7 +22,6 @@ const EXCLUDE_ALWAYS = [
 
 export const SP_STATIC = {
   adminGroup: ADMIN_GROUP,
-  formBuilderSuperuserGroup: FORM_BUILDER_SUPERUSER_GROUP,
   auditorGroup: AUDITOR_GROUP,
   statusColumn: null,
   excludeAlways: [...EXCLUDE_ALWAYS],

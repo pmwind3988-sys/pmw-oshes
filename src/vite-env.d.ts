@@ -4,12 +4,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_NAME?: string;
   readonly VITE_DEPARTMENT_NAME?: string;
   readonly VITE_OSHES_ADMIN_GROUP?: string;
-  readonly VITE_OSHES_FORM_BUILDER_GROUP?: string;
-  readonly VITE_SP_MASTER_FORM_LIST?: string;
-  readonly VITE_SP_APPROVERS_LIST?: string;
-  readonly VITE_SP_FORM_VERSIONS_LIST?: string;
-  readonly VITE_SP_FORM_BUILDER_LOG_LIST?: string;
-  readonly VITE_SP_DASHBOARD_SETTINGS_LIST?: string;
+  readonly VITE_OSHES_AUDITOR_GROUP?: string;
+  readonly VITE_OSHES_SLA_DEFAULT_DAYS?: string;
 }
 
 interface ImportMeta {
