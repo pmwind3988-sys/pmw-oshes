@@ -19,3 +19,5 @@ stitch-export/
 # Impeccable design-hook local state (shared config.json is committed).
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+.env.local.bak-*
+.env.*.bak

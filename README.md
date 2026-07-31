@@ -16,7 +16,9 @@ The application is based on the proven `pmw-hrform` architecture. Career, recrui
 
 ## Configure
 
-Copy `.env.example` to `.env.local`, then replace every placeholder with the OSHES tenant, Entra application, SharePoint site, group, list, email, and deployment values.
+See [SETUP.md](SETUP.md) for full deployment setup — SharePoint site, Entra app registration, every environment variable, and a first-run check that proves the wiring.
+
+For local work: copy `.env.example` to `.env.local` and replace every placeholder with the OSHES tenant, Entra application, SharePoint site, group, email, and deployment values.
 
 The primary SharePoint configuration variables are:
 
