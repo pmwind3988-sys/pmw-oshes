@@ -1,10 +1,26 @@
 import type { LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmailSchedule } from '../types/index.ts';
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { fetchWithAuthRecovery } from "./authRecovery";
+import { SharePointHttpError } from "./sharepointClient";
 import { OSHES_LISTS } from "../config/oshes";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
+
+/**
+ * SharePoint answers an unknown column or a missing list with 400/404 rather than an
+ * empty result, so a query written against a newer schema fails outright on a site
+ * that has not been provisioned yet. Callers use this to retry with a narrower
+ * $select instead of surfacing the failure.
+ */
+function isQueryMismatchError(error: unknown): boolean {
+  return error instanceof SharePointHttpError && (error.status === 400 || error.status === 404);
+}
+
+function emptyOnQueryMismatch(error: unknown): { value: never[] } {
+  if (!isQueryMismatchError(error)) throw error;
+  return { value: [] };
+}
 
 export interface SpColumnSpec {
   n: string;
@@ -403,12 +419,61 @@ export async function spUploadFile(token: string, lib: string, filename: string,
   return r.json().catch(() => ({}));
 }
 
-export async function getFormVersion(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`).catch(() => ({ value: [] })) as { value?: { SurveyJSON?: string }[] };
+/** Profile key used for forms published before PublishKey existed. */
+export const DEFAULT_PUBLISH_KEY = 'production';
+
+export function normalizePublishKey(value?: string | null): string {
+  const normalized = slugify(value || DEFAULT_PUBLISH_KEY);
+  return normalized || DEFAULT_PUBLISH_KEY;
+}
+
+export function isPublishExpired(value?: string): boolean {
+  return !!value && Date.parse(value) <= Date.now();
+}
+
+/**
+ * Resolves one published version of a form, optionally pinned to a publish profile.
+ *
+ * The profile columns are written by the pmw-hrform builder and may not exist yet on
+ * a site provisioned before they were added, so a query naming them can fail with a
+ * 400. When the caller asked for the default profile — which is what a link with no
+ * ?publish= resolves to — fall back to the profile-less query so those older rows
+ * still load. Anything that is not a schema mismatch propagates: an access failure
+ * must not read as "no such version".
+ */
+export async function getFormVersion(
+  token: string,
+  listTitle: string,
+  version: string,
+  publishKey?: string | null
+): Promise<{ surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishKey?: string; publishLabel?: string; publishStatus?: string; publishExpiresAt?: string; version?: string } | null> {
+  const baseFilter = `FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'`;
+  const normalizedPublishKey = publishKey ? normalizePublishKey(publishKey) : "";
+  const query = normalizedPublishKey
+    ? `${baseFilter} and PublishKey eq '${encodeURIComponent(sanitizeODataValue(normalizedPublishKey))}'`
+    : baseFilter;
+  const legacyUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${baseFilter}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$orderby=PublishedAt desc&$top=1`;
+
+  let data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=${query}&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy,PublishKey,PublishLabel,PublishStatus,PublishExpiresAt&$orderby=PublishedAt desc&$top=1`)
+    .catch(async (error: unknown) => {
+      if (!isQueryMismatchError(error)) throw error;
+      if (!normalizedPublishKey || normalizedPublishKey !== DEFAULT_PUBLISH_KEY) return { value: [] };
+      return spGet(token, legacyUrl).catch(emptyOnQueryMismatch);
+    }) as { value?: { SurveyJSON?: string }[] };
+
+  if (normalizedPublishKey === DEFAULT_PUBLISH_KEY && !data.value?.length) {
+    data = await spGet(token, legacyUrl).catch(emptyOnQueryMismatch) as { value?: { SurveyJSON?: string }[] };
+  }
+
   const row = data.value?.[0];
   if (!row?.SurveyJSON) return null;
   try {
-    return JSON.parse(row.SurveyJSON);
+    const parsed = JSON.parse(row.SurveyJSON);
+    return {
+      ...parsed,
+      publishStatus: (row as { PublishStatus?: string }).PublishStatus || parsed.publishStatus,
+      publishExpiresAt: (row as { PublishExpiresAt?: string }).PublishExpiresAt || parsed.publishExpiresAt,
+    };
   } catch {
     return null;
   }
@@ -562,7 +627,7 @@ export async function spGet(token: string, url: string): Promise<unknown> {
       'Accept': 'application/json;odata=nometadata',
     },
   });
-  if (!response.ok) throw new Error(`GET ${response.status} ${url}`);
+  if (!response.ok) throw new SharePointHttpError(`GET ${url}`, response);
   return response.json();
 }
 
@@ -687,6 +752,8 @@ interface FormConfigData {
   NumberOfApprovalLayer?: number;
   Slug?: string;
   CurrentVersion?: string;
+  CurrentPublishKey?: string;
+  CurrentPublishLabel?: string;
   IsPublished?: boolean;
   IsPublic?: boolean;
   ConditionField?: string;
@@ -767,33 +834,36 @@ export async function ensureDashboardBackgroundSettingsList(token: string): Prom
 }
 
 // ── Get latest form by slug (from reference) ────────────────────────────────
-export async function getLatestFormBySlug(token: string, slug: string): Promise<{
+export async function getLatestFormBySlug(token: string, slug: string, publishKey?: string | null): Promise<{
   formConfig: FormConfigData;
   surveyJson: unknown;
   meta: unknown;
 } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
+  const selectWithProfile = 'Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig';
+  const selectLegacy = 'Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig';
+  const itemsUrl = (select: string) =>
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(sanitizeODataValue(slug))}'&$select=${select}&$top=1`;
+
+  // CurrentPublishKey/Label only exist on sites the current builder has provisioned;
+  // retry without them rather than failing the whole read on an older site.
+  const data = await spGet(token, itemsUrl(selectWithProfile)).catch(async (error: unknown) => {
+    if (!isQueryMismatchError(error)) throw error;
+    return spGet(token, itemsUrl(selectLegacy));
+  }) as { value?: FormConfigData[] };
+
   const form = data.value?.[0];
   if (!form) return null;
   if (!form.IsPublished) return null;
 
-  const versionData = await getFormVersionByTitle(token, form.Title, form.CurrentVersion || '1.0');
+  const resolvedPublishKey = publishKey || (form as { CurrentPublishKey?: string }).CurrentPublishKey || DEFAULT_PUBLISH_KEY;
+  const versionData = await getFormVersion(token, form.Title, form.CurrentVersion || '1.0', resolvedPublishKey);
+  if (versionData && (versionData.publishStatus === 'off' || isPublishExpired(versionData.publishExpiresAt))) return null;
+
   return {
     formConfig: form,
     surveyJson: versionData?.surveyJson || null,
     meta: versionData?.meta || {},
   };
-}
-
-async function getFormVersionByTitle(token: string, listTitle: string, version: string): Promise<{ surveyJson: unknown; meta: unknown } | null> {
-  const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Web%20Form%20Versions')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(listTitle))}' and FormVersion eq '${encodeURIComponent(sanitizeODataValue(version))}'&$select=SurveyJSON,FormVersion,PublishedAt,PublishedBy&$top=1`) as { value?: { SurveyJSON?: string }[] };
-  const row = data.value?.[0];
-  if (!row?.SurveyJSON) return null;
-  try {
-    return JSON.parse(row.SurveyJSON);
-  } catch {
-    return null;
-  }
 }
 
 // ── Matrix Child Lists ────────────────────────────────────────────────────

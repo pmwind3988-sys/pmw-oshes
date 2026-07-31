@@ -34,6 +34,10 @@ export interface Submission {
   listTitle: string;
   formId: string;
   formVersion: string;
+  /** Published profile (PublishKey) the submission was sent under. */
+  publishKey?: string;
+  /** Raw L{n}_Status of the layer currently awaiting action, for lifecycle derivation. */
+  currentLayerStatus?: string;
   title: string;
   submittedByEmail: string;
   submitterName?: string;
@@ -152,6 +156,8 @@ export interface BaseLayer {
   slaDays?: number;
   /** Approval role this layer points at (a layer points at a role, not a person). */
   roleLabel?: string;
+  manualPaperWhenSenderEmail?: boolean;
+  submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
 }
 
 export interface ApprovalLayerConfig extends BaseLayer {
@@ -168,6 +174,21 @@ export interface EvaluationLayerConfig extends BaseLayer {
 }
 
 export type LayerConfigItem = ApprovalLayerConfig | EvaluationLayerConfig;
+
+export interface EvaluationSubmitterRoutingRule {
+  id: string;
+  label: string;
+  emailField?: string;
+  emailValue?: string;
+  employeeIdField?: string;
+  employeeIdValue?: string;
+  userIdField?: string;
+  userIdValue?: string;
+  fullNameField?: string;
+  fullNameValue?: string;
+  action: "assign-evaluator" | "manual-paper" | "send-to-configured-sender";
+  evaluatorEmail?: string;
+}
 
 export interface ManualBranch {
   name: string;
@@ -633,7 +654,23 @@ export interface SurveyJson {
 export interface FormBuilderMeta {
   isoStandards?: string;
   companies?: string;
+  companyChoiceEnabled?: boolean;
   showBanner?: boolean;
+  formId?: string;
+  formVersion?: string;
+  logoUrl?: string;
+  publishKey?: string;
+  publishLabel?: string;
+  documentHeader?: DocumentControlHeader;
+  pdfConfig?: PdfConfig;
+}
+
+export interface DocumentControlHeader {
+  documentNumber?: string;
+  issueNumber?: string;
+  effectiveDate?: string;
+  revisionNumber?: string;
+  revisionDate?: string;
 }
 
 export interface FormConfig {
@@ -643,6 +680,8 @@ export interface FormConfig {
   NumberOfApprovalLayer: number;
   Slug: string;
   CurrentVersion: string;
+  CurrentPublishKey?: string;
+  CurrentPublishLabel?: string;
   IsPublished: boolean;
   IsPublic: boolean;
   ConditionField?: string;
@@ -655,12 +694,25 @@ export interface FormVersionData {
   surveyJson: SurveyJson;
   meta?: FormBuilderMeta;
   version: string;
+  publishKey?: string;
+  publishLabel?: string;
+  publishStatus?: PublishProfileStatus;
+  publishExpiresAt?: string;
   savedAt: string;
   changedBy: string;
+  layerConfig?: LayerConfig | null;
 }
+
+export type PublishProfileStatus = "active" | "off";
 
 export interface FormVersionHistory {
   FormVersion: string;
+  PublishKey?: string;
+  PublishLabel?: string;
+  PublishStatus?: PublishProfileStatus;
+  PublishExpiresAt?: string;
+  DisabledAt?: string;
+  DisabledBy?: string;
   PublishedAt: string;
   PublishedBy: string;
   Title: string;
@@ -858,6 +910,13 @@ export interface PdfConfig {
   footerText?: string;           // Footer text
   showSubmissionDate?: boolean;
   showApproverChain?: boolean;
+  showEvaluationDetails?: boolean;
+  showSignatures?: boolean;
+  showStatusBadge?: boolean;
+  includeEmptyEvaluationFields?: boolean;
+  density?: "compact" | "comfortable";
+  primaryColor?: string;
+  secondaryColor?: string;
   deliveryMethod: "download" | "email" | "sharepoint";
   sharepointLibrary?: string;     // Target SharePoint document library name
   sharepointFolder?: string;      // Target folder path

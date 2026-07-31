@@ -532,6 +532,7 @@ function mapSubmission(
       key === "FormId" ||
       key === "FormID" ||
       key === "FormVersion" ||
+      key === "PublishKey" ||
       key === "Title" ||
       key === "Id" ||
       key === "_authorEmail" ||
@@ -560,6 +561,11 @@ function mapSubmission(
     listTitle,
     formId,
     formVersion,
+    publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    currentLayerStatus:
+      currentLayer > 0 && layerStatusValues[currentLayer - 1]
+        ? String(layerStatusValues[currentLayer - 1])
+        : undefined,
     title,
     submittedByEmail,
     submitterName,

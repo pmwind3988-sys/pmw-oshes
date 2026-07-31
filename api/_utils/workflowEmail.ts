@@ -51,6 +51,14 @@ export interface WorkflowEmailMessage {
   to: string | string[];
   subject: string;
   body: string;
+  attachments?: WorkflowEmailAttachment[];
+}
+
+export interface WorkflowEmailAttachment {
+  name: string;
+  contentType: string;
+  /** Base64 payload, without the data: URI prefix. */
+  contentBytes: string;
 }
 
 export interface WorkflowEmailContext {
@@ -169,7 +177,7 @@ export function recordWorkflowEmailAttempt(
   return { ...log, [key]: next };
 }
 
-function resolveOshesFormSender(): string {
+export function resolveOshesFormSender(): string {
   return (
     process.env.OSHES_FORM_EMAIL_FROM_ADDRESS ||
     process.env.VITE_OSHES_FORM_EMAIL_FROM_ADDRESS ||
@@ -209,6 +217,14 @@ export async function sendGraphEmail(
           toRecipients: recipients.map((recipient) => ({
             emailAddress: { address: recipient },
           })),
+          ...(message.attachments?.length ? {
+            attachments: message.attachments.map((attachment) => ({
+              "@odata.type": "#microsoft.graph.fileAttachment",
+              name: attachment.name,
+              contentType: attachment.contentType,
+              contentBytes: attachment.contentBytes,
+            })),
+          } : {}),
         },
         saveToSentItems: false,
       }),

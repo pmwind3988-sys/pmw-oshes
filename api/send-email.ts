@@ -3,9 +3,37 @@ import { getGraphToken } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import {
   deliverWorkflowEmail,
+  resolveOshesFormSender,
   sendGraphEmail,
+  type WorkflowEmailAttachment,
   type WorkflowEmailContext,
 } from "./_utils/workflowEmail.js";
+
+/**
+ * Accepts either a raw base64 string or a data: URI, because the browser's
+ * FileReader produces the latter. Anything without a name or payload is dropped
+ * rather than sent as an empty attachment.
+ */
+function normalizeAttachment(entry: unknown): WorkflowEmailAttachment | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const record = entry as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  const contentType = typeof record.contentType === "string" && record.contentType.trim()
+    ? record.contentType.trim()
+    : "application/octet-stream";
+  let contentBytes = typeof record.contentBytes === "string"
+    ? record.contentBytes
+    : typeof record.content === "string"
+      ? record.content
+      : "";
+  if (contentBytes.startsWith("data:")) {
+    const commaIndex = contentBytes.indexOf(",");
+    contentBytes = commaIndex >= 0 ? contentBytes.slice(commaIndex + 1) : "";
+  }
+  contentBytes = contentBytes.trim();
+  if (!name || !contentBytes) return null;
+  return { name, contentType, contentBytes };
+}
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -29,13 +57,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, sendToConfiguredSender, attachments } = req.body as Record<string, unknown>;
+  const configuredSender = resolveOshesFormSender();
 
-  const recipients = typeof to === "string"
-    ? [to]
-    : Array.isArray(to)
-      ? to.filter((recipient): recipient is string => typeof recipient === "string")
-      : [];
+  // A manual-paper workflow has no online reviewer to address, so it is sent to the
+  // configured OSHES mailbox instead of a caller-supplied recipient.
+  const recipients = sendToConfiguredSender === true && configuredSender
+    ? [configuredSender]
+    : typeof to === "string"
+      ? [to]
+      : Array.isArray(to)
+        ? to.filter((recipient): recipient is string => typeof recipient === "string")
+        : [];
   const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   if (recipients.length === 0 || recipients.some((recipient) => !isEmail(recipient))) {
@@ -48,7 +81,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const message = { to: recipients, subject, body };
+    const normalizedAttachments = Array.isArray(attachments)
+      ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
+      : [];
+    const message = {
+      to: recipients,
+      subject,
+      body,
+      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+    };
     if (
       workflow &&
       typeof workflow === "object" &&

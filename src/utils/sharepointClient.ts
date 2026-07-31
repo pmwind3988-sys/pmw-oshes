@@ -26,6 +26,16 @@ export function isSharePointForbiddenError(error: unknown): boolean {
   return error instanceof SharePointHttpError && error.status === 403;
 }
 
+/**
+ * True when SharePoint refused the signed-in user, rather than reporting a missing
+ * row or an unknown column. Read helpers routinely swallow the latter to fall back
+ * to a broader query; they must never swallow this, or a permission gap turns into
+ * a silently empty result.
+ */
+export function isSharePointAccessDeniedError(error: unknown): boolean {
+  return error instanceof SharePointHttpError && (error.status === 401 || error.status === 403);
+}
+
 function createSharePointHttpError(action: string, response: Response): SharePointHttpError {
   return new SharePointHttpError(action, response);
 }

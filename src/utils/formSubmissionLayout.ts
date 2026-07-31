@@ -8,6 +8,7 @@ export interface FormSubmissionField {
   type: string;
   inputType?: string;
   choices?: unknown[];
+  rateValues?: unknown[];
   rateMin?: number;
   rateMax?: number;
   minRateDescription?: string;
@@ -16,6 +17,9 @@ export interface FormSubmissionField {
   max?: number;
   prefix?: string;
   suffix?: string;
+  rows?: number;
+  labelTrue?: string;
+  labelFalse?: string;
   value: unknown;
   kind: "field" | "matrix";
   matrixColumns?: { name: string; title: string; cellType?: string; choices?: unknown[] }[];
@@ -107,8 +111,15 @@ function elementLabel(element: SurveyElement, fallback: string): string {
   return textValue(element.title) || textValue(element.name) || fallback;
 }
 
+function isDefaultPageName(value: string): boolean {
+  return /^page\d*$/i.test(value.trim());
+}
+
 function pageTitle(page: SurveyElement, fallback: string): string {
-  return textValue(page.title) || textValue(page.name) || fallback;
+  const title = textValue(page.title);
+  if (title) return title;
+  const name = textValue(page.name);
+  return name && !isDefaultPageName(name) ? name : fallback;
 }
 
 function getChildElements(element: SurveyElement): SurveyElement[] {
@@ -253,6 +264,7 @@ export function buildFormSubmissionSections(
       type,
       inputType: textValue(element.inputType) || undefined,
       choices: Array.isArray(element.choices) ? element.choices : undefined,
+      rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
       rateMin: numberValue(element.rateMin),
       rateMax: numberValue(element.rateMax),
       minRateDescription: textValue(element.minRateDescription) || undefined,
@@ -261,6 +273,9 @@ export function buildFormSubmissionSections(
       max: numberValue(element.max),
       prefix: textValue(element.prefix) || undefined,
       suffix: textValue(element.suffix) || undefined,
+      rows: numberValue(element.rows),
+      labelTrue: textValue(element.labelTrue) || undefined,
+      labelFalse: textValue(element.labelFalse) || undefined,
       value,
       kind: MATRIX_TYPES.has(type) && rows.length > 0 ? "matrix" : "field",
       matrixColumns: MATRIX_TYPES.has(type) ? matrixColumns(element) : undefined,
@@ -269,7 +284,8 @@ export function buildFormSubmissionSections(
   };
 
   pages.forEach((page, pageIndex) => {
-    const title = pageTitle(page, pages.length > 1 ? `Page ${pageIndex + 1}` : fallbackSectionTitle);
+    const defaultTitle = pageIndex === 0 ? fallbackSectionTitle : `Page ${pageIndex + 1}`;
+    const title = pageTitle(page, defaultTitle);
     const elements = Array.isArray(page.elements) ? page.elements.filter(isRecord) : [];
     for (const element of elements) visitElement(element, title);
   });

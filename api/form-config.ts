@@ -16,6 +16,26 @@ interface ApiResponse {
   end(): void;
 }
 
+const DEFAULT_PUBLISH_KEY = "production";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-zA-Z0-9_\s-]/g, "")
+    .replace(/[\s]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizePublishKey(value?: string): string {
+  return slugify(value || DEFAULT_PUBLISH_KEY) || DEFAULT_PUBLISH_KEY;
+}
+
+function isExpired(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "" && Date.parse(value) <= Date.now();
+}
+
 /**
  * Walk survey JSON elements and resolve SharePoint-sourced choices via Graph API.
  * Mutates `surveyJson` in place — populates `choices` arrays from `spChoicesSource`
@@ -164,9 +184,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const slug = req.query.slug as string;
   const pinVersion = req.query.version as string | undefined;
+  const requestedPublishKey = (req.query.publish || req.query.batch) as string | undefined;
   if (!slug) return res.status(400).json({ error: "Missing slug parameter" });
 
-  res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+  // Errors must never reach the edge cache: a single transient Graph failure would
+  // otherwise be replayed to every visitor on this link for up to 5 more minutes.
+  // The success path re-sets this header just before responding.
+  res.setHeader("Cache-Control", "no-store");
 
   try {
     const token = await getGraphToken();
@@ -183,25 +207,46 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 2. Get version data from Web Form Versions
     const targetVersion = pinVersion || (formConfig.CurrentVersion as string) || "1.0";
-    const row = (await queryWebFormVersion(token, String(formConfig.Title || ""), targetVersion))?.fields;
+    const targetPublishKey = normalizePublishKey(requestedPublishKey || (formConfig.CurrentPublishKey as string | undefined));
+    const row = (await queryWebFormVersion(token, String(formConfig.Title || ""), targetVersion, targetPublishKey))?.fields;
 
-    if (!row && pinVersion) {
-      return res.status(404).json({ error: `Version ${pinVersion} not found.` });
+    if (!row && (pinVersion || requestedPublishKey)) {
+      return res.status(404).json({ error: `Published form ${targetVersion}/${targetPublishKey} not found.` });
+    }
+    if (row?.PublishStatus === "off") {
+      return res.status(403).json({ error: "This published form profile is turned off." });
+    }
+    if (isExpired(row?.PublishExpiresAt)) {
+      return res.status(403).json({ error: "This published form profile has expired." });
     }
 
     let surveyJson: unknown = null;
     let meta: Record<string, unknown> = {};
+    let versionLayerConfig: unknown = null;
+    let publishLabel = String(formConfig.CurrentPublishLabel || "Production");
     if (row?.SurveyJSON) {
       try {
         const parsed = JSON.parse(row.SurveyJSON as string) as {
           surveyJson?: unknown;
           meta?: Record<string, unknown>;
+          layerConfig?: unknown;
+          publishLabel?: string;
         };
         surveyJson = parsed.surveyJson || null;
         meta = parsed.meta || {};
+        versionLayerConfig = parsed.layerConfig || null;
+        publishLabel = parsed.publishLabel || publishLabel;
       } catch {
         // Invalid JSON, leave as defaults
       }
+    }
+
+    // Without survey content the client has nothing to render or submit, so fail
+    // loudly here rather than returning a 200 the form page cannot use.
+    if (!surveyJson) {
+      return res.status(404).json({
+        error: `No published content found for ${targetVersion}/${targetPublishKey}. Please republish the form.`,
+      });
     }
 
     // Enrich surveyJson with SP-sourced choices (using system credential)
@@ -209,8 +254,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ? await enrichSurveyJson(token, surveyJson as Record<string, unknown>)
       : { spSources: 0, choicesFetched: 0, errors: ["No surveyJson.pages found"] };
 
+    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
     return res.status(200).json({
-      formConfig,
+      formConfig: {
+        ...formConfig,
+        CurrentVersion: targetVersion,
+        CurrentPublishKey: targetPublishKey,
+        CurrentPublishLabel: publishLabel,
+        LayerConfig: versionLayerConfig ? JSON.stringify(versionLayerConfig) : formConfig.LayerConfig,
+      },
       surveyJson,
       meta,
       _enrichment: enrichment,

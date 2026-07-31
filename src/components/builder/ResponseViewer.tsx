@@ -72,7 +72,7 @@ interface FormConfig {
 
 const SYSTEM_FIELDS = new Set([
   "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask", "PdfUrl",
   "L1_Status", "L1_Email", "L1_SignedAt", "L1_Rejection", "L1_Signature",

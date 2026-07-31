@@ -229,7 +229,7 @@ function splitSharePointUrlFieldValue(value: string): string {
 
 function toAbsoluteSharePointUrl(url: string): string {
   if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
-  if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(url)) return url;
+  if (!/^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(url)) return url;
   try {
     return `${new URL(SP_SITE_URL).origin}${url}`;
   } catch {
@@ -248,27 +248,41 @@ function encodeServerRelativePathParam(serverRelativeUrl: string): string {
 function sharePointServerRelativePath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith("data:")) return "";
-  const isSharePointRelativePath = /^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(trimmed);
+  const cleanValue = splitSharePointUrlFieldValue(trimmed).split(/[?#]/)[0] ?? trimmed;
+  const isSharePointRelativePath = /^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(cleanValue);
 
   try {
-    if (/^https?:\/\//i.test(trimmed)) {
+    if (/^https?:\/\//i.test(cleanValue)) {
       const siteUrl = new URL(SP_SITE_URL);
-      const imageUrl = new URL(trimmed);
+      const imageUrl = new URL(cleanValue);
       if (siteUrl.origin.toLowerCase() !== imageUrl.origin.toLowerCase()) return "";
-      if (!/^(\/sites\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(imageUrl.pathname)) return "";
+      if (!/^(\/sites\/|\/teams\/|\/SiteAssets\/|\/Shared%20Documents\/|\/Shared Documents\/|\/Lists\/)/i.test(imageUrl.pathname)) return "";
       return decodeURIComponent(imageUrl.pathname);
     }
   } catch {
     return "";
   }
 
-  return isSharePointRelativePath ? decodeURIComponent(trimmed.split(/[?#]/)[0] ?? trimmed) : "";
+  return isSharePointRelativePath ? decodeURIComponent(cleanValue) : "";
 }
 
 function sharePointFileValueUrl(value: string): string {
   const serverRelativePath = sharePointServerRelativePath(value);
   if (!serverRelativePath) return "";
   return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverRelativePath)}')/$value`;
+}
+
+/**
+ * Some SharePoint Online tenants don't honor bearer-token auth on the
+ * getFileByServerRelativePath `/$value` endpoint (it can 401 or redirect to
+ * an HTML sign-in page while returning 200). `_layouts/15/download.aspx` is
+ * a second, independently-authed download route that reliably accepts the
+ * same bearer token, so we fall back to it before giving up.
+ */
+function sharePointDownloadAspxUrl(value: string): string {
+  const serverRelativePath = sharePointServerRelativePath(value);
+  if (!serverRelativePath) return "";
+  return `${SP_SITE_URL}/_layouts/15/download.aspx?SourceUrl=${encodeURIComponent(serverRelativePath)}`;
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -287,21 +301,30 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
   const cached = cache.get(absolute);
   if (cached) return cached;
 
-  const spFileUrl = sharePointFileValueUrl(absolute);
-  const requestUrl = spFileUrl || absolute;
-  try {
-    const response = await fetchWithAuthRecovery(requestUrl, {
-      headers: spFileUrl || isSharePointSource(absolute) ? { Authorization: `Bearer ${token}` } : undefined,
-    });
-    if (!response.ok) return absolute;
-    const blob = await response.blob();
-    if (!blob.type.startsWith("image/")) return absolute;
-    const dataUrl = await blobToDataUrl(blob);
-    cache.set(absolute, dataUrl);
-    return dataUrl;
-  } catch {
-    return absolute;
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: "*/*" };
+  const candidateUrls = [
+    sharePointFileValueUrl(absolute),
+    sharePointDownloadAspxUrl(absolute),
+  ].filter((url): url is string => !!url);
+  candidateUrls.push(absolute);
+
+  for (const requestUrl of candidateUrls) {
+    try {
+      const response = await fetchWithAuthRecovery(requestUrl, {
+        headers: requestUrl !== absolute || isSharePointSource(absolute) ? authHeaders : undefined,
+      });
+      if (!response.ok) continue;
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) continue;
+      const dataUrl = await blobToDataUrl(blob);
+      cache.set(absolute, dataUrl);
+      return dataUrl;
+    } catch {
+      continue;
+    }
   }
+  console.warn(`PDF image hydration failed for all candidate URLs; embedding unresolved source: ${absolute}`);
+  return absolute;
 }
 
 function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
@@ -342,8 +365,9 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   const next: Record<string, unknown> = { ...value };
   for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
     const raw = next[key];
-    if (typeof raw === "string" && (isImageSource(raw) || isSharePointSource(raw))) {
-      next[key] = await imageSourceToDataUrl(token, raw, cache);
+    if (typeof raw === "string") {
+      const source = imageSourceFromString(raw);
+      if (source) next[key] = await imageSourceToDataUrl(token, source, cache);
     }
   }
 
@@ -351,7 +375,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   const relativeUrl = next.serverRelativeUrl || next.ServerRelativeUrl;
   if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
     const combined = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
-    if (isImageSource(combined)) {
+    if (isImageSource(combined) || isSharePointSource(combined)) {
       next.url = await imageSourceToDataUrl(token, combined, cache);
     }
   }
@@ -381,8 +405,14 @@ async function hydratePdfImages(token: string, data: PdfFormData): Promise<void>
     }
   }
 
-  if (data.logoUrl && isImageSource(data.logoUrl)) {
+  if (data.logoUrl && (isImageSource(data.logoUrl) || isSharePointSource(data.logoUrl))) {
     data.logoUrl = await imageSourceToDataUrl(token, data.logoUrl, cache);
+  }
+  if (data.pdfConfig?.headerLogoUrl) {
+    data.pdfConfig = {
+      ...data.pdfConfig,
+      headerLogoUrl: await imageSourceToDataUrl(token, data.pdfConfig.headerLogoUrl, cache),
+    };
   }
 }
 
@@ -393,7 +423,7 @@ export async function generateAndStorePdf(
   listTitle: string,
   responseItemId: number,
   data: PdfFormData,
-  options: { replaceExistingPdfUrl?: string } = {},
+  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void> } = {},
 ): Promise<string> {
   // ── Inject matrix child rows ──────────────────────────────────────────
   // For dynamicmatrix/tableinput fields, read child list rows and attach
@@ -436,6 +466,7 @@ export async function generateAndStorePdf(
       setTimeout(() => reject(new Error("PDF generation timed out")), 60_000)
     ),
   ]);
+  await options.onGeneratedBlob?.(blob);
 
   if (options.replaceExistingPdfUrl) {
     await deleteFormPdf(token, options.replaceExistingPdfUrl);
@@ -469,4 +500,5 @@ export async function generateAndStorePdf(
 
 export const __test__ = {
   imageSourceFromString,
+  sharePointServerRelativePath,
 };

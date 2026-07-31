@@ -425,12 +425,13 @@ function collectSubmissionSchema(surveyJson: Record<string, unknown>): ApiSubmis
 async function getPublishedSurveyJson(
   token: string,
   formConfig: Record<string, unknown>,
+  publishKey?: string,
 ): Promise<Record<string, unknown> | null> {
   const formTitle = valueToText(formConfig.Title);
   const targetVersion = valueToText(formConfig.CurrentVersion) || "1.0";
   if (!formTitle) return null;
 
-  const row = (await queryWebFormVersion(token, formTitle, targetVersion))?.fields;
+  const row = (await queryWebFormVersion(token, formTitle, targetVersion, publishKey))?.fields;
   const parsed = parseJsonRecord(row?.SurveyJSON);
   const surveyJson = parsed?.surveyJson ?? parsed;
   return surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
@@ -680,6 +681,7 @@ async function buildSubmissionFields(
   const fields: Record<string, unknown> = {
     SubmittedAt: new Date().toISOString(),
     FormVersion: valueToText(formConfig.CurrentVersion) || "1.0",
+    PublishKey: valueToText(formConfig.CurrentPublishKey) || "production",
     FormID: valueToText(formConfig.FormID),
     SubmittedBy: "GUEST",
   };
@@ -787,6 +789,7 @@ function isCoreSubmissionField(fieldName: string): boolean {
     fieldName === "SubmittedAt" ||
     fieldName === "SubmittedBy" ||
     fieldName === "FormVersion" ||
+    fieldName === "PublishKey" ||
     fieldName === "FormID" ||
     fieldName === "RawJSON" ||
     fieldName === "PDPAConsent" ||
@@ -1062,6 +1065,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     listTitle,
     body: formBody,
     matrixData,
+    formVersion,
+    publishKey,
     pdpaConsent,
     pdpaNoticeVersion,
     pdpaConsentedAt,
@@ -1070,6 +1075,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     listTitle?: string;
     body?: Record<string, unknown>;
     matrixData?: Record<string, { rows: Record<string, unknown>[]; columns: ApiMatrixColumn[] }>;
+    formVersion?: string;
+    publishKey?: string;
     pdpaConsent?: boolean;
     pdpaNoticeVersion?: string;
     pdpaConsentedAt?: string;
@@ -1103,7 +1110,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
-    const surveyJson = await getPublishedSurveyJson(token, formConfig);
+    // The client sends the profile it actually rendered, so the server validates the
+    // submission against that same published schema rather than whatever is current.
+    const targetPublishKey = typeof publishKey === "string" && publishKey.trim()
+      ? publishKey.trim()
+      : valueToText(formConfig.CurrentPublishKey) || "production";
+    if (typeof formVersion === "string" && formVersion.trim()) {
+      formConfig.CurrentVersion = formVersion.trim();
+    }
+    formConfig.CurrentPublishKey = targetPublishKey;
+
+    const surveyJson = await getPublishedSurveyJson(token, formConfig, targetPublishKey);
     if (!surveyJson) {
       logError("api:submit-form", "Published form schema unavailable", undefined, { listTitle });
       return res.status(500).json({ error: "Internal server error. Please try again." });

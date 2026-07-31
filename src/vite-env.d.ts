@@ -6,6 +6,15 @@ interface ImportMetaEnv {
   readonly VITE_OSHES_ADMIN_GROUP?: string;
   readonly VITE_OSHES_AUDITOR_GROUP?: string;
   readonly VITE_OSHES_SLA_DEFAULT_DAYS?: string;
+  /** Mailbox workflow email is sent from. */
+  readonly VITE_OSHES_FORM_EMAIL_FROM_ADDRESS?: string;
+  readonly VITE_EMAIL_FROM_ADDRESS?: string;
+  /**
+   * Sentinel mailbox meaning "this layer is handled on paper". A layer resolving to
+   * this address is marked manual instead of being assigned an online reviewer.
+   * Deliberately separate from the sender mailbox above.
+   */
+  readonly VITE_OSHES_MANUAL_PAPER_ADDRESS?: string;
 }
 
 interface ImportMeta {

@@ -3,6 +3,7 @@
  * Route: /form/:formId
  */
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -12,11 +13,13 @@ import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes"
 import "survey-core/survey-core.min.css";
 
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
+import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
-import type { LayerConfig, LayerConfigItem } from "../types";
+import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
+import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
@@ -26,16 +29,29 @@ import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
 import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
+import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { OSHES_LISTS } from "../config/oshes";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
+const CONFIGURED_SENDER_EMAIL = (
+  import.meta.env.VITE_OSHES_FORM_EMAIL_FROM_ADDRESS ||
+  import.meta.env.VITE_EMAIL_FROM_ADDRESS ||
+  ""
+).trim().toLowerCase();
+// Paper/manual sentinel mailbox — a layer assigned to this address is handled on
+// paper (no online reviewer). Kept separate from the email "from" mailbox above.
+const CONFIGURED_MANUAL_PAPER_EMAIL = (
+  import.meta.env.VITE_OSHES_MANUAL_PAPER_ADDRESS || ""
+).trim().toLowerCase();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COMPANY_FIELD_NAME = "company";
 const COMPANY_FIELD_LABEL = "Company";
 const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 
-const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer"]);
+// Columns the pmw-hrform builder adds to response lists but which may be absent on
+// a list provisioned by an older builder. A submission must not fail because of one.
+const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer", "PublishKey"]);
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
@@ -67,6 +83,67 @@ type CompanyChoiceOption = { value: string; text: string };
 
 function companyLinesFromText(value: string): string[] {
   return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+}
+
+function documentHeaderFromMeta(meta: Record<string, unknown> | undefined, formId: string, formVersion: string): Required<DocumentControlHeader> {
+  const raw = meta?.documentHeader;
+  const header = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as DocumentControlHeader
+    : {};
+  return {
+    documentNumber: header.documentNumber || formId,
+    issueNumber: header.issueNumber || "",
+    effectiveDate: header.effectiveDate || "",
+    revisionNumber: header.revisionNumber || formVersion,
+    revisionDate: header.revisionDate || "",
+  };
+}
+
+function isExpiredPublishProfile(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "" && Date.parse(value) <= Date.now();
+}
+
+type LoadedFormData = {
+  formConfig: Record<string, unknown>;
+  surveyJson: Record<string, unknown>;
+  meta: Record<string, unknown>;
+};
+
+/**
+ * JSON.stringify with object keys emitted in sorted order, so two structurally
+ * identical objects built by different code paths compare equal. The public
+ * endpoint and the direct SharePoint read assemble formConfig in a different key
+ * order, which a plain stringify would report as a difference.
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(",")}}`;
+}
+
+function loadedFormDataEquals(a: LoadedFormData, b: LoadedFormData): boolean {
+  try {
+    return stableStringify(a) === stableStringify(b);
+  } catch {
+    return false; // circular or otherwise unserialisable — treat as changed
+  }
+}
+
+/**
+ * A reload normally resolves to exactly the same published form — a guest read
+ * followed by the signed-in read once MSAL settles, say. Swapping in an equal but
+ * newly allocated object there re-derives the document control header and rebuilds the
+ * SurveyJS model, so the header blanks out and anything already typed is lost. Keep
+ * the existing object unless the content actually changed.
+ */
+function applyLoadedFormData(
+  setFormData: Dispatch<SetStateAction<LoadedFormData | null>>,
+  next: LoadedFormData,
+): void {
+  setFormData(prev => (prev && loadedFormDataEquals(prev, next) ? prev : next));
 }
 
 function companyChoiceFromUnknown(choice: unknown): CompanyChoiceOption | null {
@@ -135,6 +212,48 @@ function submittedValueToString(value: unknown): string {
   return "";
 }
 
+function collectSharePointDateTimeFieldNames(surveyJson: unknown): Set<string> {
+  const names = new Set<string>();
+  const root = surveyJson && typeof surveyJson === "object" && !Array.isArray(surveyJson)
+    ? surveyJson as Record<string, unknown>
+    : {};
+  const pages = Array.isArray(root.pages) ? root.pages : [];
+
+  const walk = (elements: unknown): void => {
+    if (!Array.isArray(elements)) return;
+    for (const element of elements) {
+      if (!element || typeof element !== "object" || Array.isArray(element)) continue;
+      const record = element as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const type = typeof record.type === "string" ? record.type : "";
+      const inputType = typeof record.inputType === "string" ? record.inputType : "";
+      if (name && (type === "date" || type === "datetime" || (type === "text" && (inputType === "date" || inputType === "datetime-local")))) {
+        names.add(name);
+      }
+      walk(record.elements);
+      walk(record.templateElements);
+    }
+  };
+
+  for (const page of pages) {
+    if (page && typeof page === "object" && !Array.isArray(page)) {
+      walk((page as Record<string, unknown>).elements);
+    }
+  }
+  return names;
+}
+
+function normalizeSharePointDateTimeFields(
+  raw: Record<string, unknown>,
+  surveyJson: unknown,
+): void {
+  for (const fieldName of collectSharePointDateTimeFieldNames(surveyJson)) {
+    if (!(fieldName in raw)) continue;
+    const normalized = toSharePointMalaysiaDateTime(raw[fieldName]);
+    if (normalized) raw[fieldName] = normalized;
+  }
+}
+
 interface UploadCandidate {
   content: string;
   name?: string;
@@ -172,6 +291,24 @@ function uploadFileName(fieldName: string, candidate: UploadCandidate, index?: n
   return `${fieldName}_${Date.now()}${suffix}.${ext}`;
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || "");
+      const commaIndex = value.indexOf(",");
+      resolve(commaIndex >= 0 ? value.slice(commaIndex + 1) : value);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read generated PDF."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function safePdfFileName(title: string, id: number): string {
+  const safeTitle = title.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "manual-workflow";
+  return `${safeTitle}_submission_${id}_manual.pdf`;
+}
+
 function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
   const rawEmail = layer.assignee.type === "user"
     ? layer.assignee.value
@@ -182,6 +319,16 @@ function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string,
     throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
   }
   return email;
+}
+
+function manualPaperStatusForLayer(layer: LayerConfigItem): string {
+  return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
+}
+
+function shouldUseManualPaperForSender(layer: LayerConfigItem, email: string): boolean {
+  return layer.manualPaperWhenSenderEmail !== false &&
+    !!CONFIGURED_MANUAL_PAPER_EMAIL &&
+    email.trim().toLowerCase() === CONFIGURED_MANUAL_PAPER_EMAIL;
 }
 
 async function resolveDepartmentApproverEmail(
@@ -299,6 +446,11 @@ const globalCss = (t: typeof LIGHT) => `
   .dfp-header{flex-wrap:nowrap}
   .dfp-survey-wrap .sd-container-modern,.dfp-survey-wrap .sd-root-modern{max-width:100%!important}
   .dfp-banner-logo img{max-height:48px!important}
+  .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
+  .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
+  .dfp-doc-cell:last-child{border-right:none}
+  .dfp-doc-label{font-weight:700}
+  .dfp-doc-value{font-weight:600;color:${t.textSecond}}
   .dfp-company-option span{text-wrap:pretty}
   @media(max-width:768px){
     .dfp-banner-logo{width:116px!important}
@@ -307,6 +459,9 @@ const globalCss = (t: typeof LIGHT) => `
     .dfp-banner-logo img{max-height:40px!important}
     .dfp-banner-info{font-size:12px!important;padding:10px 12px!important}
     .dfp-company-option{flex-basis:100%!important}
+    .dfp-doc-control{grid-template-columns:1fr}
+    .dfp-doc-cell{border-right:none;border-bottom:1px solid ${t.border};justify-content:flex-start;text-align:left;padding:8px 12px}
+    .dfp-doc-cell:last-child{border-bottom:none}
   }
   @media(max-width:640px){
     .dfp-header{padding:0 12px!important;min-height:48px!important}
@@ -455,6 +610,7 @@ export default function DynamicFormPage() {
   const { formId } = useParams<{ formId: string }>();
   const [searchParams] = useSearchParams();
   const pinVersion = searchParams.get("version");
+  const publishKey = searchParams.get("publish") || searchParams.get("batch");
   const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -465,7 +621,7 @@ export default function DynamicFormPage() {
   useEffect(() => { document.body.style.background = t.bg; document.body.style.color = t.textPrimary; return () => { document.body.style.background = ""; document.body.style.color = ""; }; }, [t]);
 
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState<{ formConfig: Record<string, unknown>; surveyJson: Record<string, unknown>; meta: Record<string, unknown> } | null>(null);
+  const [formData, setFormData] = useState<LoadedFormData | null>(null);
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -478,20 +634,116 @@ export default function DynamicFormPage() {
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
-  const shareUrl = window.location.origin + window.location.pathname + (pinVersion ? `?version=${pinVersion}` : "");
+  const shareUrl = (() => {
+    const params = new URLSearchParams();
+    if (pinVersion) params.set("version", pinVersion);
+    if (publishKey) params.set("publish", publishKey);
+    const query = params.toString();
+    return window.location.origin + window.location.pathname + (query ? `?${query}` : "");
+  })();
   const tokenRef = useRef<string | null>(null);
+  // Set when the signed-in user's own SharePoint credentials cannot reach the form
+  // lists, so reads and writes both have to go through the public endpoints instead.
+  const spDirectUnavailableRef = useRef(false);
   const userEmail = accounts[0]?.username || null;
+  // `accounts` is a fresh array on some MSAL events; key the loaders off the identity
+  // itself so an unrelated event cannot re-trigger a full form reload.
+  const activeAccountId = accounts[0]?.homeAccountId;
   const lastDataRef = useRef<Record<string, unknown> | null>(null);
+
+  // main.tsx settles MSAL before React renders, but it caps that wait at 3s and gives
+  // up silently if initialize() throws — so `inProgress` can still be pending here, or
+  // never reach None at all. Give it a grace period, then load anyway: a guest filling
+  // in a public form must never be held behind a sign-in state that is stuck.
+  // Someone with a cached account waits longer, because giving up early loads the form
+  // as a guest and then reloads it as them a moment later, which is what swaps the
+  // header out from under a user whose session is slow to restore.
+  const [msalSettleExpired, setMsalSettleExpired] = useState(false);
+  useEffect(() => {
+    if (inProgress === InteractionStatus.None) return;
+    let hasCachedAccount = false;
+    try { hasCachedAccount = instance.getAllAccounts().length > 0; } catch { /* not initialised yet */ }
+    const timer = setTimeout(() => setMsalSettleExpired(true), hasCachedAccount ? 6000 : 1500);
+    return () => clearTimeout(timer);
+  }, [inProgress, instance]);
+  const authStateSettled = inProgress === InteractionStatus.None || msalSettleExpired;
 
   useEffect(() => {
     if (inProgress !== InteractionStatus.None) return;
     if (!isAuthenticated) return;
+    const account = instance.getAllAccounts()[0];
+    if (!account) return;
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] }).then(token => { tokenRef.current = token; }).catch(() => {});
-  }, [isAuthenticated, inProgress, instance, accounts]);
+    acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account }).then(token => { tokenRef.current = token; }).catch(() => {});
+  }, [isAuthenticated, inProgress, instance, activeAccountId]);
 
   useEffect(() => {
     if (!formId) { setError("No form slug provided."); setLoading(false); return; }
+    // Wait for the sign-in state to settle before reading anything. Loading while MSAL
+    // is still restoring the session resolves the form as a guest, then re-runs as the
+    // signed-in user and overwrites the first result — which is how the document header
+    // and company selector rendered and then vanished a moment later.
+    if (!authStateSettled) return;
+
+    let cancelled = false;
+
+    // Reads the published form through the public endpoint, which resolves it with
+    // the app-only credential. Used for guests, and as a fallback for signed-in
+    // users whose own SharePoint permissions cannot reach the version lists.
+    const loadFromPublicApi = async () => {
+      const params = new URLSearchParams({ slug: formId });
+      if (pinVersion) params.set("version", pinVersion);
+      if (publishKey) params.set("publish", publishKey);
+      const res = await fetch(`/api/form-config?${params.toString()}`, {
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+        },
+      });
+      const contentType = res.headers.get("content-type") || "";
+      const responseText = await res.text();
+
+      if (contentType.includes("text/html") || responseText.trim().startsWith("<")) {
+        throw new Error("API endpoint not available (returned HTML). Are you running 'vercel dev'?");
+      }
+
+      // Detect if Vite served the raw TypeScript source instead of executing the API
+      if (responseText.includes("export default async function") || responseText.includes('from "/api/_utils/')) {
+        throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
+      }
+
+      // Check HTTP status before attempting JSON parse
+      if (!res.ok) {
+        let errorDetail: string;
+        try {
+          const errJson = JSON.parse(responseText);
+          errorDetail = errJson.error || `Server error: ${res.status}`;
+        } catch {
+          errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
+        }
+        throw new Error(errorDetail);
+      }
+
+      let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
+      }
+
+      if (!parsed.formConfig) {
+        throw new Error("Invalid API response: missing formConfig.");
+      }
+      if (!parsed.surveyJson) {
+        throw new Error(`Form "${formId}" has no published content for this link. Please republish the form and share the link again.`);
+      }
+
+      return {
+        formConfig: parsed.formConfig,
+        surveyJson: parsed.surveyJson,
+        meta: (parsed.meta || {}) as Record<string, unknown>,
+      };
+    };
 
     const load = async () => {
       try {
@@ -499,98 +751,102 @@ export default function DynamicFormPage() {
         let token = tokenRef.current;
 
         // Try to acquire token if authenticated
-        if (!token && isAuthenticated && accounts[0]) {
+        const account = instance.getAllAccounts()[0];
+        if (!token && isAuthenticated && account) {
           try {
-            token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account: accounts[0] });
+            token = await acquireAccessTokenSilentOrRedirect(instance, { scopes: [`${origin}/AllSites.Manage`], account });
             tokenRef.current = token;
           } catch {
             // Guest/public loading remains available when silent authentication fails.
           }
         }
 
-        if (token) {
-          // Authenticated path — load directly from SharePoint
+        // Signed-in users read straight from SharePoint under their own identity so
+        // private forms work, but that read depends on their list permissions. When it
+        // fails — or comes back without survey content — fall back to the public
+        // endpoint instead of leaving the page with nothing to render.
+        const loadFromSharePoint = async (accessToken: string) => {
           let cfgRaw: Record<string, unknown>;
-          let ver: { surveyJson: unknown; meta: unknown } | null;
+          let ver: { surveyJson: unknown; meta: unknown; layerConfig?: unknown; publishStatus?: string; publishExpiresAt?: string } | null;
           if (pinVersion) {
-            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json;odata=nometadata" } });
-            if (!cfgRes.ok) throw new Error(`Failed to load form config: ${cfgRes.status} ${cfgRes.statusText}`);
+            const cfgRes = await fetchWithAuthRecovery(`${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Slug eq '${encodeURIComponent(formId)}'&$select=Title,CurrentVersion,CurrentPublishKey,CurrentPublishLabel,FormID,NumberOfApprovalLayer,Slug,IsPublic,ApprovalRules,ConditionField,LayerConfig&$top=1`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json;odata=nometadata" } });
+            if (!cfgRes.ok) throw new SharePointHttpError("Failed to load form config", cfgRes);
             cfgRaw = (await cfgRes.json()).value?.[0];
             if (!cfgRaw) throw new Error(`Form "${formId}" not found.`);
-            ver = await getFormVersion(token, cfgRaw.Title as string, pinVersion);
+            ver = await getFormVersion(accessToken, cfgRaw.Title as string, pinVersion, publishKey);
             if (!ver) throw new Error(`Version ${pinVersion} not found.`);
+            if (ver.publishStatus === "off") throw new Error("This published form profile is turned off.");
+            if (isExpiredPublishProfile(ver.publishExpiresAt)) throw new Error("This published form profile has expired.");
+            if (ver.layerConfig) {
+              cfgRaw.LayerConfig = JSON.stringify(ver.layerConfig);
+            }
+            cfgRaw.CurrentVersion = pinVersion;
+            if (publishKey) cfgRaw.CurrentPublishKey = publishKey;
           } else {
-            const latest = await getLatestFormBySlug(token, formId);
+            const latest = await getLatestFormBySlug(accessToken, formId, publishKey);
             if (!latest) throw new Error(`Form "${formId}" not found.`);
             cfgRaw = latest.formConfig as unknown as Record<string, unknown>;
             ver = { surveyJson: latest.surveyJson, meta: latest.meta };
           }
-          setFormData({
+          if (!ver?.surveyJson) {
+            throw new Error(`Published content for "${formId}" could not be read from SharePoint.`);
+          }
+          return {
             formConfig: cfgRaw,
-            surveyJson: (ver?.surveyJson || null) as Record<string, unknown>,
-            meta: (ver?.meta || {}) as Record<string, unknown>,
-          });
-        } else if (!isAuthenticated) {
-          // Unauthenticated path — try public API fallback
-          const res = await fetch(`/api/form-config?slug=${encodeURIComponent(formId)}${pinVersion ? `&version=${pinVersion}` : ""}`, {
-            headers: {
-              "X-Requested-With": "XMLHttpRequest",
-              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
-            },
-          });
-          const contentType = res.headers.get("content-type") || "";
-          const responseText = await res.text();
+            surveyJson: ver.surveyJson as Record<string, unknown>,
+            meta: (ver.meta || {}) as Record<string, unknown>,
+          };
+        };
 
-          if (contentType.includes("text/html") || responseText.trim().startsWith("<")) {
-            throw new Error("API endpoint not available (returned HTML). Are you running 'vercel dev'?");
-          }
-
-          // Detect if Vite served the raw TypeScript source instead of executing the API
-          if (responseText.includes("export default async function") || responseText.includes('from "/api/_utils/')) {
-            throw new Error("API route is returning source code instead of executing. Make sure you're running 'vercel dev' (not 'npm run dev').");
-          }
-
-          // Check HTTP status before attempting JSON parse
-          if (!res.ok) {
-            let errorDetail: string;
-            try {
-              const errJson = JSON.parse(responseText);
-              errorDetail = errJson.error || `Server error: ${res.status}`;
-            } catch {
-              errorDetail = `Server returned status ${res.status}: ${responseText.substring(0, 200)}`;
-            }
-            throw new Error(errorDetail);
-          }
-
-          let parsed: { error?: string; formConfig?: Record<string, unknown>; surveyJson?: Record<string, unknown>; meta?: Record<string, unknown> };
+        if (token) {
           try {
-            parsed = JSON.parse(responseText);
-          } catch {
-            throw new Error(`Server returned non-JSON: ${responseText.substring(0, 200)}`);
+            const direct = await loadFromSharePoint(token);
+            if (cancelled) return;
+            spDirectUnavailableRef.current = false;
+            applyLoadedFormData(setFormData, direct);
+          } catch (spError) {
+            let fallback: Awaited<ReturnType<typeof loadFromPublicApi>>;
+            try {
+              fallback = await loadFromPublicApi();
+            } catch {
+              throw spError;
+            }
+            if (cancelled) return;
+            // A private form has to be read and submitted under the signed-in user's
+            // own identity, so report the access problem rather than quietly
+            // downgrading them to an anonymous respondent.
+            if (fallback.formConfig.IsPublic === false) {
+              if (!isSharePointAccessDeniedError(spError)) throw spError;
+              throw new Error(
+                `You do not have access to "${String(fallback.formConfig.Title || formId)}". This form is restricted to named SharePoint users — ask an OSHES Forms Owner to grant you access, then reload this page.`,
+                { cause: spError },
+              );
+            }
+            // Silent for the respondent — the public endpoint serves the same form —
+            // but a permission gap here is a real configuration problem, so leave a
+            // trace someone can find when diagnosing a report.
+            console.warn(`[form] SharePoint read failed for "${formId}", served via /api/form-config instead:`, spError);
+            spDirectUnavailableRef.current = true;
+            applyLoadedFormData(setFormData, fallback);
           }
-
-          if (!parsed.formConfig) {
-            throw new Error("Invalid API response: missing formConfig.");
-          }
-
-          setFormData({
-            formConfig: parsed.formConfig,
-            surveyJson: (parsed.surveyJson || {}) as Record<string, unknown>,
-            meta: (parsed.meta || {}) as Record<string, unknown>,
-          });
         } else {
-          // Authenticated but could not acquire token
-          throw new Error("Unable to get authentication token. Please sign in again.");
+          // Guests, and signed-in users whose token could not be acquired silently.
+          const publicData = await loadFromPublicApi();
+          if (cancelled) return;
+          spDirectUnavailableRef.current = false;
+          applyLoadedFormData(setFormData, publicData);
         }
       } catch (e) {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     load();
-  }, [formId, pinVersion, isAuthenticated, instance, accounts]);
+    return () => { cancelled = true; };
+  }, [formId, pinVersion, publishKey, isAuthenticated, authStateSettled, instance, activeAccountId]);
 
   // Enrich survey JSON with SharePoint-sourced choices
   useEffect(() => {
@@ -600,7 +856,9 @@ export default function DynamicFormPage() {
     const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
     const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
       cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
-    const tokenRaw = tokenRef.current;
+    // When the direct SharePoint reads are unavailable the config already arrived
+    // from the public endpoint with its choices resolved server-side.
+    const tokenRaw = spDirectUnavailableRef.current ? null : tokenRef.current;
     if (!tokenRaw) { setEnrichedSurveyJson(applyPrefill(baseJson)); return; }
     const token = tokenRaw; // narrowed to string
 
@@ -782,6 +1040,7 @@ export default function DynamicFormPage() {
   useEffect(() => { survey?.applyTheme(dark ? LayeredDarkPanelless : LayeredLightPanelless); }, [dark, survey]);
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
+  const formIdValue = String(formData?.formConfig?.FormID || "");
   const showBanner = (formData?.meta?.showBanner as boolean) !== false;
   const isoStandardsText = (formData?.meta?.isoStandards as string) || "ISO 9001 · ISO 14001 · ISO 45001";
   const companiesText = (formData?.meta?.companies as string) || "";
@@ -796,6 +1055,7 @@ export default function DynamicFormPage() {
   const logoUrl = (formData?.meta?.logoUrl as string) || "";
   const isPublicForm = formData?.formConfig?.IsPublic !== false;
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
+  const documentHeader = documentHeaderFromMeta(formData?.meta, formIdValue, formVersion);
 
   useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW OSHES"; }, [formTitle]);
 
@@ -850,7 +1110,10 @@ export default function DynamicFormPage() {
     
       let activeLayers: { email: string; name: string }[] = [];
       let resolvedLayerCount = 0;
-      const token = tokenRef.current;
+      // Someone who could not read this form from SharePoint cannot write to the
+      // response list either, so submit through the public endpoint (recorded as
+      // GUEST) exactly as an anonymous respondent on the same public link would.
+      const token = spDirectUnavailableRef.current ? null : tokenRef.current;
       const formId = String(cfg.FormID || "");
 
       // Step 1: Upload file/image/signature fields to document libraries
@@ -927,6 +1190,10 @@ export default function DynamicFormPage() {
         }
       }
 
+      if (token) {
+        normalizeSharePointDateTimeFields(raw, enrichedSurveyJson || formData?.surveyJson);
+      }
+
       // Step 2: Resolve layers — try LayerConfig first, fall back to old rules
       let layerConfigParsed: LayerConfig | null = null;
       const rawLayerConfig = cfg.LayerConfig as string | undefined;
@@ -967,6 +1234,8 @@ export default function DynamicFormPage() {
         }
       }
 
+      let hasManualPaperWorkflow = false;
+
       // Step 3: Build body (keep existing logic)
       const body: Record<string, unknown> = {};
       const urlFieldPatchNames = new Set(urlFieldPatches.map((patch) => patch.fieldName));
@@ -988,19 +1257,37 @@ export default function DynamicFormPage() {
       }
       body.SubmittedAt = new Date().toISOString();
       body.FormVersion = cfg.CurrentVersion;
+      body.PublishKey = cfg.CurrentPublishKey || publishKey || "production";
       body.FormID = cfg.FormID;
       body.PDPAConsent = "Accepted";
       body.PDPANoticeVersion = PDPA_NOTICE_VERSION;
       body.PDPAConsentAt = new Date().toISOString();
       body.RetentionUntil = getPdpaRetentionUntil(new Date(body.PDPAConsentAt as string));
+      body.SubmittedBy = token ? (userEmail || accounts[0]?.username || "authenticated-user") : "GUEST";
 
       // Step 4: Write layer status columns
       if (layerConfigParsed?.layers?.length && !deferDepartmentApproverLookupToApi) {
         // Enhanced path — use new constants
         for (let index = 0; index < layerConfigParsed.layers.length; index++) {
-          const layerNumber = layerConfigParsed.layers[index].layerNumber;
-          body[`L${layerNumber}_Status`] = SP_LAYER_STATUS.PENDING;
-          body[`L${layerNumber}_Email`] = activeLayers[index]?.email ?? "";
+          const layer = layerConfigParsed.layers[index];
+          const layerNumber = layer.layerNumber;
+          const routed = resolveEvaluationSubmitterRouting(layer, body);
+          if (routed?.manualPaper) {
+            hasManualPaperWorkflow = true;
+            body[`L${layerNumber}_Status`] = manualPaperStatusForLayer(layer);
+            const senderEmail = routed.sendToConfiguredSender ? CONFIGURED_SENDER_EMAIL : "";
+            body[`L${layerNumber}_Email`] = senderEmail;
+            activeLayers[index] = { email: senderEmail, name: "" };
+          } else {
+            const routedEmail = routed?.email || activeLayers[index]?.email || "";
+            const manualPaperForSender = shouldUseManualPaperForSender(layer, routedEmail);
+            if (manualPaperForSender) hasManualPaperWorkflow = true;
+            body[`L${layerNumber}_Status`] = manualPaperForSender
+              ? manualPaperStatusForLayer(layer)
+              : SP_LAYER_STATUS.PENDING;
+            body[`L${layerNumber}_Email`] = routedEmail;
+            activeLayers[index] = { ...(activeLayers[index] || { name: "" }), email: routedEmail };
+          }
         }
         body.FormStatus = SP_FORM_STATUS.SUBMITTED;
         body.CurrentLayer = layerConfigParsed.layers[0]?.layerNumber ?? 0;
@@ -1026,8 +1313,7 @@ export default function DynamicFormPage() {
       // Step 5: Submit
       let submittedByEmail = "";
       if (token) {
-        submittedByEmail = userEmail || accounts[0]?.username || "authenticated-user";
-        body.SubmittedBy = submittedByEmail;
+        submittedByEmail = String(body.SubmittedBy || userEmail || accounts[0]?.username || "authenticated-user");
         await ensurePdpaColumns(token, cfg.Title as string);
         if (hasManualBranches) {
           const maxBranchLayers = Math.max(
@@ -1149,10 +1435,14 @@ export default function DynamicFormPage() {
         // Step 7: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
           const layer1Email = activeLayers[0]?.email;
+          const firstLayerNumber = layerConfigParsed?.layers?.[0]?.layerNumber ?? 1;
+          const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
           const baseUrl = window.location.origin;
 
-          if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
+          if (firstLayerManualPaper) {
+            // Manual-paper workflow notices are sent with the generated PDF below.
+          } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
             const reviewLink = formSlug
               ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
               : undefined;
@@ -1185,8 +1475,8 @@ export default function DynamicFormPage() {
           }
         }
 
-        // Step 7: Generate PDF for no-layers submission (immediate terminal state)
-        if (resolvedLayerCount === 0 && result?.Id && token) {
+        // Step 7: Generate PDF for no-layers or manual-paper workflow submissions.
+        if ((resolvedLayerCount === 0 || hasManualPaperWorkflow) && result?.Id && token) {
           try {
             const cfgData = await getFormConfigByTitle(token, cfg.Title as string);
             const formVer = cfgData ? (cfgData as unknown as Record<string, unknown>).CurrentVersion as string || "1.0" : "1.0";
@@ -1198,11 +1488,14 @@ export default function DynamicFormPage() {
             if (rawSurvey) {
               const parsed = JSON.parse(rawSurvey);
               const surveyContent = parsed.surveyJson || parsed;
+              const versionMeta = parsed.meta && typeof parsed.meta === "object" && !Array.isArray(parsed.meta)
+                ? parsed.meta as Record<string, unknown>
+                : {};
               const respItem = await spGet(
                 token,
                 `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`
               ) as Record<string, unknown>;
-              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule','PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
+              const SYSTEM_FIELDS = new Set(['Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer','FormVersion','PublishKey','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule','PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil','Author','Editor','Created','Modified','ContentType','PermMask','PdfUrl','L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature','L2_Status','L2_Email','L2_SignedAt','L2_Rejection','L2_Signature','L3_Status','L3_Email','L3_SignedAt','L3_Rejection','L3_Signature']);
               const pdfData: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(respItem)) {
                 if (SYSTEM_FIELDS.has(k) || v === null || v === undefined) continue;
@@ -1238,14 +1531,48 @@ export default function DynamicFormPage() {
                 }
               } catch { /* ignore matrix injection errors */ }
               const { generateAndStorePdf, buildPdfLayerResults } = await import("../utils/generateFormPdf");
-              await generateAndStorePdf(token, cfg.Title as string, result.Id, {
+              let manualPdfAttachment: { name: string; contentType: string; contentBytes: string } | null = null;
+              const responseItemId = result.Id;
+              const pdfUrl = await generateAndStorePdf(token, cfg.Title as string, responseItemId, {
                 surveyJson: surveyContent as PdfFormData["surveyJson"],
                 responseData: pdfData,
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
                 isoStandards: isoStandardsText,
                 logoUrl: logoUrl || "/logo-128.png",
+                pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
+                  ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
+                  : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
+                documentHeader: versionMeta.documentHeader && typeof versionMeta.documentHeader === "object" && !Array.isArray(versionMeta.documentHeader)
+                  ? versionMeta.documentHeader as PdfFormData["documentHeader"]
+                  : undefined,
+              }, {
+                onGeneratedBlob: async (blob) => {
+                  if (!hasManualPaperWorkflow) return;
+                  manualPdfAttachment = {
+                    name: safePdfFileName(cfg.Title as string, responseItemId),
+                    contentType: "application/pdf",
+                    contentBytes: await blobToBase64(blob),
+                  };
+                },
               });
+              if (hasManualPaperWorkflow) {
+                const pdfLink = pdfUrl.startsWith("http") ? pdfUrl : `${new URL(SP_SITE_URL).origin}${pdfUrl}`;
+                await fetch("/api/send-email", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                    ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+                  },
+                  body: JSON.stringify({
+                    sendToConfiguredSender: true,
+                    subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
+                    body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/>The manual evaluation/approval PDF is attached.<br/><a href="${pdfLink}">Open generated PDF record</a>`,
+                    attachments: manualPdfAttachment ? [manualPdfAttachment] : undefined,
+                  }),
+                });
+              }
             }
           } catch {
             // Submission remains successful when optional PDF generation is unavailable.
@@ -1290,6 +1617,8 @@ export default function DynamicFormPage() {
           },
           body: JSON.stringify({
             listTitle: cfg.Title,
+            formVersion: cfg.CurrentVersion,
+            publishKey: cfg.CurrentPublishKey || publishKey,
             body,
             matrixData: Object.keys(matrixData).length > 0 ? matrixData : undefined,
             pdpaConsent: true,
@@ -1383,11 +1712,24 @@ export default function DynamicFormPage() {
     };
   }, [showQr]);
 
-  if (loading || (formData && !formData.surveyJson && !error)) return (
+  if (loading) return (
     <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <style>{globalCss(t)}</style>
       <Spinner t={t} />
       <div style={{ fontSize: 13, color: t.textMuted, animation: "pulse 1.5s infinite" }}>Loading form...</div>
+    </div>
+  );
+
+  // A form that loaded without survey content can never be filled in or submitted —
+  // say so instead of sitting on a spinner forever.
+  if (!error && !formData?.surveyJson) return (
+    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCss(t)}</style>
+      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
+        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
+        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
+        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask an OSHES Forms Owner to republish the form and share the link again.</p>
+      </div>
     </div>
   );
 
@@ -1436,6 +1778,20 @@ export default function DynamicFormPage() {
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
             <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
           </div>
+          <div className="dfp-doc-control" aria-label="Document control metadata">
+            {[
+              ["Document Number:", documentHeader.documentNumber],
+              ["Issue Number:", documentHeader.issueNumber],
+              ["Effective Date:", documentHeader.effectiveDate],
+              ["Revision Number:", documentHeader.revisionNumber],
+              ["Revision Date:", documentHeader.revisionDate],
+            ].map(([label, value]) => (
+              <div className="dfp-doc-cell" key={label}>
+                <span className="dfp-doc-label">{label}</span>
+                {value && <span className="dfp-doc-value">{value}</span>}
+              </div>
+            ))}
+          </div>
           <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
             <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
@@ -1476,7 +1832,7 @@ export default function DynamicFormPage() {
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
               </div>
             )}
-            {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {survey ? <div className="dfp-survey-wrap"><Survey model={survey} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {survey && isLastSurveyPage && (
               <>
                 <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>

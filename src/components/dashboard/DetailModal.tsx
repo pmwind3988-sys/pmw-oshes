@@ -74,6 +74,7 @@ const SYSTEM_FIELDS = new Set([
   "FormId",
   "FormID",
   "FormVersion",
+  "PublishKey",
   "SubmittedAt",
   "SubmittedBy",
   "Submitted_x0020_By",

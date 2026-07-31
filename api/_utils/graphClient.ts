@@ -391,15 +391,40 @@ export function queryMasterFormBySlug(token: string, slug: string): Promise<Grap
   return queryListItemByFields(token, OSHES_LISTS.masterForm, { Slug: slug });
 }
 
+/**
+ * Resolves one published version, optionally pinned to a publish profile.
+ *
+ * PublishKey is written by the pmw-hrform builder and may be absent on rows
+ * published before it existed. When the caller asked for the default profile —
+ * what a link with no ?publish= resolves to — fall back to the unkeyed lookup so
+ * those older rows still resolve. A non-default profile has no such fallback:
+ * silently serving production content under a different profile's link would be
+ * worse than reporting nothing found.
+ */
 export function queryWebFormVersion(
   token: string,
   formTitle: string,
   formVersion: string,
+  publishKey?: string,
 ): Promise<GraphListItem | null> {
-  return queryListItemByFields(token, OSHES_LISTS.versions, {
+  const unkeyed = () => queryListItemByFields(token, OSHES_LISTS.versions, {
     FormTitle: formTitle,
     FormVersion: formVersion,
   });
+  if (publishKey) {
+    return queryListItemByFields(token, OSHES_LISTS.versions, {
+      FormTitle: formTitle,
+      FormVersion: formVersion,
+      PublishKey: publishKey,
+    }).then(async (item) => {
+      if (item || publishKey !== "production") return item;
+      return unkeyed();
+    }).catch(async () => {
+      if (publishKey !== "production") return null;
+      return unkeyed();
+    });
+  }
+  return unkeyed();
 }
 
 /**
