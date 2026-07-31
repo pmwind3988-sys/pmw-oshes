@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-07-31T01:14:39.387Z",
+        "reason": "Shared pmw-hrform editorial system; Segoe UI/Aptos stack chosen for M365 and SharePoint embedding"
+      }
+    ]
+  }
+}
