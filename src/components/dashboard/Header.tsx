@@ -17,6 +17,7 @@ import {
   Menu as MenuIcon,
   PrivacyTip as PrivacyIcon,
   Wallpaper as WallpaperIcon,
+  OpenInNew as OpenInNewIcon,
 } from "@mui/icons-material";
 import type { MouseEvent } from "react";
 import { useState } from "react";
@@ -26,6 +27,7 @@ import Logo from "../Logo";
 import BackgroundPicker from "./BackgroundPicker";
 import { useDashboardBackground } from "../../hooks/useDashboardBackground";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { builderUrl } from "../../config/oshes";
 
 interface HeaderProps {
   userEmail: string;
@@ -42,6 +44,7 @@ export default function Header({
 }: HeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const builder = builderUrl();
   const isCompact = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
@@ -216,13 +219,22 @@ export default function Header({
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {isAdmin && (
-                    <>
-                      <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
-                        <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                        <Typography variant="body2">Dashboard Background</Typography>
-                      </MenuItem>
-                    </>
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
+                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                    <Typography variant="body2">Dashboard Background</Typography>
+                  </MenuItem>
+                  {builder && (
+                    <MenuItem
+                      component="a"
+                      href={builder}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={handleMainMenuClose}
+                      sx={menuItemSx}
+                    >
+                      <OpenInNewIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                      <Typography variant="body2">Form builder</Typography>
+                    </MenuItem>
                   )}
                 </>
               )}
@@ -296,13 +308,24 @@ export default function Header({
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  {isAdmin && (
-                    <>
-                      <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
-                        <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                        <Typography variant="body2">Dashboard Background</Typography>
-                      </MenuItem>
-                    </>
+                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
+                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                    <Typography variant="body2">Dashboard Background</Typography>
+                  </MenuItem>
+                  {/* Leaves this app: the builder is shared with pmw-hrform and
+                      writes to the OSHES site. Same tenant, so SSO is silent. */}
+                  {builder && (
+                    <MenuItem
+                      component="a"
+                      href={builder}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={handleProfileClose}
+                      sx={menuItemSx}
+                    >
+                      <OpenInNewIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                      <Typography variant="body2">Form builder</Typography>
+                    </MenuItem>
                   )}
                 </>
               )}

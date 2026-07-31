@@ -19,6 +19,25 @@ export const OSHES_APP = {
 export const PORTAL_SLA_DEFAULT_DAYS = Number(env("VITE_OSHES_SLA_DEFAULT_DAYS", "3")) || 3;
 
 /**
+ * Deep link to the pmw-hrform form builder, pointed at the OSHES site.
+ *
+ * Forms are authored in one place for both products. Rather than embed that
+ * builder here — which would mean reintroducing the code this app deliberately
+ * removed, and re-authenticating inside an iframe against partitioned browser
+ * storage — the portal links out to it. Same tenant and same Entra app, so the
+ * hand-off is a silent SSO with no second sign-in.
+ *
+ * Returns null when unconfigured, and the link is not rendered at all.
+ */
+export function builderUrl(): string | null {
+  const base = (import.meta.env.VITE_BUILDER_URL || "").trim().replace(/\/$/, "");
+  if (!base) return null;
+  // ?site=oshes is what puts the builder in OSHES mode. Without it the operator
+  // would land on HR's forms, which is the one outcome worth engineering against.
+  return `${base}/admin/builder?site=oshes`;
+}
+
+/**
  * List names are deliberately NOT prefixed and NOT configurable.
  *
  * OSHES lives on its own SharePoint site, so the site boundary already separates

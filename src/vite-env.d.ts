@@ -15,6 +15,11 @@ interface ImportMetaEnv {
    * Deliberately separate from the sender mailbox above.
    */
   readonly VITE_OSHES_MANUAL_PAPER_ADDRESS?: string;
+  /**
+   * Origin of the pmw-hrform deployment that hosts the shared form builder.
+   * Blank hides the "Form builder" link entirely.
+   */
+  readonly VITE_BUILDER_URL?: string;
 }
 
 interface ImportMeta {

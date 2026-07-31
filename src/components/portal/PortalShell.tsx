@@ -1,7 +1,9 @@
 import { Box, Button, Stack, Typography } from "@mui/material";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { portalNav, roleLabel } from "../../utils/portalRole";
+import { builderUrl } from "../../config/oshes";
 
 /**
  * Sidebar plus main column. The sidebar carries exactly the items the current
@@ -23,6 +25,8 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     audit,
     onSignOut,
   } = usePortal();
+
+  const builder = builderUrl();
 
   const items = portalNav(role, {
     queue: queue.length,
@@ -115,6 +119,23 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             {userTitle || userEmail}
           </Typography>
           <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+            {/* Separated from the nav above because it leaves this app. Opening a
+                new tab is the honest signal: the builder is a shared tool writing
+                to the OSHES site, not a screen of this portal. */}
+            {role === "admin" && builder && (
+              <Button
+                component="a"
+                href={builder}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="outlined"
+                size="small"
+                endIcon={<OpenInNewIcon sx={{ fontSize: 14 }} />}
+                sx={{ minHeight: 36 }}
+              >
+                Form builder
+              </Button>
+            )}
             <Button variant="outlined" size="small" onClick={onSignOut} sx={{ minHeight: 36 }}>
               Sign out
             </Button>
