@@ -1216,7 +1216,9 @@ export default function App() {
 
   async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
     if (!isAdmin) {
-      throw new Error("Only OSHES Forms Owners can delete submissions.");
+      throw new Error(
+        `Only members of ${SP_STATIC.adminGroup || "the OSHES admin group"} can delete submissions.`,
+      );
     }
 
     const account = activeAccount ?? accounts[0] ?? null;

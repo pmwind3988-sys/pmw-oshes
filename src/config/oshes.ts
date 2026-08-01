@@ -6,10 +6,27 @@ function env(name: keyof ImportMetaEnv, fallback: string): string {
 export const OSHES_APP = {
   name: env("VITE_APP_NAME", "PMW OSHES Forms"),
   department: env("VITE_DEPARTMENT_NAME", "OSHES"),
-  adminGroup: env("VITE_OSHES_ADMIN_GROUP", "_OSHES Forms Owners"),
+  /**
+   * SharePoint group whose members administer this deployment.
+   *
+   * There is deliberately no default. A guessed group name denies access in
+   * exactly the same way a genuine non-membership does, so shipping one turns a
+   * missing variable into an unexplained permissions failure. Blank instead
+   * means nobody resolves as an admin, which is the same outcome but arrives
+   * with the warning below. Submitters are unaffected either way.
+   */
+  adminGroup: env("VITE_OSHES_ADMIN_GROUP", ""),
   /** Read-only group. Members see every record and the audit trail, and never render an action. */
-  auditorGroup: env("VITE_OSHES_AUDITOR_GROUP", "_OSHES Auditors"),
+  auditorGroup: env("VITE_OSHES_AUDITOR_GROUP", ""),
 } as const;
+
+if (!OSHES_APP.adminGroup) {
+  console.warn(
+    "VITE_OSHES_ADMIN_GROUP is not set — no account will resolve as an OSHES admin. " +
+      "It is compared as a literal string against the SharePoint group Title; " +
+      "list the real names with <site-url>/_api/web/sitegroups?$select=Title",
+  );
+}
 
 /**
  * Working days a layer may sit before it counts as overdue, when neither the
