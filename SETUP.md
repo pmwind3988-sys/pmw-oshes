@@ -39,16 +39,34 @@ substantially and the shared certificate no longer applies.
    https://<tenant>.sharepoint.com/sites/<your-oshes-site>
    ```
 
-2. Create the access groups and **write down their exact names** — the app
-   compares against them as literal strings, so a trailing space breaks access.
+2. Decide which SharePoint groups map to which role.
 
-   | Group | Purpose | Env var |
+   | Role | Purpose | Env var |
    |---|---|---|
-   | OSHES Forms Owners | Full admin: approvals, exports, hard delete | `VITE_OSHES_ADMIN_GROUP` |
-   | OSHES Auditors | Read-only: sees every record and the audit trail, can take no action | `VITE_OSHES_AUDITOR_GROUP` |
+   | Admin | Full admin: approvals, exports, hard delete | `VITE_OSHES_ADMIN_GROUP` |
+   | Auditor | Read-only: sees every record and the audit trail, can take no action | `VITE_OSHES_AUDITOR_GROUP` |
    | (site members) | Submit forms, sign layers assigned to them | — |
 
    The auditor group is optional. Leave the var blank to disable the role.
+
+   Either create a dedicated group, or point `VITE_OSHES_ADMIN_GROUP` at the
+   site's built-in **Owners** group (`<Site Name> Owners`), which is what this
+   deployment does. Reusing Owners is simpler, and it means anyone granted site
+   ownership for any reason also gets form authoring and hard delete on OSHES
+   submissions. Create a separate group if those two sets of people should differ.
+
+   **Whatever you choose, take the name from SharePoint rather than typing it.**
+   It is compared as a literal string against the group's `Title`, so a trailing
+   space or a missing prefix reads as "not a member". List the real names:
+
+   ```
+   https://tenant.sharepoint.com/sites/YOUR-OSHES-SITE/_api/web/sitegroups?$select=Title
+   ```
+
+   A wrong name and a genuine membership failure look identical from the outside —
+   both simply deny access. The form builder distinguishes them for you: when it
+   denies access it logs which group it checked and, if that group does not exist,
+   lists the ones that do.
 
 3. **Do not create any lists by hand.** The builder provisions them, and a
    hand-made list with the right name but the wrong columns is harder to diagnose
@@ -249,20 +267,38 @@ will not re-send. The response reports `{ examined, sent, failed }`.
 
 ## E. First run — proving it works
 
-11. Point the **form builder** at the OSHES site and sign in as a member of
-    OSHES Forms Owners.
-12. Run **Bootstrap system lists**. This creates the five system lists. It is
-    idempotent — safe to re-run.
-13. Build and publish one throwaway form.
-14. Open this app. The form should appear in the catalogue.
+12. **Teach the form builder about this site.** The builder is a separate
+    deployment (`pmw-hrform`) and has no way to discover the OSHES site — it
+    reads a static registry. Set both in that project's environment:
+
+    | Key | Value |
+    |---|---|
+    | `VITE_SP_SITE_URL_OSHES` | the same URL as `VITE_SP_SITE_URL` here |
+    | `VITE_OSHES_ADMIN_GROUP` | the same group name as here |
+
+    Only a URL and a group name cross over — no OSHES secret belongs in the
+    builder's environment. Both are `VITE_`-prefixed, so they are compiled in at
+    build time: **the builder must be rebuilt after setting them**, not merely
+    restarted.
+
+13. Open the builder at `/admin/builder?site=oshes`, signed in as a member of
+    the admin group from step A2. An orange banner naming the OSHES site
+    confirms it is pointed at the right place.
+
+    Opening it provisions the five system lists automatically — the call is
+    best-effort and silent, so an empty form library is the symptom of it having
+    failed.
+
+14. Build and publish one throwaway form.
+15. Open this app. The form should appear in the catalogue.
 
     That round trip proves the site URL, the group names, and the delegated
     token are all correct. If the catalogue is empty but no error appears, the
     likely cause is a group name mismatch, not a permissions failure.
 
-15. Submit the test form as an ordinary member and confirm it reaches the
+16. Submit the test form as an ordinary member and confirm it reaches the
     dashboard.
-16. Delete the test form.
+17. Delete the test form.
 
 ---
 
