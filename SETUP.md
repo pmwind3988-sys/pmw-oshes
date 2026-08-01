@@ -9,10 +9,11 @@ that configuration and runs the forms.
 
 ---
 
-## Assumption this guide is built on
+## The fact this guide is built on
 
 **The OSHES SharePoint site is on the same host as the HR site**
-(`https://tenant.sharepoint.com`).
+(`https://tenant.sharepoint.com`). Confirmed 2026-08-01 against the
+configured `VITE_SP_SITE_URL`.
 
 That one fact removes most of the Azure work, because the delegated SharePoint
 scope is granted per **origin**, not per site:
@@ -32,10 +33,10 @@ substantially and the shared certificate no longer applies.
 ## A. Create the SharePoint site
 
 1. Create the site: **SharePoint admin → Sites → Create**. Team or Communication
-   site, both work. Suggested URL:
+   site, both work. The site this deployment uses:
 
    ```
-   https://tenant.sharepoint.com/sites/PMW-OSHES
+   https://tenant.sharepoint.com/sites/YOUR-OSHES-SITE
    ```
 
 2. Create the access groups and **write down their exact names** — the app
@@ -89,7 +90,7 @@ Reuse the existing registration — do not create a second one.
    Get `{site-id}` with:
 
    ```bash
-   az rest --method GET --url "https://graph.microsoft.com/v1.0/sites/tenant.sharepoint.com:/sites/PMW-OSHES"
+   az rest --method GET --url "https://graph.microsoft.com/v1.0/sites/tenant.sharepoint.com:/sites/YOUR-OSHES-SITE"
    ```
 
 6. **The certificate needs nothing new.** `getSharePointToken()` requests
@@ -141,13 +142,46 @@ the value the server actually trusts.
 | `VITE_OSHES_MANUAL_PAPER_ADDRESS` | Sentinel mailbox meaning "handle on paper". **Blank disables the feature** |
 
 Manual-paper routing marks a layer manual and emails it a generated PDF instead
-of assigning an online reviewer. Leave the sentinel blank until you actually want
-that behaviour — an accidental match silently changes how a workflow routes.
+of assigning an online reviewer. Blank disables it entirely.
+
+> **This deployment points the sentinel at the same mailbox it sends from**
+> (`oshes-forms@example.com`), which is a deliberate choice and differs from
+> pmw-hrform, where the two are separate addresses.
+>
+> The consequence, so it is never a surprise: the sentinel is compared against
+> each **layer's assignee**, not against the sender. Any workflow layer assigned
+> to that mailbox becomes `Manual Approval Required` — a PDF goes out and no
+> approval link is generated. If a layer ever needs a genuine online approval
+> routed to the OSHES inbox, give the sentinel its own address first.
 
 ### Misc
 
-`VITE_APP_NAME`, `VITE_DEPARTMENT_NAME`, `VITE_PDPA_CONTACT_EMAIL`,
-`VITE_PDPA_RETENTION_YEARS`, `VITE_APP_BASE_URL`.
+| Key | Notes |
+|---|---|
+| `VITE_APP_NAME` | Defaults to `PMW OSHES Forms` |
+| `VITE_DEPARTMENT_NAME` | Defaults to `OSHES` |
+| `VITE_PDPA_CONTACT_EMAIL` | Shown in the privacy notice |
+| `VITE_APP_BASE_URL` | Production origin. Approval links in email are built from it — a wrong value 404s every emailed link |
+| `VITE_BUILDER_URL` | Origin of the pmw-hrform deployment. **Origin only** — the app appends `/admin/builder?site=oshes`. Blank hides the link |
+
+### Optional — defaults apply when unset
+
+These are read by the code but are not required. The defaults are the values the
+app uses today, so leaving them unset is a supported configuration.
+
+| Key | Default | Set it when |
+|---|---|---|
+| `VITE_INTERNAL_EMAIL_DOMAINS` | `pmw-group.com` | Staff use another domain. Comma-separated; decides who counts as internal |
+| `VITE_PDPA_NOTICE_VERSION` | `PDPA-MY-OSHES-2026-06-25` | The privacy notice changes and consent must be re-captured |
+| `PDPA_RETENTION_YEARS` | `7` | See the warning below |
+| `API_LOG_LEVEL` | `warn` in production | Debugging. Accepts `info`, `warn`, `error` |
+| `APP_ORIGIN`, `APP_BASE_URL` | fall back to `VITE_APP_BASE_URL` | Never needed; the fallback is correct |
+
+> **`PDPA_RETENTION_YEARS` and `VITE_PDPA_RETENTION_YEARS` are two different
+> variables.** The browser reads the `VITE_` one to display the retention period;
+> `api/submit-form.ts` reads the un-prefixed one to compute the `RetentionUntil`
+> date actually written to SharePoint. Change one without the other and the
+> notice shown to the user stops matching the stored data. Set both, or neither.
 
 ---
 
@@ -160,6 +194,26 @@ that behaviour — an accidental match silently changes how a workflow routes.
     duplicate them in the dashboard. Vercel does **not** interpolate env vars into
     `vercel.json` header values, so anything environment-specific there must be
     literal.
+
+    Because of that, `Access-Control-Allow-Origin` in `vercel.json` is the hard-coded
+    string `https://pmw-oshes.vercel.app`. **Attaching a custom domain means editing
+    that literal** — no env var will do it for you.
+
+11. Check the variables landed correctly:
+
+    ```bash
+    npm run check:env
+    ```
+
+    Run it locally against `.env.local`, and again after a deploy by pulling the
+    deployed values first:
+
+    ```bash
+    npx vercel env pull .env.production.local --environment=production
+    ```
+
+    It never prints a secret — only whether each is present and whether the pairs
+    that must match actually match.
 
 ---
 
