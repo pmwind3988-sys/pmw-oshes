@@ -200,6 +200,35 @@ app uses today, so leaving them unset is a supported configuration.
     string `https://pmw-oshes.vercel.app`. **Attaching a custom domain means editing
     that literal** — no env var will do it for you.
 
+### The cron schedule
+
+`workflow-email-cron` runs **once a day at 00:00 UTC** (08:00 Malaysia), which is
+what the Hobby plan allows — it permits a daily cadence only, and rejects a
+deploy carrying anything more frequent.
+
+Running daily costs almost nothing here, for two reasons worth knowing before
+anyone is tempted to "fix" it:
+
+- **Immediate workflow email never touches the cron.** `deliverWorkflowEmail` is
+  called inline during submission, so an approval request goes out at submit
+  time regardless of the schedule.
+- **The cron is a catch-up sweep, not a timer.** It collects every entry whose
+  `dueAt` has passed, so a longer interval delays delivery but never drops it.
+  The soonest anything can become due is one day out — `customDays` has a floor
+  of 1 — so a daily sweep is matched to the queue it drains.
+
+00:00 UTC is chosen so reminders land at the start of the Malaysian working day
+rather than overnight.
+
+To run it on demand without waiting:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/workflow-email-cron
+```
+
+It is idempotent — an entry moves to `sending` before delivery, so a second run
+will not re-send. The response reports `{ examined, sent, failed }`.
+
 11. Check the variables landed correctly:
 
     ```bash
