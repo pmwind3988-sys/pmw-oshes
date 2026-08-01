@@ -33,10 +33,10 @@ substantially and the shared certificate no longer applies.
 ## A. Create the SharePoint site
 
 1. Create the site: **SharePoint admin → Sites → Create**. Team or Communication
-   site, both work. The site this deployment uses:
+   site, both work. Note the resulting URL — it becomes `VITE_SP_SITE_URL`:
 
    ```
-   https://tenant.sharepoint.com/sites/YOUR-OSHES-SITE
+   https://<tenant>.sharepoint.com/sites/<your-oshes-site>
    ```
 
 2. Create the access groups and **write down their exact names** — the app
@@ -144,9 +144,10 @@ the value the server actually trusts.
 Manual-paper routing marks a layer manual and emails it a generated PDF instead
 of assigning an online reviewer. Blank disables it entirely.
 
-> **This deployment points the sentinel at the same mailbox it sends from**
-> (`oshes-forms@example.com`), which is a deliberate choice and differs from
-> pmw-hrform, where the two are separate addresses.
+> **This deployment points the sentinel at the same mailbox it sends from** —
+> `VITE_OSHES_MANUAL_PAPER_ADDRESS` and `OSHES_FORM_EMAIL_FROM_ADDRESS` hold the
+> same address. That is a deliberate choice, and it differs from pmw-hrform,
+> where the two are separate mailboxes.
 >
 > The consequence, so it is never a surprise: the sentinel is compared against
 > each **layer's assignee**, not against the sender. Any workflow layer assigned
