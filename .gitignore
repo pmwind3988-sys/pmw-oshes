@@ -7,14 +7,17 @@ dist/
 tmp/
 
 # Reference template retained for comparison only.
-pmw-hrform/
+/pmw-hrform/
 
 # Legacy static prototype files retained during migration.
-app.js
-styles.css
-dev-server.js
-assets/
-stitch-export/
+# Leading slashes matter: without them these patterns match at every depth, and
+# the unanchored forms were silently excluding src/assets (the app logos, so the
+# production build could not resolve them) and a design handoff stylesheet.
+/app.js
+/styles.css
+/dev-server.js
+/assets/
+/stitch-export/
 
 # Impeccable design-hook local state (shared config.json is committed).
 .impeccable/hook.cache.json
