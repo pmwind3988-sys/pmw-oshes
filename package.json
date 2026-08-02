@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check:env": "node scripts/check-env.mjs"
+    "check:env": "node scripts/check-env.mjs",
+    "check:site": "node scripts/check-site-access.mjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",

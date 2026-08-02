@@ -111,6 +111,13 @@ Reuse the existing registration — do not create a second one.
    az rest --method GET --url "https://graph.microsoft.com/v1.0/sites/tenant.sharepoint.com:/sites/YOUR-OSHES-SITE"
    ```
 
+   Confirm the grant landed before moving on — this is the one step whose failure
+   looks like a broken deployment rather than a missing permission:
+
+   ```bash
+   npm run check:site
+   ```
+
 6. **The certificate needs nothing new.** `getSharePointToken()` requests
    `${origin}/.default`, and the origin is unchanged, so the existing
    `SHAREPOINT_CERT_PFX_BASE64` works as-is.
