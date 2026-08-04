@@ -20,6 +20,39 @@ afterEach(() => {
 });
 
 describe("notifyAuthRecoveryForResponse", () => {
+  it("treats MSAL timed_out as a stale auth timeout", async () => {
+    const { isAuthTimeoutError, isStaleAuthError } = await import("./authRecovery");
+    const error = {
+      errorCode: "timed_out",
+      message: "timed_out: See https://aka.ms/msal.js.errors#timed_out for details",
+    };
+
+    expect(isStaleAuthError(error)).toBe(true);
+    expect(isAuthTimeoutError(error)).toBe(true);
+  });
+
+  it("expires stale automatic re-login attempt markers", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("sessionStorage", {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => store.set(key, value)),
+      removeItem: vi.fn((key: string) => store.delete(key)),
+    });
+    const {
+      hasAuthTimeoutReloginAttempted,
+      markAuthTimeoutReloginAttempted,
+    } = await import("./authRecovery");
+
+    store.set("pmw_auth_timeout_relogin_attempted", "1");
+    expect(hasAuthTimeoutReloginAttempted()).toBe(false);
+
+    markAuthTimeoutReloginAttempted();
+    expect(hasAuthTimeoutReloginAttempted()).toBe(true);
+
+    store.set("pmw_auth_timeout_relogin_attempted", String(Date.now() - 121000));
+    expect(hasAuthTimeoutReloginAttempted()).toBe(false);
+  });
+
   it("requests app-wide recovery for a SharePoint 401 response", async () => {
     const dispatchEvent = vi.fn<(event: Event) => boolean>(() => true);
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue({ status: 401, ok: false } as Response);

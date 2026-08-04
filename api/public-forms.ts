@@ -29,9 +29,10 @@ interface PublicFormSummary {
 /**
  * The QR picker's form list.
  *
- * Only published form types flagged public in their LayerConfig appear here, and
- * only the fields the poster flow needs — no approver names, no chain detail.
- * The picker reads this so a new public form type shows up without a code change.
+ * Only published form types an anonymous visitor can actually open appear here,
+ * and only the fields the poster flow needs — no approver names, no chain
+ * detail. The picker reads this so a new public form type shows up without a
+ * code change.
  */
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
@@ -65,18 +66,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
       }
 
-      const isPublic = layerConfig?.isPublic ?? fields.IsPublic === true;
+      // Must match the gate the form page itself applies (`IsPublic !== false`),
+      // or this picker hides forms whose links are in fact open — and the
+      // poster it is printed on then points at a form nobody can find here.
+      const isPublic = fields.IsPublic !== false && layerConfig?.isPublic !== false;
       if (!isPublic) continue;
 
       const title = String(fields.Title ?? "");
       if (!title) continue;
 
+      const slug = String(fields.Slug ?? "");
+      // Without a slug there is no form to open, and the picker's only job is
+      // now to open one.
+      if (!slug) continue;
+
+      const declaredLayers = Number(fields.NumberOfApprovalLayer);
       forms.push({
         listTitle: title,
-        slug: String(fields.Slug ?? ""),
+        slug,
         code: String(layerConfig?.code ?? fields.FormID ?? "").toUpperCase(),
         name: title,
-        layerCount: layerConfig?.layers?.length ?? (Number(fields.NumberOfApprovalLayer) || 1),
+        // Zero layers is a real answer. Defaulting it to 1 told every reporter
+        // their record-keeping form was going to an approver.
+        layerCount:
+          layerConfig?.layers?.length
+          ?? (Number.isFinite(declaredLayers) && declaredLayers > 0 ? Math.trunc(declaredLayers) : 0),
         severityCapture: layerConfig?.severityCapture ?? "none",
       });
     }

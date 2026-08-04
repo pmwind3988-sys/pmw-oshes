@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type {
   AuditEntry,
   CatalogueEntry,
+  PortalAccess,
   PortalRecord,
   PortalRole,
   PortalScreen,
@@ -9,9 +10,13 @@ import type {
   SurveyJson,
 } from "../types";
 import type { PeopleDirectory } from "../utils/portalPeople";
+import type { PortalPrefs } from "../utils/portalPrefs";
 
 export interface PortalContextValue {
+  /** Label for this account. Every gate reads `access`, never this. */
   role: PortalRole;
+  /** What this account may see and do, resolved once per session. */
+  access: PortalAccess;
   userEmail: string;
   userName: string;
   userTitle: string;
@@ -19,10 +24,10 @@ export interface PortalContextValue {
   spClient: SharePointClient;
   directory: PeopleDirectory;
 
-  /** Every record this account may see. */
+  /** Every record this account may see — its own filings only, unless it has oversight. */
   records: PortalRecord[];
-  /** The subset a submitter sees — their own filings. Same as `records` for other roles. */
-  visibleRecords: PortalRecord[];
+  /** Records this account filed itself, whatever else it can see. */
+  myRecords: PortalRecord[];
   /** Items waiting on this account's signature. */
   queue: PortalRecord[];
   catalogue: CatalogueEntry[];
@@ -34,6 +39,10 @@ export interface PortalContextValue {
 
   screen: PortalScreen;
   setScreen: (screen: PortalScreen) => void;
+
+  /** Per-browser preferences: landing page, table density, whether settled rows show. */
+  prefs: PortalPrefs;
+  setPrefs: (changes: Partial<PortalPrefs>) => void;
 
   /** Reference of the record whose drawer is open, or null. */
   drawerRef: string | null;
@@ -50,8 +59,8 @@ export interface PortalContextValue {
   updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) => void;
 
   toast: (message: string) => void;
+  /** The only session exit the portal offers — signing back in picks the account. */
   onSignOut: () => void;
-  onSwitchAccount: () => void;
 }
 
 const PortalContext = createContext<PortalContextValue | null>(null);

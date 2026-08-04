@@ -27,8 +27,13 @@ import { registerSignaturePad, SignatureCapture } from "../utils/SignaturePad";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import Logo from "../components/Logo";
+import { Box, Button, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import WarningIcon from "@mui/icons-material/Warning";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { editorial, editorialShadow } from "../theme/editorial";
+import { WorkspaceNotice } from "../components/builder/WorkspaceLayout";
+import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -109,42 +114,33 @@ type PublicPreviousLayerSummary = {
 };
 
 // ── Styling ──
+// Drawn from the shared PMW Editorial tokens rather than a private palette, so
+// this page cannot drift from the approval workspace it hands off to. This
+// route is reached from an email link and is often the only screen an approver
+// ever sees, so it stands alone — no sidebar — but wears the same system.
 const COLORS = {
-  purple: "#0078D4", purpleLight: "#106EBE", purplePale: "#EAF5FC",
-  bg: "linear-gradient(180deg, #EEF6FC 0%, #F7FAFD 48%, #F7F8FA 100%)", cardBg: "#FFFFFF", border: "#D6DCE5",
-  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
-  green: "#107C10", greenPale: "#E3F1E3",
-  red: "#C62828", redPale: "#F8E4E4",
-  shadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(26, 31, 43, 0.06)",
-  shadowHover: "0 0 0 1px rgba(0, 120, 212, 0.18), 0 2px 4px -1px rgba(0, 120, 212, 0.12), 0 10px 24px rgba(26, 31, 43, 0.08)",
+  purple: editorial.pmwBlue,
+  purpleDark: editorial.pmwBlueDark,
+  purplePale: editorial.blueWash,
+  cardBg: editorial.panel,
+  border: editorial.border,
+  textPrimary: editorial.ink,
+  textSecond: editorial.muted,
+  textMuted: editorial.softMuted,
+  green: editorial.success,
+  greenPale: "rgba(16, 124, 16, 0.10)",
+  red: editorial.error,
+  redPale: "rgba(198, 40, 40, 0.10)",
+  shadow: editorialShadow,
 };
 
 const sectionCard: React.CSSProperties = {
   background: COLORS.cardBg,
-  borderRadius: 12,
+  border: `1px solid ${COLORS.border}`,
+  borderRadius: 14,
   padding: 24,
   marginBottom: 20,
   boxShadow: COLORS.shadow,
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "12px 32px",
-  minHeight: 44,
-  borderRadius: 8,
-  border: "none",
-  background: COLORS.purple,
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: "pointer",
-  fontFamily: "'Segoe UI', system-ui, sans-serif",
-};
-
-const btnOutline: React.CSSProperties = {
-  ...btnPrimary,
-  background: "transparent",
-  border: `1px solid ${COLORS.red}`,
-  color: COLORS.red,
 };
 
 function valueToText(value: unknown): string {
@@ -497,7 +493,7 @@ export default function EvaluationPage() {
             responseItemId: itemId,
             layerNumber: currentLayer.layerNumber,
             action,
-            fields: evalSurveyModel ? evalSurveyModel.data : {},
+            fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data) : {},
             signature: signatureData || undefined,
             rejection: rejectionReason || undefined,
           }),
@@ -532,7 +528,7 @@ export default function EvaluationPage() {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
           confirmerEmail: userEmail,
           confirmerName: accounts[0]?.name ?? undefined,
-          fields: evalSurveyModel ? evalSurveyModel.data as Record<string, unknown> : {},
+          fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {},
           signatureUrl: signatureData,
         });
         await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
@@ -683,49 +679,37 @@ export default function EvaluationPage() {
 
   // ── Render ──
   if (authState === "checking" || loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: COLORS.textMuted, fontSize: 14 }}>Loading...</div>
-      </div>
-    );
+    return <WorkspaceNotice title="Loading..." message="Fetching this submission and its workflow layer." />;
   }
 
   if (authState === "unauthorized") {
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>Sign in required</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>You need to sign in with your Microsoft 365 account to access this evaluation.</p>
-          <button onClick={() => instance.loginRedirect({ ...loginRequest })} style={btnPrimary}>Sign in with Microsoft 365</button>
-        </div>
-      </div>
+      <WorkspaceNotice
+        icon={<LockIcon sx={{ fontSize: 28 }} />}
+        title="Sign in required"
+        message="You need to sign in with your Microsoft 365 account to access this evaluation."
+        action={
+          <Button variant="contained" size="large" onClick={() => instance.loginRedirect({ ...loginRequest })}>
+            Sign in with Microsoft 365
+          </Button>
+        }
+      />
     );
   }
 
   if (error) {
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><WarningIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.red, marginBottom: 8 }}>Error</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13 }}>{error}</p>
-        </div>
-      </div>
+      <WorkspaceNotice tone="error" icon={<WarningIcon sx={{ fontSize: 28 }} />} title="Error" message={error} />
     );
   }
 
   if (actionState === "success") {
     return (
-      <div style={{ minHeight: "100vh", background: COLORS.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: COLORS.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", border: `1px solid ${COLORS.border}`, boxShadow: COLORS.shadow }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.green, marginBottom: 8 }}>Submitted Successfully</div>
-          <p style={{ color: COLORS.textSecond, fontSize: 13, marginBottom: 24 }}>
-            Your response has been recorded. You may close this page.
-          </p>
-        </div>
-      </div>
+      <WorkspaceNotice
+        icon={<CheckCircleIcon sx={{ fontSize: 28, color: editorial.success }} />}
+        title="Submitted successfully"
+        message="Your response has been recorded. You may close this page."
+      />
     );
   }
 
@@ -738,13 +722,11 @@ export default function EvaluationPage() {
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
 
   return (
-    <div className="eval-page" style={{ minHeight: "100vh", background: COLORS.bg, padding: "clamp(16px, 3vw, 32px) 16px" }}>
+    <div className="eval-page" style={{ minHeight: "100vh", padding: "clamp(16px, 3vw, 32px) 16px" }}>
       <style>{`
         .eval-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .eval-page h1, .eval-page h2, .eval-page h3 { text-wrap: balance; }
         .eval-page p, .eval-page li, .eval-page span { text-wrap: pretty; }
-        .eval-action-button { transition-property: transform, box-shadow, background-color, color; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.2, 0, 0, 1); }
-        .eval-action-button:active:not(:disabled) { transform: scale(0.96); }
         .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 800; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
         .eval-survey-wrap .sd-root-modern, .eval-survey-wrap .sd-container-modern { background: transparent !important; max-width: 100% !important; }
         .eval-survey-wrap .sd-row { display: flex !important; flex-wrap: wrap !important; }
@@ -757,7 +739,7 @@ export default function EvaluationPage() {
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
 
         {/* Header */}
-        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, borderRadius: 16, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
+        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
           <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.purplePale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             {logoUrl ? (
               <img src={logoUrl} alt="Company logo" style={{ maxWidth: 54, maxHeight: 54, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", outlineOffset: -1 }} />
@@ -766,7 +748,7 @@ export default function EvaluationPage() {
             )}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.purple, textTransform: "uppercase", letterSpacing: 0, marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.purpleDark, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
               {isEvaluation ? "Evaluation Review" : "Approval Review"}
             </div>
             <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 800, color: COLORS.textPrimary, margin: 0 }}>
@@ -783,7 +765,7 @@ export default function EvaluationPage() {
             fontWeight: 800,
             padding: "7px 12px",
             borderRadius: 999,
-            color: isLayerAlreadyComplete ? COLORS.green : COLORS.purple,
+            color: isLayerAlreadyComplete ? COLORS.green : COLORS.purpleDark,
             background: isLayerAlreadyComplete ? COLORS.greenPale : COLORS.purplePale,
             fontVariantNumeric: "tabular-nums",
           }}>
@@ -893,15 +875,15 @@ export default function EvaluationPage() {
           </div>
 
           {isLayerAlreadyComplete ? (
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: 14, borderRadius: 10, background: COLORS.greenPale, color: COLORS.textPrimary }}>
-              <LockIcon style={{ fontSize: 20, color: COLORS.green, marginTop: 1 }} />
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>This layer is already completed</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 2 }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", p: 1.75, borderRadius: "10px", backgroundColor: COLORS.greenPale }}>
+              <LockIcon sx={{ fontSize: 20, color: COLORS.green, mt: "1px" }} />
+              <Box>
+                <Typography sx={{ fontSize: 14, fontWeight: 800 }}>This layer is already completed</Typography>
+                <Typography sx={{ fontSize: 13, color: COLORS.textSecond, mt: 0.25 }}>
                   The submission cannot be approved, rejected, or evaluated again from this link.
-                </div>
-              </div>
-            </div>
+                </Typography>
+              </Box>
+            </Stack>
           ) : (
             <>
               {isEvaluation && (
@@ -928,69 +910,74 @@ export default function EvaluationPage() {
               )}
 
               {isCheckboxMode && (
-                <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, cursor: "pointer", minHeight: 40 }}>
-                  <input
-                    type="checkbox"
-                    checked={checkboxApproved}
-                    onChange={(e) => setCheckboxApproved(e.target.checked)}
-                    style={{ width: 18, height: 18, accentColor: COLORS.purple }}
-                  />
-                  <span style={{ fontSize: 14, color: COLORS.textPrimary }}>I approve this submission</span>
-                </label>
+                <FormControlLabel
+                  sx={{ mb: 2, minHeight: 44 }}
+                  control={
+                    <Checkbox checked={checkboxApproved} onChange={(e) => setCheckboxApproved(e.target.checked)} />
+                  }
+                  label={<Typography sx={{ fontSize: 14 }}>I approve this submission</Typography>}
+                />
               )}
 
               {/* Rejection reason (always available for approval layers) */}
               {!isEvaluation && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-                    Rejection Reason <span style={{ fontWeight: 400, color: COLORS.textMuted }}>(optional)</span>
-                  </div>
-                  <textarea
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Enter reason if rejecting..."
-                    style={{
-                      width: "100%",
-                      minHeight: 72,
-                      padding: 10,
-                      borderRadius: 8,
-                      border: `1px solid ${COLORS.border}`,
-                      fontSize: 13,
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      outline: "none",
-                    }}
-                  />
-                </div>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  label="Rejection reason (optional)"
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter reason if rejecting..."
+                  sx={{ mb: 2 }}
+                />
               )}
 
               {/* Action buttons */}
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", rowGap: 1.5 }}>
                 {isEvaluation ? (
-                  <button
-                    className="eval-action-button"
+                  <Button
+                    variant="contained"
+                    size="large"
                     onClick={() => handleSubmit("confirm")}
-                    style={{ ...btnPrimary, opacity: actionState === "submitting" || !evalSurveyModel || !evalValid ? 0.6 : 1 }}
                     disabled={actionState === "submitting" || !evalSurveyModel || !evalValid}
+                    sx={{ minHeight: 44 }}
                   >
-                    {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit Evaluation"}
-                  </button>
+                    {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit evaluation"}
+                  </Button>
                 ) : (
                   <>
-                    <button
-                      className="eval-action-button"
+                    <Button
+                      variant="contained"
+                      size="large"
                       onClick={() => handleSubmit("approve")}
-                      style={{ ...btnPrimary, opacity: actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData) ? 0.6 : 1 }}
-                      disabled={actionState === "submitting" || (isCheckboxMode && !checkboxApproved) || (isSignatureRequired && !signatureData)}
+                      disabled={
+                        actionState === "submitting" ||
+                        (isCheckboxMode && !checkboxApproved) ||
+                        (isSignatureRequired && !signatureData)
+                      }
+                      sx={{ minHeight: 44 }}
                     >
-                      {actionState === "submitting" ? "Submitting..." : isSignatureRequired && !signatureData ? "Signature required" : "Approve"}
-                    </button>
-                    <button className="eval-action-button" onClick={() => handleSubmit("reject")} style={btnOutline} disabled={actionState === "submitting"}>
+                      {actionState === "submitting"
+                        ? "Submitting..."
+                        : isSignatureRequired && !signatureData
+                          ? "Signature required"
+                          : "Approve"}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="large"
+                      onClick={() => handleSubmit("reject")}
+                      disabled={actionState === "submitting"}
+                      sx={{ minHeight: 44 }}
+                    >
                       Reject
-                    </button>
+                    </Button>
                   </>
                 )}
-              </div>
+              </Stack>
             </>
           )}
         </div>

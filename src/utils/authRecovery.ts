@@ -20,15 +20,19 @@ const STALE_AUTH_ERROR_CODES = new Set([
   "token_refresh_required",
   "invalid_grant",
   "monitor_window_timeout",
+  "timed_out",
 ]);
 
-const SILENT_TOKEN_TIMEOUT_MS = 20000;
+// MSAL gives its own hidden renew iframe about 6s, so wait only a little longer
+// than that before declaring the silent renew dead and re-signing the user in.
+const SILENT_TOKEN_TIMEOUT_MS = 8000;
 const AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY = "pmw_auth_timeout_relogin_attempted";
+const AUTH_TIMEOUT_RELOGIN_ATTEMPT_TTL_MS = 120000;
 export const AUTH_RECOVERY_REQUIRED_EVENT = "pmw:auth-recovery-required";
 let redirectStarted = false;
 
 export type AuthRecoveryEventDetail = {
-  reason: "protected_resource_unauthorized";
+  reason: "protected_resource_unauthorized" | "stale_token" | "silent_token_timeout";
   message: string;
 };
 
@@ -57,7 +61,9 @@ export function isStaleAuthError(error: unknown): boolean {
     message.includes("login_required") ||
     message.includes("refresh token") ||
     message.includes("no account") ||
-    message.includes("token refresh")
+    message.includes("token refresh") ||
+    message.includes("timed_out") ||
+    message.includes("timed out")
   );
 }
 
@@ -67,6 +73,9 @@ export function isAuthTimeoutError(error: unknown): boolean {
 
   return (
     errorCode === "monitor_window_timeout" ||
+    errorCode === "timed_out" ||
+    message.includes("timed_out") ||
+    message.includes("timed out") ||
     message.includes("silent token acquisition timed out") ||
     message.includes("authentication is taking too long")
   );
@@ -74,7 +83,18 @@ export function isAuthTimeoutError(error: unknown): boolean {
 
 export function hasAuthTimeoutReloginAttempted(): boolean {
   try {
-    return sessionStorage.getItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY) === "1";
+    const attemptedAt = Number(sessionStorage.getItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY));
+    if (!Number.isFinite(attemptedAt)) {
+      sessionStorage.removeItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY);
+      return false;
+    }
+
+    if (Date.now() - attemptedAt > AUTH_TIMEOUT_RELOGIN_ATTEMPT_TTL_MS) {
+      sessionStorage.removeItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY);
+      return false;
+    }
+
+    return true;
   } catch {
     return false;
   }
@@ -82,7 +102,7 @@ export function hasAuthTimeoutReloginAttempted(): boolean {
 
 export function markAuthTimeoutReloginAttempted(): void {
   try {
-    sessionStorage.setItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY, "1");
+    sessionStorage.setItem(AUTH_TIMEOUT_RELOGIN_ATTEMPT_KEY, String(Date.now()));
   } catch {
     // Storage can be restricted in private browsing.
   }
@@ -112,10 +132,15 @@ export function isAuthTimeoutReloginRequiredError(error: unknown): boolean {
 export function notifyAuthRecoveryForResponse(response: Pick<Response, "status">): void {
   if (response.status !== 401 || typeof window === "undefined") return;
 
-  const detail: AuthRecoveryEventDetail = {
+  notifyAuthRecoveryRequired({
     reason: "protected_resource_unauthorized",
     message: "Your Microsoft 365 session expired. Reconnecting...",
-  };
+  });
+}
+
+export function notifyAuthRecoveryRequired(detail: AuthRecoveryEventDetail): void {
+  if (typeof window === "undefined") return;
+
   window.dispatchEvent(new CustomEvent<AuthRecoveryEventDetail>(AUTH_RECOVERY_REQUIRED_EVENT, { detail }));
 }
 

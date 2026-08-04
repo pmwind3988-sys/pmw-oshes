@@ -8,11 +8,11 @@ import { SeverityPill } from "../../components/portal/PortalPills";
  * queue, differing only in what the sub-copy promises about what happens next.
  */
 export default function QueueScreen() {
-  const { role, queue, openDrawer } = usePortal();
+  const { access, queue, openDrawer } = usePortal();
 
-  const title = role === "evaluator" ? "To evaluate" : "My approvals";
-  const subtitle = role === "evaluator"
-    ? "you are layer 1 on incident, near-miss and hazard forms — evaluate, then it routes onward"
+  const title = access.isEvaluator ? "To evaluate" : "My approvals";
+  const subtitle = access.isEvaluator
+    ? "only what is on your layer · evaluating releases it to the layer after yours"
     : "only what is on your layer · signing releases it to the next approver immediately";
 
   return (

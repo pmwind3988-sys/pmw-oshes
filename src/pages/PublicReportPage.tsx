@@ -3,10 +3,6 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import { editorial, editorialHairline } from "../theme/editorial";
-import QuickReportForm from "../components/portal/QuickReportForm";
-import { usePortalDraft } from "../hooks/usePortalDraft";
-import { submitQuickReport } from "../utils/portalSubmit";
-import { formatClockTime } from "../utils/portalTime";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY as string | undefined;
 
@@ -16,16 +12,20 @@ const riseIn = keyframes`
 `;
 
 /**
- * The flow is strictly linear. There is no stage picker: you get to the
- * confirmation by filing a valid report, and to tracking from the confirmation
- * or the sign-in screen — never by jumping.
+ * Two things happen here and nothing else: choosing which public form to file,
+ * and looking one up by reference. Filling a form in is not one of them —
+ * that belongs to the published form itself, at /form/{slug}.
+ *
+ * This page used to render a built-in five-question report for whichever form
+ * you picked, and post it by guessing which of that form's columns the five
+ * answers belonged in. The form named at the top and the form actually being
+ * filled in were two different things, and only the questions the built-in
+ * one happened to ask were ever collected.
  */
-type Stage = "qr" | "form" | "done" | "trackEntry" | "track";
+type Stage = "qr" | "trackEntry" | "track";
 
 const STAGE_LABEL: Record<Stage, string> = {
-  qr: "Step 1 of 3 · choose a form",
-  form: "Step 2 of 3 · no sign-in needed",
-  done: "Step 3 of 3 · keep the reference",
+  qr: "Choose a form",
   trackEntry: "Tracking",
   track: "Tracking",
 };
@@ -35,6 +35,7 @@ interface PublicForm {
   slug: string;
   code: string;
   name: string;
+  /** Zero is a real answer: plenty of these forms are records, not requests. */
   layerCount: number;
   severityCapture: string;
 }
@@ -98,21 +99,10 @@ export default function PublicReportPage() {
   const [forms, setForms] = useState<PublicForm[]>([]);
   const [formsLoaded, setFormsLoaded] = useState(false);
   const [formsError, setFormsError] = useState("");
-  const [picked, setPicked] = useState<PublicForm | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [reference, setReference] = useState("");
-  const [receivedAt, setReceivedAt] = useState("");
-  const [emailGiven, setEmailGiven] = useState("");
 
   const [trackInput, setTrackInput] = useState("");
   const [trackError, setTrackError] = useState("");
   const [tracked, setTracked] = useState<{ reference: string; subject: string; steps: TrackStep[] } | null>(null);
-
-  const { draft, setField, reset, savedLabel } = usePortalDraft(
-    picked?.listTitle ?? "public",
-    posterLocation ? { location: posterLocation } : undefined,
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -137,23 +127,21 @@ export default function PublicReportPage() {
 
   const exit = useCallback(() => navigate("/"), [navigate]);
 
-  const submit = async () => {
-    if (!picked) return;
-    setSubmitting(true);
-    try {
-      const result = await submitQuickReport({ listTitle: picked.listTitle, surveyJson: null, draft });
-      const stamp = new Date();
-      setReference(`${picked.code}-${String(stamp.getFullYear() % 100).padStart(2, "0")}${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(Number(result.id) || 0).padStart(4, "0")}`);
-      setReceivedAt(formatClockTime(stamp));
-      setEmailGiven(draft.email.trim());
-      reset();
-      setStage("done");
-    } catch (error) {
-      setFormsError(error instanceof Error ? error.message : "Could not file the report.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  /**
+   * Hand off to the published form. The poster's location rides along as a
+   * query parameter; the form page resolves it against its own schema, because
+   * only the form knows what it calls that field.
+   */
+  const openForm = useCallback(
+    (form: PublicForm) => {
+      const params = new URLSearchParams();
+      if (posterLocation) params.set("location", posterLocation);
+      if (posterCode) params.set("poster", posterCode);
+      const query = params.toString();
+      navigate(`/form/${encodeURIComponent(form.slug)}${query ? `?${query}` : ""}`);
+    },
+    [navigate, posterCode, posterLocation],
+  );
 
   const lookUp = async () => {
     const wanted = trackInput.trim().toUpperCase();
@@ -209,15 +197,12 @@ export default function PublicReportPage() {
           </Typography>
         ) : (
           <Stack>
-            {forms.map((form, index) => (
+            {forms.filter((form) => form.slug).map((form, index) => (
               <Box
                 key={form.listTitle}
                 component="button"
                 type="button"
-                onClick={() => {
-                  setPicked(form);
-                  setStage("form");
-                }}
+                onClick={() => openForm(form)}
                 sx={{
                   minHeight: 56,
                   display: "flex",
@@ -239,7 +224,9 @@ export default function PublicReportPage() {
                   <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{form.name}</Typography>
                   <Typography sx={{ fontSize: 12, color: editorial.muted }}>
                     {form.severityCapture === "required" ? "Severity is asked · " : ""}
-                    {form.layerCount} approval layer{form.layerCount === 1 ? "" : "s"}
+                    {form.layerCount === 0
+                      ? "no approval step"
+                      : `${form.layerCount} approval layer${form.layerCount === 1 ? "" : "s"}`}
                   </Typography>
                 </Box>
                 <Typography sx={{ color: editorial.muted, flex: "none" }}>→</Typography>
@@ -250,86 +237,6 @@ export default function PublicReportPage() {
 
         <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 3, pt: 2, borderTop: editorialHairline }}>
           A poster can encode one specific form and skip this step. Anything urgent — call 999 first, then file.
-        </Typography>
-      </Shell>
-    );
-  }
-
-  if (stage === "form" && picked) {
-    return (
-      <Shell stage={stage} onExit={exit}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
-          <Button onClick={() => setStage("qr")} sx={{ color: editorial.muted, px: 0, minWidth: 0, minHeight: 44 }}>
-            ← Change form
-          </Button>
-          <Typography sx={{ fontSize: 11, color: editorial.muted }}>{savedLabel}</Typography>
-        </Stack>
-
-        <Typography component="h1" sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, mb: 2 }}>
-          {picked.name}
-        </Typography>
-
-        {formsError && (
-          <Typography sx={{ fontSize: 12, color: editorial.error, mb: 1.5 }}>{formsError}</Typography>
-        )}
-
-        <QuickReportForm
-          draft={draft}
-          setField={setField}
-          askSeverity={picked.severityCapture !== "none"}
-          askIdentity
-          submitLabel="Submit report"
-          submitting={submitting}
-          onSubmit={() => void submit()}
-          footnote="Saved on this device as you type, so a dropped signal at the jetty does not lose the entry."
-        />
-      </Shell>
-    );
-  }
-
-  if (stage === "done") {
-    return (
-      <Shell stage={stage} onExit={exit}>
-        <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em", color: editorial.pmwBlueDark, fontWeight: 800 }}>
-          Received {receivedAt}
-        </Typography>
-        <Typography component="h1" sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>
-          Your report is with the safety team.
-        </Typography>
-
-        <Box sx={{ border: editorialHairline, borderRadius: "12px", p: 2, my: 3, textAlign: "center" }}>
-          <Typography sx={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em", color: editorial.muted, fontWeight: 800 }}>
-            Reference — photograph this
-          </Typography>
-          <Typography sx={{ fontSize: 34, fontWeight: 700, mt: 1, fontVariantNumeric: "tabular-nums", wordBreak: "break-all" }}>
-            {reference}
-          </Typography>
-        </Box>
-
-        <Stack spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={() => window.print()}
-            sx={{ minHeight: 44, width: "100%" }}
-          >
-            Download a PDF of what you sent
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setTrackInput(reference);
-              void lookUp();
-            }}
-            sx={{ minHeight: 44, width: "100%" }}
-          >
-            Track this report
-          </Button>
-        </Stack>
-
-        <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 2.5 }}>
-          {emailGiven
-            ? `A copy is on its way to ${emailGiven}.`
-            : "You did not leave an email, so the reference above is the only way back in — photograph it."}
         </Typography>
       </Shell>
     );

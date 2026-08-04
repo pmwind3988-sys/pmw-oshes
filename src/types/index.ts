@@ -1,14 +1,19 @@
 export type {
   AuditEntry,
   CatalogueEntry,
+  FormVisibility,
+  PortalAccess,
   PortalChainStep,
-  PortalFormDraft,
+  PortalNavItem,
+  PortalNavSection,
   PortalPerson,
   PortalRecord,
   PortalRole,
   PortalScreen,
   PortalStatus,
   SeverityTone,
+  WorkflowKind,
+  WorkflowShape,
 } from "./portal";
 
 // Page state machine states
@@ -278,12 +283,17 @@ export interface DiscoveredList {
 }
 
 export interface LoadedConfig {
+  /** Declared approval layers per form. Zero is a real answer, not a missing one. */
   layerConfig: Record<string, number>;
   formIdMap: Record<string, string>;
   listMetaMap: Record<string, ListMetaEntry>;
   allowedTitles: Set<string>;
   layerConfigs?: Record<string, LayerConfig | null>;
   surveyJsonByFormVersion?: Record<string, Record<string, SurveyJson | null>>;
+  /** Whether each form's link actually opens for an anonymous visitor. */
+  formVisibility?: Record<string, import("./portal").FormVisibility>;
+  /** Public form route slug, for building the link the catalogue shows. */
+  formSlugMap?: Record<string, string>;
 }
 
 // Status config for badges

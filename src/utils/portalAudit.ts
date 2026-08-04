@@ -23,12 +23,16 @@ export function deriveAuditFromRecords(records: PortalRecord[]): AuditEntry[] {
   for (const record of records) {
     if (record.filedAt) {
       const severityNote = record.severity ? ` · severity ${record.severity}` : "";
+      // A form with no chain was routed nowhere, and the trail must not say it was.
+      const routing = record.hasWorkflow
+        ? ` · routed to ${record.chain[0]?.who ?? "the first approver"}`
+        : " · recorded, no approval step";
       entries.push(
         toEntry(
           record.filedAt,
           record.reference,
           record.submitter || "Public submitter",
-          `Filed via ${record.source}${severityNote} · routed to ${record.chain[0]?.who ?? "the first approver"}`,
+          `Filed via ${record.source}${severityNote}${routing}`,
         ),
       );
     }

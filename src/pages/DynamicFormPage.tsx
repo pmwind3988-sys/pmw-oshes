@@ -28,7 +28,9 @@ import Logo from "../components/Logo";
 import { safeEvalArithmetic } from "../utils/FormBuilderEngine";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
-import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload } from "../utils/prefilledQr";
+import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload, type PrefilledQrPayload } from "../utils/prefilledQr";
+import { findLocationField } from "../utils/formFieldHints";
+import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { OSHES_LISTS } from "../config/oshes";
 
@@ -611,7 +613,9 @@ export default function DynamicFormPage() {
   const [searchParams] = useSearchParams();
   const pinVersion = searchParams.get("version");
   const publishKey = searchParams.get("publish") || searchParams.get("batch");
-  const prefilledQrPayload = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
+  const explicitPrefill = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
+  /** Where the QR poster is nailed up, handed over by the public report picker. */
+  const posterLocation = searchParams.get("location") ?? "";
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -622,6 +626,20 @@ export default function DynamicFormPage() {
 
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState<LoadedFormData | null>(null);
+
+  /**
+   * A poster's `?location=` is resolved against *this* form's schema, because
+   * only the form knows what it calls that question. A miss leaves the field
+   * empty for the reporter to fill in — never a guess about where an answer
+   * gets stored. An explicit prefill payload stays authoritative over it.
+   */
+  const prefilledQrPayload = useMemo<PrefilledQrPayload | null>(() => {
+    const field = posterLocation ? findLocationField(formData?.surveyJson) : "";
+    if (!field) return explicitPrefill;
+    const base: PrefilledQrPayload = explicitPrefill ?? { v: 1, values: {}, locked: [] };
+    if (field in base.values) return base;
+    return { ...base, values: { ...base.values, [field]: posterLocation } };
+  }, [explicitPrefill, posterLocation, formData]);
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -1104,7 +1122,9 @@ export default function DynamicFormPage() {
     setSubmitStatus("loading");
   }, [pdpaAccepted, showCompanyChoice, companyFieldName, companyChoiceValue, survey]);
   const doSubmitForm = useCallback(async () => {
-    const raw = lastDataRef.current ?? {};
+    // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
+    // typed, before uploads or column mapping read the answers.
+    const raw = foldOtherAnswers(lastDataRef.current ?? {});
     const cfg = formData?.formConfig;
     if (!cfg) { throw new Error("no form config"); }
     

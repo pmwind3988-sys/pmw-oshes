@@ -2,6 +2,7 @@ import { Alert, Snackbar } from "@mui/material";
 import { usePortal } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
 import SubmissionDrawer from "../components/portal/SubmissionDrawer";
+import HomeScreen from "./portal/HomeScreen";
 import TodayScreen from "./portal/TodayScreen";
 import QueueScreen from "./portal/QueueScreen";
 import RecordsScreen from "./portal/RecordsScreen";
@@ -9,6 +10,7 @@ import FileFormScreen from "./portal/FileFormScreen";
 import CatalogueScreen from "./portal/CatalogueScreen";
 import PeopleScreen from "./portal/PeopleScreen";
 import AuditScreen from "./portal/AuditScreen";
+import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
   const { screen } = usePortal();
@@ -25,9 +27,16 @@ function ScreenBody() {
       return <PeopleScreen />;
     case "audit":
       return <AuditScreen />;
+    case "settings":
+      return <SettingsScreen />;
+    // Two framings of one table: what you filed, and everything you may see.
+    case "mine":
+      return <RecordsScreen scope="mine" />;
     case "subs":
+      return <RecordsScreen scope="all" />;
+    case "home":
     default:
-      return <RecordsScreen />;
+      return <HomeScreen />;
   }
 }
 

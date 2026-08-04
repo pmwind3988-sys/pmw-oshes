@@ -1,72 +1,59 @@
-import { useState } from "react";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { useNavigate } from "react-router-dom";
+import { Box, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
-import { usePortalDraft } from "../../hooks/usePortalDraft";
-import QuickReportForm from "../../components/portal/QuickReportForm";
-import { submitQuickReport } from "../../utils/portalSubmit";
 import type { CatalogueEntry } from "../../types";
 
 /**
- * File a form — two steps in one screen: pick the form type, then fill it.
+ * File a form — pick a form type, then fill in that form.
  *
- * Name and email are never asked: the session supplies them.
+ * This screen used to render a built-in five-question report (where, how bad,
+ * what happened, name, email) whatever you picked, and post it by guessing
+ * which of the real form's columns those five answers belonged in. So a form
+ * authored in the builder with twenty questions — half of them required —
+ * produced a record with three fields set, no validation, and no sign that
+ * anything had been skipped. The form you picked and the form you got were
+ * two different things.
+ *
+ * There is now exactly one place a form is defined: the pmw-hrform builder.
+ * This screen is a picker, and picking opens the published form itself at
+ * /form/{slug}, with its own schema, validation and PDPA consent.
  */
 export default function FileFormScreen() {
-  const { catalogue, surveyJsonByForm, userName, userEmail, toast, setScreen, refresh } = usePortal();
-  const [picked, setPicked] = useState<CatalogueEntry | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { catalogue } = usePortal();
+  const navigate = useNavigate();
 
-  const formId = picked?.listTitle ?? "";
-  const { draft, setField, reset, savedLabel } = usePortalDraft(formId);
+  const openable = (entry: CatalogueEntry) => Boolean(entry.slug);
 
-  const submit = async () => {
-    if (!picked) return;
-    setSubmitting(true);
-    try {
-      await submitQuickReport({
-        listTitle: picked.listTitle,
-        surveyJson: surveyJsonByForm[picked.listTitle] ?? null,
-        draft,
-        submitterName: userName || userEmail,
-        submitterEmail: userEmail,
-      });
-      reset();
-      setPicked(null);
-      setScreen("subs");
-      refresh();
-      toast(`Filed — with ${picked.firstApprover} now. You can follow it in My submissions.`);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not file the form.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  return (
+    <Box sx={{ maxWidth: 760 }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
+          File a form
+        </Typography>
+        <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
+          each one opens the published form itself · your name and email come from your account
+        </Typography>
+      </Box>
 
-  if (!picked) {
-    return (
-      <Box sx={{ maxWidth: 720 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-            File a form
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-            your name and email come from your account — you do not have to type them
+      {catalogue.length === 0 ? (
+        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", p: 2 }}>
+          <Typography sx={{ fontSize: 13, color: editorial.muted }}>
+            No form types are published yet. Forms are authored in the PMW form builder; once one is published there it
+            appears here.
           </Typography>
         </Box>
-
-        {catalogue.length === 0 ? (
-          <Typography sx={{ fontSize: 13, color: editorial.muted }}>
-            No form types are published yet. An administrator adds them in the form catalogue.
-          </Typography>
-        ) : (
-          <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflow: "hidden" }}>
-            {catalogue.map((entry, index) => (
+      ) : (
+        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflow: "hidden" }}>
+          {catalogue.map((entry, index) => {
+            const canOpen = openable(entry);
+            return (
               <Box
                 key={entry.listTitle}
-                component="button"
-                type="button"
-                onClick={() => setPicked(entry)}
+                component={canOpen ? "button" : "div"}
+                type={canOpen ? "button" : undefined}
+                onClick={canOpen ? () => navigate(`/form/${encodeURIComponent(entry.slug)}`) : undefined}
+                aria-disabled={canOpen ? undefined : true}
                 sx={{
                   width: "100%",
                   minHeight: 54,
@@ -77,54 +64,59 @@ export default function FileFormScreen() {
                   px: 2,
                   py: 1.25,
                   textAlign: "left",
-                  cursor: "pointer",
+                  cursor: canOpen ? "pointer" : "default",
                   border: "none",
                   borderTop: index === 0 ? "none" : editorialHairline,
                   background: "transparent",
                   color: "inherit",
                   font: "inherit",
-                  "&:hover": { background: editorial.blueWash },
+                  opacity: canOpen ? 1 : 0.6,
+                  "&:hover": canOpen ? { background: editorial.blueWash } : undefined,
                 }}
               >
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{entry.name}</Typography>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
+                    <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{entry.name}</Typography>
+                    {entry.isPublic && (
+                      <Box
+                        component="span"
+                        sx={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          px: 0.8,
+                          py: 0.25,
+                          borderRadius: "999px",
+                          border: editorialHairline,
+                          color: editorial.muted,
+                        }}
+                      >
+                        Public link
+                      </Box>
+                    )}
+                  </Stack>
+                  {/* What happens after you submit — which for plenty of these
+                      forms is nothing, and saying so is the point. */}
                   <Typography sx={{ fontSize: 12, color: editorial.muted }}>
-                    {entry.chain.length} approval layer{entry.chain.length === 1 ? "" : "s"} · first to {entry.firstApprover}
+                    {canOpen
+                      ? entry.hasWorkflow
+                        ? `${entry.workflow.label} · first to ${entry.firstApprover}`
+                        : entry.workflow.label
+                      : "This form has no published link yet — republish it in the form builder to open it here."}
                   </Typography>
                 </Box>
-                <Typography sx={{ color: editorial.muted, flex: "none" }}>→</Typography>
+                {canOpen && <Typography sx={{ color: editorial.muted, flex: "none" }}>→</Typography>}
               </Box>
-            ))}
-          </Box>
-        )}
-      </Box>
-    );
-  }
+            );
+          })}
+        </Box>
+      )}
 
-  return (
-    <Box sx={{ maxWidth: 640 }}>
-      <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", p: 2.5 }}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-          <Button onClick={() => setPicked(null)} sx={{ color: editorial.muted, px: 0, minWidth: 0 }}>
-            ← Change form
-          </Button>
-          <Typography sx={{ fontSize: 11, color: editorial.muted }}>{savedLabel}</Typography>
-        </Stack>
-
-        <Typography component="h1" sx={{ fontSize: 26, fontWeight: 700, mb: 2, lineHeight: 1.2 }}>
-          {picked.name}
-        </Typography>
-
-        <QuickReportForm
-          draft={draft}
-          setField={setField}
-          askSeverity={picked.severityCapture !== "none"}
-          askIdentity={false}
-          submitLabel={`Submit — routes to ${picked.firstApprover}`}
-          submitting={submitting}
-          onSubmit={() => void submit()}
-        />
-      </Box>
+      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 3, maxWidth: "62ch" }}>
+        Every form here is the one published from the PMW form builder — the same schema, validation and consent text an
+        anonymous visitor gets on its public link. Nothing on this screen defines a form of its own.
+      </Typography>
     </Box>
   );
 }

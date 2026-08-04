@@ -15,6 +15,7 @@
 | Form logic | `FormBuilderEngine.ts` | Pure functions: 57 question types, validation, survey JSON builder, versioning |
 | Status constants | `statusConstants.ts` | `SP_LAYER_STATUS`, `SP_FORM_STATUS`, `normalizeLayerStatus()`, `deriveFormStatus()`, `layerColumn()` helper |
 | Custom widget | `DynamicMatrix.tsx` | Custom SurveyJS widget for matrix questions + `rowsToHtml()` matrix↔HTML conversion |
+| "Other" answers | `surveyOtherAnswers.ts` | `foldOtherAnswers()` — collapses SurveyJS's `"other"` + `{name}-Comment` pair into the typed answer. Must run on every submit path (form + evaluation): `-Comment` has no SP column, so `mapBodyToSharePointColumnKeys` would reject the submission |
 | Auth persistence | `authDecision.ts` | `localStorage` helpers for `pmw_hr_auth_decision` |
 | PDPA compliance | `pdpa.ts` | Constants + helper for PDPA retention date, consent label, privacy notice sections |
 | Career API client | `careersService.ts` | Frontend fetch wrapper for `/api/jobs-list`, `/api/job-apply`, `/api/job-admin`. ~470 lines. |

@@ -46,6 +46,10 @@ function statusColours(status: PortalStatus) {
       return { color: editorial.warning, backgroundColor: editorial.yellowSoft, borderColor: "rgba(177, 92, 0, 0.32)" };
     case "Approved":
       return { color: editorial.ink, backgroundColor: "#F1F3F6", borderColor: editorial.border };
+    // Filed on a form with no approval step: complete, but never signed. Kept
+    // visually quieter than Approved so the two are not read as the same event.
+    case "Recorded":
+      return { color: editorial.muted, backgroundColor: editorial.paper, borderColor: editorial.border };
     case "Cancelled":
     case "Rejected":
       return { color: editorial.muted, backgroundColor: "transparent", borderColor: editorial.border };

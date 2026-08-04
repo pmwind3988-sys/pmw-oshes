@@ -3,6 +3,7 @@
  * Shows evaluator name, date, and field values.
  */
 import type { EvaluationLayerResult } from "../../types";
+import { editorial, editorialShadow } from "../../theme/editorial";
 
 interface EvaluationSummaryProps {
   result: EvaluationLayerResult;
@@ -128,10 +129,10 @@ function RatingDisplay({ field, value }: { field: EvaluationFieldDefinition; val
   return (
     <div style={{ display: "grid", gap: 6, minWidth: 150 }}>
       <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{rating} / {max}</div>
-      <div style={{ height: 7, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
-        <div style={{ width: `${percent}%`, height: "100%", background: "linear-gradient(90deg, #F7C948, #6264A7)" }} />
+      <div style={{ height: 7, borderRadius: 999, background: editorial.border, overflow: "hidden" }}>
+        <div style={{ width: `${percent}%`, height: "100%", background: `linear-gradient(90deg, ${editorial.sky}, ${editorial.pmwBlue})` }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10, color: "#6B7280" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10, color: editorial.muted }}>
         <span>{field.minRateDescription || min}</span>
         <span>{field.maxRateDescription || max}</span>
       </div>
@@ -140,9 +141,10 @@ function RatingDisplay({ field, value }: { field: EvaluationFieldDefinition; val
 }
 
 const cardStyle: React.CSSProperties = {
-  background: "#F8F7FF",
-  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.08), 0 8px 20px rgba(26, 31, 43, 0.06)",
-  borderRadius: 12,
+  background: editorial.blueSoft,
+  border: `1px solid ${editorial.border}`,
+  boxShadow: editorialShadow,
+  borderRadius: 14,
   padding: "16px 18px",
   marginBottom: 12,
 };
@@ -150,16 +152,16 @@ const cardStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#6B7280",
+  color: editorial.muted,
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   marginBottom: 4,
 };
 
 const valueStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "#1E1B4B",
-  fontWeight: 500,
+  color: editorial.ink,
+  fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
 };
 
@@ -167,14 +169,14 @@ const fieldRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   padding: "8px 0",
-  borderBottom: "1px solid #F0EEF8",
+  borderBottom: `1px solid ${editorial.border}`,
 };
 
 export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements }: EvaluationSummaryProps) {
   if (!result || result.status !== "confirmed") {
     return (
       <div style={cardStyle}>
-        <div style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
+        <div style={{ fontSize: 12, color: editorial.softMuted, fontStyle: "italic" }}>
           {layerTitle ? `${layerTitle}: ` : ""}Not yet evaluated
         </div>
       </div>
@@ -188,16 +190,16 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
     <div style={cardStyle}>
       {/* Header */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#5B21B6" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: editorial.pmwBlueDark }}>
           {layerTitle || `Evaluation Layer ${result.layerNumber}`}
         </div>
         {layerDescription && (
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{layerDescription}</div>
+          <div style={{ fontSize: 11, color: editorial.muted, marginTop: 2 }}>{layerDescription}</div>
         )}
       </div>
 
       {/* Evaluator info */}
-      <div style={{ display: "flex", gap: 24, marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #E5E3F0" }}>
+      <div style={{ display: "flex", gap: 24, marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${editorial.border}` }}>
         <div>
           <div style={labelStyle}>Evaluator</div>
           <div style={valueStyle}>{result.email || "Unknown"}</div>
@@ -212,7 +214,7 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
         </div>
         <div>
           <div style={labelStyle}>Status</div>
-          <div style={{ ...valueStyle, color: "#059669" }}>Confirmed</div>
+          <div style={{ ...valueStyle, color: editorial.success }}>Confirmed</div>
         </div>
       </div>
 
@@ -224,8 +226,8 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
             const field: EvaluationFieldDefinition = fieldDefinitions.get(key) ?? { name: key, title: formatFieldName(key), type: "text" };
             return (
               <div key={key} style={fieldRowStyle}>
-                <div style={{ fontSize: 12, color: "#6B7280", flex: 1 }}>{field.title}</div>
-                <div style={{ fontSize: 13, color: "#1E1B4B", fontWeight: 500, flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 12, color: editorial.muted, flex: 1 }}>{field.title}</div>
+                <div style={{ fontSize: 13, color: editorial.ink, fontWeight: 700, flex: 1, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                   {field.type === "rating" ? <RatingDisplay field={field} value={value} /> : formatValue(value, field)}
                 </div>
               </div>
@@ -236,9 +238,9 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
 
       {/* Notes */}
       {result.notes && (
-        <div style={{ marginTop: 12, padding: 10, background: "#FFF8E7", borderRadius: 8, fontSize: 12 }}>
-          <div style={{ fontWeight: 600, color: "#92400E", marginBottom: 4 }}>Notes</div>
-          <div style={{ color: "#78350F" }}>{result.notes}</div>
+        <div style={{ marginTop: 12, padding: 10, background: editorial.yellowSoft, borderRadius: 8, fontSize: 12 }}>
+          <div style={{ fontWeight: 800, color: editorial.warning, marginBottom: 4 }}>Notes</div>
+          <div style={{ color: editorial.ink }}>{result.notes}</div>
         </div>
       )}
     </div>

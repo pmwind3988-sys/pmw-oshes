@@ -1,5 +1,13 @@
 import { PORTAL_SLA_DEFAULT_DAYS } from "../config/oshes";
-import type { CatalogueEntry, LayerConfig, LayerConfigItem, SeverityCapture, Submission } from "../types";
+import type {
+  CatalogueEntry,
+  FormVisibility,
+  LayerConfig,
+  LayerConfigItem,
+  SeverityCapture,
+  Submission,
+} from "../types";
+import { describeWorkflow, resolveFormVisibility, workflowLayers } from "./formWorkflow";
 import { displayName, layerAssigneeEmail, layerRoleLabel, type PeopleDirectory } from "./portalPeople";
 import { parseDate } from "./portalTime";
 
@@ -46,24 +54,33 @@ export function severityCaptureLabel(capture: SeverityCapture): string {
 }
 
 /** Layers in chain order — manual branches contribute their layers once, in order. */
-export function chainLayers(config: LayerConfig | null | undefined): LayerConfigItem[] {
-  if (!config) return [];
-  if (config.layers.length > 0) return [...config.layers].sort((a, b) => a.layerNumber - b.layerNumber);
-  const branchLayers = config.manualBranches?.[0]?.layers ?? [];
-  return [...branchLayers].sort((a, b) => a.layerNumber - b.layerNumber);
+export const chainLayers = workflowLayers;
+
+export interface BuildCatalogueArgs {
+  listTitles: string[];
+  layerConfigs?: Record<string, LayerConfig | null>;
+  submissions: Submission[];
+  /** Whether each form's link actually opens anonymously, read from the Master Form column. */
+  visibility?: Record<string, FormVisibility>;
+  slugs?: Record<string, string>;
+  directory?: PeopleDirectory;
+  now?: Date;
 }
 
 /**
  * Build the form catalogue. The form set, its approval chain, per-layer SLA and
- * the public flag are data — nothing downstream may hard-code a form list.
+ * whether the link is open are data — nothing downstream may hard-code a form
+ * list, and nothing invents a chain for a form that declares none.
  */
-export function buildCatalogue(
-  listTitles: string[],
-  layerConfigs: Record<string, LayerConfig | null> | undefined,
-  submissions: Submission[],
-  directory: PeopleDirectory = {},
-  now: Date = new Date(),
-): CatalogueEntry[] {
+export function buildCatalogue({
+  listTitles,
+  layerConfigs,
+  submissions,
+  visibility,
+  slugs,
+  directory = {},
+  now = new Date(),
+}: BuildCatalogueArgs): CatalogueEntry[] {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const thirtyDaysAgo = now.getTime() - 30 * DAY_MS;
 
@@ -81,23 +98,40 @@ export function buildCatalogue(
   return listTitles
     .map((listTitle) => {
       const config = layerConfigs?.[listTitle] ?? null;
-      const layers = chainLayers(config);
+      const layers = workflowLayers(config);
+      const workflow = describeWorkflow(layers);
       const chain = layers.map((layer, index) => layerRoleLabel(layer, index));
       const bucket = counts.get(listTitle) ?? { today: 0, volume: 0 };
       const firstEmail = layerAssigneeEmail(layers[0]);
+
+      // Falls back to the form's own stored flag when the loader could not read
+      // the Master Form column, so the badge is never simply absent.
+      const formVisibility =
+        visibility?.[listTitle]
+        ?? resolveFormVisibility({ layerConfigIsPublic: config?.isPublic ?? null });
 
       return {
         listTitle,
         code: deriveCode(listTitle, config),
         name: listTitle,
+        slug: slugs?.[listTitle] ?? "",
         chain,
         layers,
+        workflow,
+        hasWorkflow: workflow.hasWorkflow,
         slaDays: layerSlaDays(config, layers[0]),
-        isPublic: config?.isPublic ?? false,
+        visibility: formVisibility,
+        isPublic: formVisibility.isPublic,
         severityCapture: severityCaptureOf(config),
         volume: bucket.volume,
         today: bucket.today,
-        firstApprover: firstEmail ? displayName(firstEmail, directory) : chain[0] ?? "the first approver",
+        // A form with no chain has nobody to route to. Naming "the first
+        // approver" anyway is how the file screen came to promise one.
+        firstApprover: !workflow.hasWorkflow
+          ? ""
+          : firstEmail
+            ? displayName(firstEmail, directory)
+            : chain[0] ?? "the first approver",
       } satisfies CatalogueEntry;
     })
     .sort((a, b) => a.name.localeCompare(b.name));

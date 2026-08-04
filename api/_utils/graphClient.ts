@@ -448,6 +448,28 @@ export async function queryListItemById(
   }
 }
 
+/**
+ * A SharePoint multi-choice column stores a collection, and Graph refuses to
+ * write one unless the payload names the collection type next to the value.
+ * Without the annotation the request fails as `invalidRequest` — the same shape
+ * as a bad column name, which is why the failure reads like a missing field.
+ *
+ * Applied to every array value: a column that turns out to be plain text
+ * rejects an array either way, so the callers' string fallback still applies.
+ */
+export function annotateGraphCollectionFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const annotated: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(fields)) {
+    if (Array.isArray(value)) {
+      annotated[`${name}@odata.type`] = "Collection(Edm.String)";
+      annotated[name] = value.map((entry) => (typeof entry === "string" ? entry : String(entry)));
+      continue;
+    }
+    annotated[name] = value;
+  }
+  return annotated;
+}
+
 export async function createListItem(
   token: string,
   listDisplayName: string,
@@ -457,7 +479,7 @@ export async function createListItem(
   const listId = await getListId(token, listDisplayName);
 
   const data = (await graphPost(token, `/sites/${siteId}/lists/${listId}/items`, {
-    fields,
+    fields: annotateGraphCollectionFields(fields),
   })) as { id: string };
 
   return data;
@@ -671,7 +693,7 @@ export async function updateListItemFields(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(fields),
+    body: JSON.stringify(annotateGraphCollectionFields(fields)),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -868,7 +890,7 @@ export async function updateListItem(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: annotateGraphCollectionFields(fields) }),
   });
   if (!res.ok) {
     const text = await res.text();

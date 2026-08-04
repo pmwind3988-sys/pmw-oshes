@@ -14,7 +14,8 @@ import { PortalProvider } from "../../contexts/PortalContext";
 import PortalPage from "../../pages/PortalPage";
 import { buildCatalogue, findCatalogueEntry } from "../../utils/portalCatalogue";
 import { toPortalRecord, queueFor } from "../../utils/portalRecords";
-import { allowedScreens, derivePortalRole, portalHome } from "../../utils/portalRole";
+import { allowedScreens, derivePortalAccess, portalHome } from "../../utils/portalRole";
+import { DEFAULT_PORTAL_PREFS, readPortalPrefs, writePortalPrefs, type PortalPrefs } from "../../utils/portalPrefs";
 import { deriveAuditFromRecords, readAuditTrail, sortAudit } from "../../utils/portalAudit";
 import { applySubmissionPatch } from "../../utils/portalPatch";
 import { displayName, normalizeEmail, type PeopleDirectory } from "../../utils/portalPeople";
@@ -30,7 +31,6 @@ interface PortalContainerProps {
   loadedConfig: LoadedConfig | null;
   spClient: SharePointClient;
   onSignOut: () => void;
-  onSwitchAccount: () => void;
   onRefresh: () => void;
 }
 
@@ -57,7 +57,6 @@ export default function PortalContainer({
   loadedConfig,
   spClient,
   onSignOut,
-  onSwitchAccount,
   onRefresh,
 }: PortalContainerProps) {
   const [patched, setPatched] = useState<Record<string, Submission>>({});
@@ -69,6 +68,9 @@ export default function PortalContainer({
   const [drawerRef, setDrawerRef] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
   const [screen, setScreenState] = useState<PortalScreen | null>(null);
+  const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
+    typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -111,7 +113,14 @@ export default function PortalContainer({
     const titles = new Set<string>(visibleLists.map((list) => list.title));
     for (const title of loadedConfig?.allowedTitles ?? []) titles.add(title);
 
-    const base = buildCatalogue([...titles], loadedConfig?.layerConfigs, effectiveSubmissions, directory);
+    const base = buildCatalogue({
+      listTitles: [...titles],
+      layerConfigs: loadedConfig?.layerConfigs,
+      submissions: effectiveSubmissions,
+      visibility: loadedConfig?.formVisibility,
+      slugs: loadedConfig?.formSlugMap,
+      directory,
+    });
     return base.map((entry) => ({ ...entry, ...catalogueOverrides[entry.listTitle] }));
   }, [visibleLists, loadedConfig, effectiveSubmissions, directory, catalogueOverrides]);
 
@@ -126,16 +135,30 @@ export default function PortalContainer({
       .sort((a, b) => (b.filedAt?.getTime() ?? 0) - (a.filedAt?.getTime() ?? 0));
   }, [effectiveSubmissions, catalogue, directory]);
 
-  const derivedRole = useMemo(
-    () => derivePortalRole({ userEmail, isAdmin, isAuditor, catalogue, records }),
+  const derivedAccess = useMemo(
+    () => derivePortalAccess({ userEmail, isAdmin, isAuditor, catalogue, records }),
     [userEmail, isAdmin, isAuditor, catalogue, records],
   );
-  const role = (import.meta.env.DEV ? readDevRole() : null) ?? derivedRole;
+
+  // The dev override still names a role; the capabilities that role implies are
+  // rebuilt from it, so overriding to "approver" also drops the admin screens.
+  const devRole = import.meta.env.DEV ? readDevRole() : null;
+  const access = useMemo(() => {
+    if (!devRole || devRole === derivedAccess.role) return derivedAccess;
+    return derivePortalAccess({
+      userEmail,
+      isAdmin: devRole === "admin",
+      isAuditor: devRole === "auditor",
+      catalogue,
+      records,
+    });
+  }, [devRole, derivedAccess, userEmail, catalogue, records]);
+  const role = access.role;
 
   const email = normalizeEmail(userEmail);
-  const visibleRecords = useMemo(
-    () => (role === "submitter" ? records.filter((record) => record.submitterEmail === email) : records),
-    [records, role, email],
+  const myRecords = useMemo(
+    () => records.filter((record) => record.submitterEmail === email),
+    [records, email],
   );
   const queue = useMemo(() => queueFor(records, userEmail), [records, userEmail]);
 
@@ -152,12 +175,22 @@ export default function PortalContainer({
     return map;
   }, [loadedConfig]);
 
-  // A deep link into a screen this role does not get lands on its own home instead.
-  const permitted = allowedScreens(role);
-  const activeScreen = screen && permitted.includes(screen) ? screen : portalHome(role);
+  // A screen this account cannot reach — a stale preference, or a link shared
+  // between two different kinds of account — lands on Home instead.
+  const permitted = allowedScreens(access);
+  const preferredStart = permitted.includes(prefs.startScreen) ? prefs.startScreen : portalHome();
+  const activeScreen = screen && permitted.includes(screen) ? screen : preferredStart;
+
+  const setPrefs = (changes: Partial<PortalPrefs>) =>
+    setPrefsState((current) => {
+      const next = { ...current, ...changes };
+      writePortalPrefs(next);
+      return next;
+    });
 
   const value = {
     role,
+    access,
     userEmail,
     userName: displayName(email, directory),
     userTitle: userEmail,
@@ -165,7 +198,7 @@ export default function PortalContainer({
     spClient,
     directory,
     records,
-    visibleRecords,
+    myRecords,
     queue,
     catalogue,
     audit,
@@ -173,6 +206,8 @@ export default function PortalContainer({
     refresh: onRefresh,
     screen: activeScreen,
     setScreen: (next: PortalScreen) => setScreenState(next),
+    prefs,
+    setPrefs,
     drawerRef,
     openDrawer: (reference: string) => setDrawerRef(reference),
     closeDrawer: () => setDrawerRef(null),
@@ -191,7 +226,6 @@ export default function PortalContainer({
       setCatalogueOverrides((current) => ({ ...current, [listTitle]: { ...current[listTitle], ...changes } })),
     toast: (message: string) => setToastMessage(message),
     onSignOut,
-    onSwitchAccount,
   };
 
   return (

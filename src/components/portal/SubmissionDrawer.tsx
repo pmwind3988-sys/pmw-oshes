@@ -15,7 +15,6 @@ import {
 import { Close as CloseIcon } from "@mui/icons-material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
-import { canChase, isReadOnlyRole } from "../../utils/portalRole";
 import { normalizeEmail } from "../../utils/portalPeople";
 import { cancelSubmission, nudgeApprover, returnForInformation, signLayer } from "../../utils/portalActions";
 import { downloadRecordPdf } from "../../utils/portalPdf";
@@ -57,9 +56,24 @@ function FieldGrid({ record }: { record: PortalRecord }) {
 }
 
 function ApprovalChain({ record }: { record: PortalRecord }) {
+  // A form with no chain gets a sentence, not an empty timeline that reads as
+  // "the approvals have not loaded".
+  if (!record.hasWorkflow) {
+    return (
+      <Box>
+        <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Approval chain</Typography>
+        <Typography sx={{ fontSize: 13, color: editorial.muted }}>
+          This form has no approval or evaluation step. It was filed straight to the record and needs no signature.
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1.5 }}>Approval chain</Typography>
+      <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1.5 }}>
+        {record.workflowKind === "evaluation" ? "Evaluation" : "Approval chain"}
+      </Typography>
       <Stack>
         {record.chain.map((step, index) => {
           const last = index === record.chain.length - 1;
@@ -126,7 +140,7 @@ function ApprovalChain({ record }: { record: PortalRecord }) {
  */
 export default function SubmissionDrawer() {
   const portal = usePortal();
-  const { records, drawerRef, closeDrawer, role, userEmail, userName, spClient, applyPatch, appendAudit, toast, nudged, markNudged, surveyJsonByForm } = portal;
+  const { records, drawerRef, closeDrawer, access, userEmail, userName, spClient, applyPatch, appendAudit, toast, nudged, markNudged, surveyJsonByForm } = portal;
 
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -138,15 +152,21 @@ export default function SubmissionDrawer() {
   const open = Boolean(record);
 
   const email = normalizeEmail(userEmail);
-  const readOnly = isReadOnlyRole(role);
-  const isMyLayer = Boolean(record && !record.done && !record.returned && record.currentAssigneeEmail === email);
+  const readOnly = access.readOnly;
+  const isMyLayer = Boolean(
+    record && record.hasWorkflow && !record.done && !record.returned && record.currentAssigneeEmail === email,
+  );
   const canSign = !readOnly && isMyLayer;
-  const canChaseThis = !readOnly && Boolean(record) && canChase(role) && !record!.done && !record!.returned && !isMyLayer;
+  // Nothing to chase on a form with no chain — there is no next approver.
+  const canChaseThis =
+    !readOnly && Boolean(record) && access.canChase && record!.hasWorkflow && !record!.done && !record!.returned && !isMyLayer;
+  // Withdrawing your own filing is a property of having filed it, not of the
+  // role label — an approver who reports a hazard may withdraw it too.
   const canCancel =
     !readOnly &&
     Boolean(record) &&
     !record!.done &&
-    (role === "admin" || (role === "submitter" && record!.submitterEmail === email && record!.at === 0));
+    (access.isAdmin || (record!.submitterEmail === email && record!.at === 0));
 
   const actor = { spClient, actorName: userName || userEmail, actorEmail: userEmail };
 
@@ -227,7 +247,7 @@ export default function SubmissionDrawer() {
     }
   };
 
-  const cancelLabel = role === "submitter" ? "Withdraw" : "Cancel submission";
+  const cancelLabel = record && record.submitterEmail === email ? "Withdraw" : "Cancel submission";
 
   return (
     <>
@@ -265,7 +285,9 @@ export default function SubmissionDrawer() {
                     fontWeight: record.overdue ? 800 : 400,
                   }}
                 >
-                  {record.done || record.returned ? record.status : `${record.stage} · ${record.slaNote}`}
+                  {record.done || record.returned || !record.hasWorkflow
+                    ? record.status
+                    : `${record.stage} · ${record.slaNote}`}
                 </Typography>
               </Box>
               <IconButton onClick={closeDrawer} aria-label="Close">
@@ -279,7 +301,9 @@ export default function SubmissionDrawer() {
             {canSign && (
               <Box sx={{ mt: 2.5 }}>
                 <TextField
-                  label={role === "evaluator" ? "Evaluation note" : "Note for the record"}
+                  label={record.workflowKind === "evaluation" || record.chain[record.at]?.type === "evaluation"
+                    ? "Evaluation note"
+                    : "Note for the record"}
                   placeholder="Optional for approval, required if you return it"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
@@ -294,7 +318,7 @@ export default function SubmissionDrawer() {
               {canSign && (
                 <>
                   <Button variant="contained" onClick={() => void handleSign()} disabled={busy} sx={{ minHeight: 40 }}>
-                    {role === "evaluator" ? "Evaluate and release" : "Sign this layer"}
+                    {record.chain[record.at]?.type === "evaluation" ? "Evaluate and release" : "Sign this layer"}
                   </Button>
                   <Button variant="outlined" onClick={() => void handleReturn()} disabled={busy} sx={{ minHeight: 40 }}>
                     Return for more information

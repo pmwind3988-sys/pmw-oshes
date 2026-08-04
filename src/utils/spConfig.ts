@@ -1,5 +1,6 @@
 import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig, SurveyJson } from "../types";
 import { OSHES_APP, OSHES_LISTS } from "../config/oshes";
+import { resolveFormVisibility, type FormVisibility } from "./formWorkflow";
 
 const ADMIN_GROUP = OSHES_APP.adminGroup;
 const AUDITOR_GROUP = OSHES_APP.auditorGroup;
@@ -89,6 +90,46 @@ export function generateMeta(listTitle: string): ListMetaEntry {
   };
 }
 
+/**
+ * Columns beyond the ones this app has always read. They exist on the Master
+ * Form list the form builder creates, but a site provisioned by an older build
+ * may not have them — and SharePoint fails the whole `$select` when one is
+ * missing, which would take the entire form set down with it. So they are asked
+ * for once, and dropped on failure.
+ */
+const MASTER_FORM_BASE_SELECT = [
+  "Title",
+  "FormID",
+  "CurrentVersion",
+  "NumberOfApprovalLayer",
+  "ConditionField",
+  "ApprovalRules",
+  "LayerConfig",
+  "IsPublished",
+];
+const MASTER_FORM_EXTRA_SELECT = ["IsPublic", "Slug"];
+
+async function queryMasterForm(spClient: SharePointClient): Promise<Record<string, unknown>[]> {
+  try {
+    return await spClient.queryList(OSHES_LISTS.masterForm, {
+      select: [...MASTER_FORM_BASE_SELECT, ...MASTER_FORM_EXTRA_SELECT],
+    });
+  } catch {
+    return spClient.queryList(OSHES_LISTS.masterForm, { select: MASTER_FORM_BASE_SELECT });
+  }
+}
+
+/**
+ * How many approval layers a form declares. Zero is a real answer: plenty of
+ * OSHES forms are records, not requests, and nobody signs them. Defaulting the
+ * absent case to 1 is what made the dashboard invent an approval chain for
+ * every one of them.
+ */
+function declaredLayerCount(value: unknown): number {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0;
+}
+
 export async function loadConfig(
   spClient: SharePointClient
 ): Promise<LoadedConfig> {
@@ -98,16 +139,16 @@ export async function loadConfig(
   const allowedTitles = new Set<string>();
   const layerConfigs: Record<string, LayerConfig | null> = {};
   const surveyJsonByFormVersion: Record<string, Record<string, SurveyJson | null>> = {};
+  const formVisibility: Record<string, FormVisibility> = {};
+  const formSlugMap: Record<string, string> = {};
 
   try {
-    const configItems = await spClient.queryList(OSHES_LISTS.masterForm, {
-      select: ["Title", "FormID", "CurrentVersion", "NumberOfApprovalLayer", "ConditionField", "ApprovalRules", "LayerConfig", "IsPublished"],
-    });
+    const configItems = await queryMasterForm(spClient);
 
     for (const item of configItems) {
       const title = String(item.Title || "");
       const formId = String(item.FormID || "");
-      const totalLayers = Number(item.NumberOfApprovalLayer) || 1;
+      const totalLayers = declaredLayerCount(item.NumberOfApprovalLayer);
 
       if (!title) continue;
 
@@ -118,6 +159,7 @@ export async function loadConfig(
       layerConfig[title] = totalLayers;
       formIdMap[title] = formId;
       listMetaMap[title] = generateMeta(title);
+      formSlugMap[title] = String(item.Slug || "");
 
       // Parse LayerConfig JSON if present
       let parsedLayerConfig: LayerConfig | null = null;
@@ -139,7 +181,18 @@ export async function loadConfig(
         );
       }
 
+      // A form that declares no layers is configured, not unconfigured. Saying
+      // so with an empty chain is what lets the dashboard stop pretending it
+      // has one.
+      if (!parsedLayerConfig && totalLayers === 0) {
+        parsedLayerConfig = { version: "1.0", layers: [] };
+      }
+
       layerConfigs[title] = parsedLayerConfig;
+      formVisibility[title] = resolveFormVisibility({
+        masterFormIsPublic: item.IsPublic,
+        layerConfigIsPublic: parsedLayerConfig?.isPublic ?? null,
+      });
     }
   } catch {
     // Master Form list may not exist yet
@@ -182,6 +235,8 @@ export async function loadConfig(
     allowedTitles,
     layerConfigs,
     surveyJsonByFormVersion,
+    formVisibility,
+    formSlugMap,
   };
 }
 

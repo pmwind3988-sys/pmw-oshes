@@ -17,11 +17,24 @@
 | Read-only submission preview | `ReadOnlySubmissionPreview.tsx` | Used by `EvaluationPage` so a reviewer sees what was submitted |
 | Layer progress derivation | `approvalDashboardLayerProgress.ts` | Pure — has unit tests |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |
-| Colors | `constants.ts` | `C` color object — inline styles, NOT MUI theme |
+| Shared page chrome | `WorkspaceLayout.tsx` | `WorkspacePage`, `WorkspaceHeader`, `WorkspaceNotice`, `WorkspacePanelHeader`, `WorkspacePill`, `WorkspaceTag` |
 
 ## Conventions
 - **State**: Local `useState` only — no context or external store
-- `ApprovalDashboard` and `WorkflowAssignmentEditor` style with the inline `C` object rather than the MUI theme; the portal screens use the theme. Match whichever file you are in.
+- **Styling**: MUI components plus `editorial` tokens from `src/theme/editorial.ts`, same as
+  the portal screens and `AdminHomePage`. There is no private palette in this folder — the
+  grey/emerald `C` object these files arrived with (and `constants.ts`) has been removed.
+  Panels 14px, inputs 12px, small surfaces 8–10px, pills 999px, MUI buttons square. See
+  `DESIGN.md`.
+- **Whole-page states** (loading, signed out, access denied) go through `WorkspaceNotice`
+  so the three routes cannot each invent their own version.
+
+## Relationship to pmw-hrform
+The approval, evaluation and response flows are the pmw-hrform workflow with no behavioural
+changes — same layers, statuses, actions, emails and PDF handling. Keep the logic in step
+with hrform. The presentation is deliberately **not** shared: hrform renders these screens
+in standalone grey chrome, this app renders them in PMW Editorial. Do not re-import
+hrform's inline styles when porting a fix across.
 
 ## Where form configuration comes from
 `LayerConfig` (layer sequence, assignees, and the OSHES additions `code` / `slaDays` /

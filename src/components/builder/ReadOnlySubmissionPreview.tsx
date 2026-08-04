@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
+import { editorial } from "../../theme/editorial";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
+// This renders inside the approval workspace and the evaluation page, so it
+// takes the same tokens they do rather than carrying a palette of its own.
 const C = {
-  border: "#E5E7EB",
-  cardBg: "#FFFFFF",
-  softBg: "#F9FAFB",
-  textPrimary: "#111827",
-  textSecond: "#4B5563",
-  textMuted: "#6B7280",
-  purple: "#0078D4",
-  purplePale: "#E6F2FB",
-  red: "#DC2626",
+  border: editorial.border,
+  cardBg: editorial.panel,
+  softBg: editorial.paperSoft,
+  textPrimary: editorial.ink,
+  textSecond: editorial.muted,
+  textMuted: editorial.softMuted,
+  purple: editorial.pmwBlueDark,
+  purplePale: editorial.blueWash,
+  red: editorial.error,
 } as const;
 
 interface PreviewField {

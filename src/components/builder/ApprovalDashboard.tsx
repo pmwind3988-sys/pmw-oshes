@@ -38,6 +38,22 @@ import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
 import type { LayerConfigSource } from "./approvalDashboardLayerProgress";
 import type { LayerConfigItem, ManualBranch, EvaluationLayerConfig, Submission, FormBuilderField } from "../../types";
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Link,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import BlockIcon from "@mui/icons-material/Block";
 import LockIcon from "@mui/icons-material/Lock";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -45,31 +61,29 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReplayIcon from "@mui/icons-material/Replay";
+import CallSplitIcon from "@mui/icons-material/CallSplit";
+import { editorial, editorialHairline } from "../../theme/editorial";
+import {
+  WorkspaceHeader,
+  WorkspaceNotice,
+  WorkspacePage,
+  WorkspacePanelHeader,
+  WorkspacePill,
+  WorkspaceTag,
+} from "./WorkspaceLayout";
+import { workspacePanelSx, workspaceSurfaceSx } from "./workspaceStyles";
+import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
+import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SUBMISSIONS_PER_PAGE = 12;
 
-// Theme
-const C = {
-  purple: "#0078D4",
-  purpleLight: "#106EBE",
-  purplePale: "#E6F2FB",
-  purpleMid: "#B4D5F0",
-  bg: "#F9FAFB",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  textPrimary: "#111827",
-  textSecond: "#6B7280",
-  textMuted: "#9CA3AF",
-  green: "#059669",
-  greenPale: "#D1FAE5",
-  greenBorder: "#6EE7B7",
-  red: "#DC2626",
-  redPale: "#FEE2E2",
-  amber: "#D97706",
-  amberPale: "#FEF3C7",
-};
+/** SharePoint hands back site-relative PDF paths; links need the origin. */
+function absolutePdfUrl(url: string): string {
+  if (url.startsWith("http")) return url;
+  return `${new URL(SP_SITE_URL).origin}${url}`;
+}
 
 interface PendingItem {
   Id: number;
@@ -1163,7 +1177,7 @@ export default function ApprovalDashboard() {
       const nextLayerNum = nextLayerConfig?.layerNumber ?? currLayerNum + 1;
       const isFinal = !nextLayerConfig && currLayerNum >= totalLayers;
 
-      const fields = evalSurveyModel ? evalSurveyModel.data as Record<string, unknown> : {};
+      const fields = evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {};
 
       await submitEvaluationData(token, listName, respId, currLayerNum, {
         confirmerEmail: accounts[0]?.username || "SYSTEM",
@@ -1937,97 +1951,84 @@ export default function ApprovalDashboard() {
     : "";
 
   if (loading || !adminChecked) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: C.textMuted }}>Loading approvals...</div>
-      </div>
-    );
+    return <WorkspaceNotice title="Loading approvals..." message="Reading submissions and workflow layers from SharePoint." />;
   }
 
   if (adminChecked && (!isAdmin || !isSuperuser)) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>You need OSHES Forms Owner and Form Builder Superuser permissions to view this page.</div>
-        </div>
-      </div>
+      <WorkspaceNotice
+        tone="error"
+        icon={<BlockIcon sx={{ fontSize: 28 }} />}
+        title="Access denied"
+        message="This workspace is limited to the OSHES admin group. Ask an administrator to add you if you need to review submissions."
+      />
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
-          <div style={{ color: C.textSecond }}>You must be signed in to view approvals.</div>
-        </div>
-      </div>
+      <WorkspaceNotice
+        icon={<LockIcon sx={{ fontSize: 28 }} />}
+        title="Sign in required"
+        message="You must be signed in with your Microsoft 365 account to view approvals."
+      />
     );
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Auth banner — topmost */}
-        <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg,${C.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-            {((accounts[0]?.username?.[0] || "?").toUpperCase())}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>Signed in</div>
-            <div style={{ fontSize: 11, color: C.textSecond }}>{accounts[0]?.username || "—"}</div>
-          </div>
-          <button onClick={() => { clearStoredAuthDecision(); instance.logoutRedirect({ postLogoutRedirectUri: window.location.href }); }}
-            style={{ fontSize: 11, color: C.textSecond, background: "none", border: `1px solid ${C.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>
-            Sign out
-          </button>
-        </div>
+  const listLabel = `${viewMode === "approvals" ? "Approval" : "Evaluation"} ${
+    statusFilter === "evaluated" ? "evaluated" : statusFilter
+  }`;
+  const hasFilters = Boolean(titleFilter || submitterFilter || dateFrom || dateTo);
 
-        <header style={{ marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>Submissions</h1>
-          <p style={{ color: C.textSecond, marginTop: 4 }}>Review submissions, approvals, and evaluation layers</p>
-        </header>
+  return (
+    <>
+      <WorkspacePage>
+        <WorkspaceHeader
+          eyebrow="OSHES admin workspace"
+          title="Submissions"
+          subtitle="Review submissions, approvals, and evaluation layers. Signing a layer releases the item to the next one immediately."
+          account={accounts[0]?.username || undefined}
+          onSignOut={() => {
+            clearStoredAuthDecision();
+            instance.logoutRedirect({ postLogoutRedirectUri: window.location.href });
+          }}
+        />
 
         {error && (
-          <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, color: C.red, marginBottom: 16 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
             {error}
-          </div>
+          </Alert>
         )}
         {emailNotice && (
-          <div style={{ background: C.greenPale, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: 12, color: "#065F46", marginBottom: 16 }}>
+          <Alert severity="success" sx={{ mb: 2 }}>
             {emailNotice}
-          </div>
+          </Alert>
         )}
 
-        {/* Category tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        {/* Category, then status within it — the two questions an admin asks in order. */}
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: "wrap", rowGap: 1 }}>
           {(["approvals", "evaluations"] as const).map((mode) => {
-            const modeCount = baseFilteredItems.filter(i =>
-              mode === "evaluations" ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation" : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
+            const modeCount = baseFilteredItems.filter((i) =>
+              mode === "evaluations"
+                ? itemCurrentTypes[getPendingItemKey(i)] === "evaluation"
+                : itemCurrentTypes[getPendingItemKey(i)] !== "evaluation"
             ).length;
             return (
-              <button
+              <WorkspacePill
                 key={mode}
-                onClick={() => { setViewMode(mode); setStatusFilter("pending"); }}
-                style={{
-                  padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                  fontSize: 13, fontWeight: 600,
-                  background: viewMode === mode ? C.purple : "#fff",
-                  color: viewMode === mode ? "#fff" : C.textSecond,
-                  boxShadow: viewMode === mode ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
+                active={viewMode === mode}
+                onClick={() => {
+                  setViewMode(mode);
+                  setStatusFilter("pending");
                 }}
               >
                 {mode === "approvals" ? "Approvals" : "Evaluations"} ({modeCount})
-              </button>
+              </WorkspacePill>
             );
           })}
-        </div>
+        </Stack>
 
-        {/* Status tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: "wrap", rowGap: 1 }}>
           {(viewMode === "evaluations"
             ? (["pending", "evaluated"] as const)
             : (["pending", "approved", "rejected"] as const)
@@ -2039,230 +2040,181 @@ export default function ApprovalDashboard() {
               return getItemStatus(item) !== "pending";
             }).length;
             return (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab)}
-                style={{
-                  padding: "6px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  background: statusFilter === tab ? C.purple : "#fff",
-                  color: statusFilter === tab ? "#fff" : C.textSecond,
-                  boxShadow: statusFilter === tab ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
-                }}
-              >
+              <WorkspacePill key={tab} active={statusFilter === tab} onClick={() => setStatusFilter(tab)}>
                 {tab === "evaluated" ? "Evaluated" : tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
-              </button>
+              </WorkspacePill>
             );
           })}
-        </div>
+        </Stack>
 
-        {/* Filters */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-          <input
-            type="text"
-            placeholder="Filter by form title..."
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.5}
+          sx={{ mb: 3, alignItems: { md: "center" }, flexWrap: "wrap", rowGap: 1.5 }}
+        >
+          <TextField
+            size="small"
+            placeholder="Filter by form title"
             value={titleFilter}
-            onChange={e => setTitleFilter(e.target.value)}
-            style={{
-              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
-            }}
+            onChange={(e) => setTitleFilter(e.target.value)}
+            sx={{ flex: "1 1 200px", minWidth: 0 }}
           />
-          <input
-            type="text"
-            placeholder="Filter by submitter email..."
+          <TextField
+            size="small"
+            placeholder="Filter by submitter email"
             value={submitterFilter}
-            onChange={e => setSubmitterFilter(e.target.value)}
-            style={{
-              flex: "1 1 180px", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-              fontSize: 13, color: C.textPrimary, outline: "none", minWidth: 0,
-            }}
+            onChange={(e) => setSubmitterFilter(e.target.value)}
+            sx={{ flex: "1 1 200px", minWidth: 0 }}
           />
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flex: "0 0 auto" }}>
-            <span style={{ fontSize: 12, color: C.textMuted }}>From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textPrimary, outline: "none",
+          <TextField
+            size="small"
+            type="date"
+            label="From"
+            slotProps={{ inputLabel: { shrink: true } }}
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            sx={{ flex: "0 0 auto" }}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="To"
+            slotProps={{ inputLabel: { shrink: true } }}
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            sx={{ flex: "0 0 auto" }}
+          />
+          {hasFilters && (
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => {
+                setTitleFilter("");
+                setSubmitterFilter("");
+                setDateFrom("");
+                setDateTo("");
               }}
-            />
-            <span style={{ fontSize: 12, color: C.textMuted }}>To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              style={{
-                padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                fontSize: 12, color: C.textPrimary, outline: "none",
-              }}
-            />
-          </div>
-          {(titleFilter || submitterFilter || dateFrom || dateTo) && (
-            <button
-              onClick={() => { setTitleFilter(""); setSubmitterFilter(""); setDateFrom(""); setDateTo(""); }}
-              style={{
-                padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-                background: "transparent", color: C.textMuted, fontSize: 12, cursor: "pointer",
-              }}
+              sx={{ color: editorial.muted, flex: "0 0 auto" }}
             >
               Clear
-            </button>
+            </Button>
           )}
-        </div>
+        </Stack>
 
-        {/* Reject Reason Dialog */}
-        {showRejectDialog && (
-          <div
-            style={{
-              position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-            onClick={() => setShowRejectDialog(false)}
-          >
-            <div
-              style={{
-                background: C.cardBg, borderRadius: 14, padding: 24, width: 420, maxWidth: "90vw",
-                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+        <Dialog open={showRejectDialog} onClose={() => setShowRejectDialog(false)} fullWidth maxWidth="xs">
+          <DialogTitle sx={{ fontSize: 19, fontWeight: 800, pb: 0.5 }}>Reject submission</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ fontSize: 13, color: editorial.muted, mb: 2 }}>
+              The reason is written to the layer record and shown to the submitter.
+            </Typography>
+            <TextField
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter rejection reason..."
+              multiline
+              rows={4}
+              fullWidth
+              autoFocus
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setShowRejectDialog(false);
+                setRejectionReason("");
               }}
-              onClick={e => e.stopPropagation()}
             >
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Reject Submission</div>
-              <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 16 }}>
-                Provide a reason for rejecting this submission.
-              </div>
-              <textarea
-                value={rejectionReason}
-                onChange={e => setRejectionReason(e.target.value)}
-                placeholder="Enter rejection reason..."
-                rows={4}
-                autoFocus
-                style={{
-                  width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-                  fontSize: 13, color: C.textPrimary, resize: "vertical", outline: "none",
-                  fontFamily: "inherit", boxSizing: "border-box",
-                }}
-              />
-              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => { setShowRejectDialog(false); setRejectionReason(""); }}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    handleReject(rejectionReason);
-                    setShowRejectDialog(false);
-                    setRejectionReason("");
-                  }}
-                  disabled={!rejectionReason.trim() || actionLoading}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: "none",
-                    background: rejectionReason.trim() && !actionLoading ? C.red : C.border,
-                    color: rejectionReason.trim() && !actionLoading ? "#fff" : C.textMuted,
-                    fontSize: 13, fontWeight: 600, cursor: rejectionReason.trim() && !actionLoading ? "pointer" : "not-allowed",
-                  }}
-                >
-                  Confirm Reject
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {deleteTarget && (
-          <div
-            style={{
-              position: "fixed", inset: 0, background: "rgba(0,0,0,0.42)", zIndex: 1000,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-            onClick={() => { if (!deleteLoading) { setDeleteTarget(null); setDeleteConfirmText(""); } }}
-          >
-            <div
-              style={{
-                background: C.cardBg, borderRadius: 14, padding: 24, width: 460, maxWidth: "90vw",
-                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              disabled={!rejectionReason.trim() || actionLoading}
+              onClick={() => {
+                handleReject(rejectionReason);
+                setShowRejectDialog(false);
+                setRejectionReason("");
               }}
-              onClick={e => e.stopPropagation()}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.redPale, color: C.red, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <DeleteIcon style={{ fontSize: 18 }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: C.textPrimary }}>Delete Submission Permanently</div>
-                  <div style={{ fontSize: 12, color: C.textSecond }}>This removes the submission item and related managed files where possible.</div>
-                </div>
-              </div>
-              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, margin: "14px 0", fontSize: 12, color: C.textSecond }}>
-                <div style={{ fontWeight: 700, color: C.textPrimary }}>{deleteTarget.Title}</div>
-                <div>Submitted by {deleteTarget.SubmittedBy || "Unknown"} on {formatDateTime(deleteTarget.SubmittedAt)}</div>
-                <div>Item ID: {deleteTarget.Id}</div>
-              </div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>
-                Type DELETE to confirm
-              </label>
-              <input
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-                disabled={deleteLoading}
-                autoFocus
-                style={{
-                  width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, fontSize: 13, color: C.textPrimary, outline: "none",
-                }}
-              />
-              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => { setDeleteTarget(null); setDeleteConfirmText(""); }}
-                  disabled={deleteLoading}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.border}`,
-                    background: "#fff", color: C.textSecond, fontSize: 13, fontWeight: 600,
-                    cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.6 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteSubmission}
-                  disabled={deleteConfirmText !== "DELETE" || deleteLoading}
-                  style={{
-                    padding: "9px 18px", borderRadius: 8, border: "none",
-                    background: deleteConfirmText === "DELETE" && !deleteLoading ? C.red : C.border,
-                    color: deleteConfirmText === "DELETE" && !deleteLoading ? "#fff" : C.textMuted,
-                    fontSize: 13, fontWeight: 600,
-                    cursor: deleteConfirmText === "DELETE" && !deleteLoading ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {deleteLoading ? "Deleting..." : "Delete permanently"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+              Confirm reject
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-        {/* Items + Detail Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-          {/* Items List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ fontWeight: 600, color: C.purple }}>
-                {viewMode === "approvals" ? "Approval" : "Evaluation"} {statusFilter === "evaluated" ? "Evaluated" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} ({filteredItems.length})
-              </span>
-              <span style={{ fontSize: 11, color: C.textSecond }}>
-                Newest first
-              </span>
-            </div>
-            <div style={{ maxHeight: 600, overflow: "auto" }}>
+        <Dialog
+          open={Boolean(deleteTarget)}
+          onClose={() => {
+            if (!deleteLoading) {
+              setDeleteTarget(null);
+              setDeleteConfirmText("");
+            }
+          }}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle sx={{ fontSize: 19, fontWeight: 800, pb: 0.5 }}>Delete submission permanently</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ fontSize: 13, color: editorial.muted, mb: 2 }}>
+              This removes the submission item and related managed files where possible. It cannot be undone.
+            </Typography>
+            {deleteTarget && (
+              <Box sx={{ ...workspaceSurfaceSx, backgroundColor: editorial.paperSoft, p: 1.75, mb: 2.5 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 800 }}>{deleteTarget.Title}</Typography>
+                <Typography sx={{ fontSize: 12, color: editorial.muted }}>
+                  Submitted by {deleteTarget.SubmittedBy || "Unknown"} on {formatDateTime(deleteTarget.SubmittedAt)}
+                </Typography>
+                <Typography sx={{ fontSize: 12, color: editorial.muted }}>Item ID: {deleteTarget.Id}</Typography>
+              </Box>
+            )}
+            <TextField
+              label="Type DELETE to confirm"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              disabled={deleteLoading}
+              fullWidth
+              autoFocus
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+              variant="outlined"
+              disabled={deleteLoading}
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteConfirmText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDeleteSubmission}
+              disabled={deleteConfirmText !== "DELETE" || deleteLoading}
+            >
+              {deleteLoading ? "Deleting..." : "Delete permanently"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1fr)" },
+            gap: 3,
+            alignItems: "start",
+          }}
+        >
+          {/* Items list */}
+          <Box sx={workspacePanelSx}>
+            <WorkspacePanelHeader label={`${listLabel} (${filteredItems.length})`} hint="Newest first" />
+            <Box sx={{ maxHeight: 600, overflow: "auto" }}>
               {filteredItems.length === 0 ? (
-                <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions</div>
+                <Typography sx={{ p: 3, textAlign: "center", fontSize: 13, color: editorial.muted }}>
+                  No submissions
+                </Typography>
               ) : (
                 pagedItems.map((item) => {
                   const itemKey = getPendingItemKey(item);
@@ -2271,219 +2223,231 @@ export default function ApprovalDashboard() {
                   const emailSchedule = getScheduledWorkflowEmail(item.WorkflowEmailSchedule, currentLayerNumber);
                   const hasPendingEmailSchedule = emailSchedule?.status === "scheduled";
                   const isEvaluationItem = itemCurrentTypes[itemKey] === "evaluation";
+                  const selected = selectedItem?.Id === item.Id && selectedItem.Title === item.Title;
+                  const itemStatus = getItemStatus(item);
+                  const statusTone: WorkspaceTone =
+                    itemStatus === "approved" ? "success" : itemStatus === "rejected" ? "error" : "warning";
+                  const emailTone: WorkspaceTone = hasPendingEmailSchedule
+                    ? "warning"
+                    : emailStatus.status === "sent"
+                      ? "success"
+                      : emailStatus.status === "failed"
+                        ? "error"
+                        : emailSchedule
+                          ? "warning"
+                          : "neutral";
+                  const emailLabel = hasPendingEmailSchedule
+                    ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
+                    : emailStatus.status === "sent"
+                      ? "Evaluator email sent"
+                      : emailStatus.status === "failed"
+                        ? "Evaluator email failed"
+                        : emailSchedule
+                          ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
+                          : "Evaluator email not sent";
+                  const emailTitle = hasPendingEmailSchedule
+                    ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                    : emailStatus.status === "not_sent"
+                      ? emailSchedule
+                        ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
+                        : "No evaluator email delivery has been recorded."
+                      : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${
+                          emailStatus.attempts === 1 ? "" : "s"
+                        } • ${formatDateTime(emailStatus.lastAttemptAt)}`;
+
                   return (
-                  <div
-                    key={getPendingItemKey(item)}
-                    onClick={() => loadItemDetails(item)}
-                    style={{
-                      padding: 16,
-                      borderBottom: `1px solid ${C.border}`,
-                      cursor: "pointer",
-                      background: selectedItem?.Id === item.Id && selectedItem.Title === item.Title ? C.purplePale : "transparent",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontWeight: 600, color: C.textPrimary, marginBottom: 4 }}>{item.Title}</div>
-                        <div style={{ fontSize: 13, color: C.textSecond }}>
-                          By {item.SubmittedBy} • {formatDateTime(item.SubmittedAt)}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-                          v{item.FormVersion || "Legacy"}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>
-                          {formatLayerProgress(item)}
-                        </div>
-                        {isEvaluationItem && (isAdmin || isSuperuser) && (
-                          <div
-                            title={hasPendingEmailSchedule
-                              ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "not_sent"
-                              ? emailSchedule
-                                ? `Scheduled for ${formatDateTime(emailSchedule.dueAt)}`
-                                : "No evaluator email delivery has been recorded."
-                              : `${emailStatus.recipient} • ${emailStatus.attempts} attempt${emailStatus.attempts === 1 ? "" : "s"} • ${formatDateTime(emailStatus.lastAttemptAt)}`}
-                            style={{
-                              display: "inline-flex", alignItems: "center", marginTop: 6,
-                              fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
-                              background: hasPendingEmailSchedule ? C.amberPale
-                                : emailStatus.status === "sent" ? C.greenPale
-                                : emailStatus.status === "failed" ? C.redPale
-                                  : emailSchedule ? C.amberPale : "#F3F4F6",
-                              color: hasPendingEmailSchedule ? "#92400E"
-                                : emailStatus.status === "sent" ? "#065F46"
-                                : emailStatus.status === "failed" ? "#991B1B"
-                                  : emailSchedule ? "#92400E" : C.textSecond,
-                            }}
-                          >
-                            {hasPendingEmailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
-                              : emailStatus.status === "sent" ? "Evaluator email sent"
-                              : emailStatus.status === "failed" ? "Evaluator email failed"
-                                : emailSchedule ? `Email scheduled ${formatDateTime(emailSchedule.dueAt)}`
-                                  : "Evaluator email not sent"}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {item.PdfUrl && (
-                          <a
-                            href={item.PdfUrl.startsWith("http") ? item.PdfUrl : `${new URL(SP_SITE_URL).origin}${item.PdfUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 8,
-                              background: C.purplePale, color: C.purple, textDecoration: "none",
-                            }}
-                          >
-                            PDF
-                          </a>
-                        )}
-                        <span
-                          style={{
-                            fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 12,
-                            background: getItemStatus(item) === "approved" ? C.greenPale
-                              : getItemStatus(item) === "rejected" ? C.redPale : C.amberPale,
-                            color: getItemStatus(item) === "approved" ? "#065F46"
-                              : getItemStatus(item) === "rejected" ? "#991B1B" : "#92400E",
-                          }}
-                        >
-                          {getItemDisplayStatus(item)}
-                        </span>
-                        <button
-                          title="Delete submission permanently"
-                          aria-label={`Delete ${item.Title} submission ${item.Id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(item);
-                            setDeleteConfirmText("");
-                          }}
-                          disabled={deleteLoading}
-                          style={{
-                            width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.redPale}`,
-                            background: "#fff", color: C.red, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            cursor: deleteLoading ? "not-allowed" : "pointer", opacity: deleteLoading ? 0.55 : 1,
-                          }}
-                        >
-                          <DeleteIcon style={{ fontSize: 15 }} />
-                        </button>
-                        {(isAdmin || isSuperuser) && (
-                          <button
-                            title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}
-                            aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleRegeneratePdf(item);
-                            }}
-                            disabled={pdfRegeneratingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: pdfRegeneratingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: pdfRegeneratingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <DescriptionIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                        {isEvaluationItem && (isAdmin || isSuperuser) && (
-                          <button
-                            title="Force resend evaluator email"
-                            aria-label={`Force resend evaluator email for ${item.Title} submission ${item.Id}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleForceResend(item);
-                            }}
-                            disabled={resendingItemKey === itemKey}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.purpleMid}`,
-                              background: "#fff", color: C.purple, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              cursor: resendingItemKey === itemKey ? "not-allowed" : "pointer",
-                              opacity: resendingItemKey === itemKey ? 0.55 : 1,
-                            }}
-                          >
-                            <ReplayIcon style={{ fontSize: 15 }} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    <Box
+                      key={itemKey}
+                      onClick={() => loadItemDetails(item)}
+                      sx={{
+                        p: 2,
+                        borderBottom: editorialHairline,
+                        cursor: "pointer",
+                        borderLeft: `3px solid ${selected ? editorial.pmwBlue : "transparent"}`,
+                        backgroundColor: selected ? editorial.blueWash : "transparent",
+                        transition: "background-color 0.15s ease",
+                        "&:hover": { backgroundColor: selected ? editorial.blueWash : editorial.blueSoft },
+                      }}
+                    >
+                      <Stack direction="row" spacing={1.5} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontSize: 14.5, fontWeight: 800, lineHeight: 1.3 }}>{item.Title}</Typography>
+                          <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.25 }}>
+                            By {item.SubmittedBy} · {formatDateTime(item.SubmittedAt)}
+                          </Typography>
+                          <Typography sx={{ fontSize: 11, color: editorial.softMuted, mt: 0.25 }}>
+                            v{item.FormVersion || "Legacy"} · {formatLayerProgress(item)}
+                          </Typography>
+                          {isEvaluationItem && (isAdmin || isSuperuser) && (
+                            <Box sx={{ mt: 0.75 }}>
+                              <WorkspaceTag tone={emailTone} title={emailTitle}>
+                                {emailLabel}
+                              </WorkspaceTag>
+                            </Box>
+                          )}
+                        </Box>
+
+                        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flexShrink: 0 }}>
+                          {item.PdfUrl && (
+                            <Link
+                              href={absolutePdfUrl(item.PdfUrl)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              sx={{
+                                fontSize: 10.5,
+                                fontWeight: 800,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: "999px",
+                                backgroundColor: editorial.blueWash,
+                                color: editorial.pmwBlueDark,
+                                textDecoration: "none",
+                              }}
+                            >
+                              PDF
+                            </Link>
+                          )}
+                          <WorkspaceTag tone={statusTone}>{getItemDisplayStatus(item)}</WorkspaceTag>
+                          <Tooltip title="Delete submission permanently">
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={`Delete ${item.Title} submission ${item.Id}`}
+                                disabled={deleteLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(item);
+                                  setDeleteConfirmText("");
+                                }}
+                                sx={{ color: editorial.error }}
+                              >
+                                <DeleteIcon sx={{ fontSize: 17 }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          {(isAdmin || isSuperuser) && (
+                            <Tooltip title={item.PdfUrl ? "Rebuild and replace PDF" : "Generate PDF"}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={`${item.PdfUrl ? "Rebuild" : "Generate"} PDF for ${item.Title} submission ${item.Id}`}
+                                  disabled={pdfRegeneratingItemKey === itemKey}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleRegeneratePdf(item);
+                                  }}
+                                  sx={{ color: editorial.pmwBlueDark }}
+                                >
+                                  <DescriptionIcon sx={{ fontSize: 17 }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          {isEvaluationItem && (isAdmin || isSuperuser) && (
+                            <Tooltip title="Force resend evaluator email">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={`Force resend evaluator email for ${item.Title} submission ${item.Id}`}
+                                  disabled={resendingItemKey === itemKey}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleForceResend(item);
+                                  }}
+                                  sx={{ color: editorial.pmwBlueDark }}
+                                >
+                                  <ReplayIcon sx={{ fontSize: 17 }} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                      </Stack>
+                    </Box>
                   );
                 })
               )}
-            </div>
+            </Box>
             {filteredItems.length > SUBMISSIONS_PER_PAGE && (
-              <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <div style={{ fontSize: 12, color: C.textSecond }}>
-                  Showing {(listPage - 1) * SUBMISSIONS_PER_PAGE + 1}-{Math.min(listPage * SUBMISSIONS_PER_PAGE, filteredItems.length)} of {filteredItems.length}
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button
-                    onClick={() => setListPage((page) => Math.max(1, page - 1))}
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ p: 1.5, borderTop: editorialHairline, alignItems: "center", justifyContent: "space-between" }}
+              >
+                <Typography sx={{ fontSize: 12, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
+                  Showing {(listPage - 1) * SUBMISSIONS_PER_PAGE + 1}–
+                  {Math.min(listPage * SUBMISSIONS_PER_PAGE, filteredItems.length)} of {filteredItems.length}
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
                     disabled={listPage <= 1}
-                    style={{
-                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                      background: "#fff", color: listPage <= 1 ? C.textMuted : C.textSecond,
-                      fontSize: 12, fontWeight: 600, cursor: listPage <= 1 ? "not-allowed" : "pointer",
-                    }}
+                    onClick={() => setListPage((page) => Math.max(1, page - 1))}
                   >
                     Previous
-                  </button>
-                  <span style={{ fontSize: 12, color: C.textSecond }}>Page {listPage} of {totalListPages}</span>
-                  <button
-                    onClick={() => setListPage((page) => Math.min(totalListPages, page + 1))}
+                  </Button>
+                  <Typography sx={{ fontSize: 12, color: editorial.muted, fontVariantNumeric: "tabular-nums" }}>
+                    Page {listPage} of {totalListPages}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
                     disabled={listPage >= totalListPages}
-                    style={{
-                      padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-                      background: "#fff", color: listPage >= totalListPages ? C.textMuted : C.textSecond,
-                      fontSize: 12, fontWeight: 600, cursor: listPage >= totalListPages ? "not-allowed" : "pointer",
-                    }}
+                    onClick={() => setListPage((page) => Math.min(totalListPages, page + 1))}
                   >
                     Next
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                </Stack>
+              </Stack>
             )}
-          </div>
+          </Box>
 
-          {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          {/* Detail panel */}
+          <Box sx={workspacePanelSx}>
             {!selectedItem ? (
-              <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>Select an item to review</div>
+              <Typography sx={{ p: 6, textAlign: "center", fontSize: 13, color: editorial.muted }}>
+                Select an item to review
+              </Typography>
             ) : (
               <>
-                <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontWeight: 600, color: C.textPrimary }}>{selectedItem.Title}</div>
-                  <div style={{ fontSize: 13, color: C.textSecond, marginTop: 4 }}>
-                    Submitted by {selectedItem.SubmittedBy} • {formatDateTime(selectedItem.SubmittedAt)}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                    Form Version: {selectedItem.FormVersion || "Legacy"}
-                  </div>
+                <Box sx={{ p: 2, borderBottom: editorialHairline }}>
+                  <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.3 }}>{selectedItem.Title}</Typography>
+                  <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.5 }}>
+                    Submitted by {selectedItem.SubmittedBy} · {formatDateTime(selectedItem.SubmittedAt)}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: editorial.softMuted, mt: 0.25 }}>
+                    Form version: {selectedItem.FormVersion || "Legacy"}
+                  </Typography>
                   {selectedCompany && (
-                    <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 600 }}>
+                    <Typography sx={{ fontSize: 12, color: editorial.pmwBlueDark, fontWeight: 700, mt: 0.25 }}>
                       Company: {selectedCompany}
-                    </div>
+                    </Typography>
                   )}
                   {selectedItem.SelectedBranch && (
-                    <div style={{ fontSize: 12, color: C.purple, marginTop: 2, fontWeight: 500 }}>
-                      Branch: {(() => { try {
-                        const lc = formConfig?.LayerConfig ? JSON.parse(formConfig.LayerConfig) : null;
-                        const selectedBranchKey = selectedItem.SelectedBranch.trim().toLowerCase();
-                        const branch = lc?.manualBranches?.find((b: ManualBranch) =>
-                          [b.name, b.label].some((candidate) => candidate.trim().toLowerCase() === selectedBranchKey)
-                        );
-                        return branch?.label || selectedItem.SelectedBranch;
-                      } catch { return selectedItem.SelectedBranch; }})()}
-                    </div>
+                    <Typography sx={{ fontSize: 12, color: editorial.pmwBlueDark, fontWeight: 700, mt: 0.25 }}>
+                      Branch:{" "}
+                      {(() => {
+                        try {
+                          const lc = formConfig?.LayerConfig ? JSON.parse(formConfig.LayerConfig) : null;
+                          const selectedBranchKey = selectedItem.SelectedBranch.trim().toLowerCase();
+                          const branch = lc?.manualBranches?.find((b: ManualBranch) =>
+                            [b.name, b.label].some((candidate) => candidate.trim().toLowerCase() === selectedBranchKey)
+                          );
+                          return branch?.label || selectedItem.SelectedBranch;
+                        } catch {
+                          return selectedItem.SelectedBranch;
+                        }
+                      })()}
+                    </Typography>
                   )}
                   {isSuperuser && selectedActiveLayers.length > 0 && (
                     <WorkflowAssignmentEditor
                       layers={selectedActiveLayers}
-                      currentLayerNumber={Math.max(
-                        selectedItem.CurrentLayer || 0,
-                        selectedItem.CurrentApprovalLayer || 0,
-                      ) || 1}
+                      currentLayerNumber={
+                        Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1
+                      }
                       layerStates={completedLayers}
                       rawAssignments={selectedItem.WorkflowAssignmentData}
                       saving={assignmentSaving}
@@ -2491,66 +2455,63 @@ export default function ApprovalDashboard() {
                     />
                   )}
                   {currentLayerType === "evaluation" && (isAdmin || isSuperuser) && (
-                    <div style={{ marginTop: 12, padding: 12, borderRadius: 9, border: `1px solid ${C.purpleMid}`, background: C.purplePale }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.purple }}>Evaluator email controls</div>
-                      <div style={{ fontSize: 11, color: C.textSecond, marginTop: 3 }}>
+                    <Box sx={{ ...workspaceSurfaceSx, backgroundColor: editorial.blueSoft, p: 1.75, mt: 1.75 }}>
+                      <Typography sx={{ fontSize: 12, fontWeight: 800, color: editorial.pmwBlueDark }}>
+                        Evaluator email controls
+                      </Typography>
+                      <Typography sx={{ fontSize: 11.5, color: editorial.muted, mt: 0.5 }}>
                         {(() => {
-                          const layerNumber = Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
+                          const layerNumber =
+                            Math.max(selectedItem.CurrentLayer || 0, selectedItem.CurrentApprovalLayer || 0) || 1;
                           const delivery = getWorkflowEmailStatus(selectedItem.WorkflowEmailLog, layerNumber);
                           const schedule = getScheduledWorkflowEmail(selectedItem.WorkflowEmailSchedule, layerNumber);
                           if (schedule?.status === "scheduled") return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
-                          if (delivery.status === "sent") return `Sent to ${delivery.recipient} on ${formatDateTime(delivery.sentAt || delivery.lastAttemptAt)} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
-                          if (delivery.status === "failed") return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
+                          if (delivery.status === "sent")
+                            return `Sent to ${delivery.recipient} on ${formatDateTime(
+                              delivery.sentAt || delivery.lastAttemptAt
+                            )} (${delivery.attempts} attempt${delivery.attempts === 1 ? "" : "s"}).`;
+                          if (delivery.status === "failed")
+                            return `Last send failed on ${formatDateTime(delivery.lastAttemptAt)}.`;
                           if (schedule) return `Scheduled for ${formatDateTime(schedule.dueAt)}.`;
                           return "No evaluator email has been sent or scheduled.";
                         })()}
-                      </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 9 }}>
-                        <input
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
+                        <TextField
+                          size="small"
                           type="datetime-local"
                           value={customEmailDate}
-                          min={toDateTimeLocalValue(new Date())}
+                          slotProps={{ htmlInput: { min: toDateTimeLocalValue(new Date()) } }}
                           onChange={(event) => setCustomEmailDate(event.target.value)}
-                          style={{ padding: "7px 9px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 11, background: "#fff" }}
                         />
-                        <button
-                          onClick={() => void handleSaveCustomEmailDate()}
+                        <Button
+                          variant="outlined"
+                          size="small"
                           disabled={scheduleSaving || !customEmailDate}
-                          style={{
-                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
-                            cursor: scheduleSaving || !customEmailDate ? "not-allowed" : "pointer",
-                            opacity: scheduleSaving || !customEmailDate ? 0.55 : 1,
-                          }}
+                          onClick={() => void handleSaveCustomEmailDate()}
                         >
                           {scheduleSaving ? "Saving..." : "Set custom date"}
-                        </button>
-                        <button
-                          onClick={() => void handleForceResend(selectedItem)}
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
                           disabled={resendingItemKey === getPendingItemKey(selectedItem)}
-                          style={{
-                            padding: "7px 11px", borderRadius: 7, border: "none",
-                            background: C.purple, color: "#fff", fontSize: 11, fontWeight: 700,
-                            cursor: resendingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
-                            opacity: resendingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
-                          }}
+                          onClick={() => void handleForceResend(selectedItem)}
                         >
                           Send now / resend
-                        </button>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.textMuted, marginTop: 5 }}>
+                        </Button>
+                      </Stack>
+                      <Typography sx={{ fontSize: 10.5, color: editorial.softMuted, mt: 1 }}>
                         Custom dates must be now or later. Send now works even after a successful delivery.
-                      </div>
-                    </div>
+                      </Typography>
+                    </Box>
                   )}
-                </div>
+                </Box>
 
                 {needsBranchSelection && getItemStatus(selectedItem) === "pending" ? (
                   <>
-                    <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
-                        Submitted Form Details
-                      </div>
+                    <Box sx={{ p: 2, maxHeight: 400, overflow: "auto" }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.5 }}>Submitted form details</Typography>
                       <ReadOnlySubmissionPreview
                         surveyJson={surveyJson}
                         data={responseData}
@@ -2558,202 +2519,325 @@ export default function ApprovalDashboard() {
                         fallbackData={responseData ?? undefined}
                         compact
                       />
-                    </div>
-                    <div style={{ padding: 24, textAlign: "center", borderTop: `1px solid ${C.border}` }}>
-                      <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.purplePale, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>⑂</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.textPrimary, marginBottom: 4 }}>Select Branch</div>
-                      <div style={{ fontSize: 12, color: C.textSecond, marginBottom: 20, maxWidth: 360, margin: "0 auto 20px" }}>
-                        Review the submitted form details, then assign the branch that should handle this approval/evaluation flow.
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 260, margin: "0 auto" }}>
+                    </Box>
+                    <Box sx={{ p: 3, textAlign: "center", borderTop: editorialHairline }}>
+                      <Box
+                        sx={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: "50%",
+                          backgroundColor: editorial.blueWash,
+                          color: editorial.pmwBlueDark,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          mx: "auto",
+                          mb: 2,
+                        }}
+                      >
+                        <CallSplitIcon sx={{ fontSize: 26 }} />
+                      </Box>
+                      <Typography sx={{ fontSize: 17, fontWeight: 800 }}>Select branch</Typography>
+                      <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.5, mb: 2.5, maxWidth: 360, mx: "auto" }}>
+                        Review the submitted form details, then assign the branch that should handle this
+                        approval/evaluation flow.
+                      </Typography>
+                      <Stack spacing={1} sx={{ maxWidth: 280, mx: "auto" }}>
                         {availableBranches.map((branch) => (
-                          <button key={branch.name} onClick={() => handleSelectBranch(branch.name)} disabled={branchLoading}
-                            style={{ padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${C.purpleMid}`, background: C.cardBg, cursor: branchLoading ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, color: C.purple, fontFamily: "inherit", opacity: branchLoading ? 0.6 : 1 }}
-                            onMouseEnter={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purple; e.currentTarget.style.background = C.purplePale; }}}
-                            onMouseLeave={e => { if (!branchLoading) { e.currentTarget.style.borderColor = C.purpleMid; e.currentTarget.style.background = C.cardBg; }}}>
+                          <Button
+                            key={branch.name}
+                            variant="outlined"
+                            disabled={branchLoading}
+                            onClick={() => handleSelectBranch(branch.name)}
+                            sx={{ minHeight: 44 }}
+                          >
                             {branch.label || branch.name}
-                          </button>
+                          </Button>
                         ))}
-                      </div>
-                      {branchLoading && <div style={{ marginTop: 12, fontSize: 11, color: C.textMuted }}>Saving branch selection...</div>}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                {selectedItemLocked ? (
-                  <div style={{ padding: 32, textAlign: "center" }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.amberPale, color: C.amber, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
-                      <LockIcon style={{ fontSize: 24 }} />
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, marginBottom: 6 }}>Item Locked</div>
-                    <div style={{ fontSize: 12, color: C.textSecond, lineHeight: 1.6, maxWidth: 360, margin: "0 auto" }}>
-                      This layer is assigned to {selectedLayerAccess?.assignedEmail || "another approver"}. Only that assignee can review or act on it unless a superuser overrides access.
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                <div style={{ padding: 16, maxHeight: 400, overflow: "auto" }}>
-                  <ReadOnlySubmissionPreview
-                    surveyJson={surveyJson}
-                    data={responseData}
-                    accessToken={token}
-                    fallbackData={responseData ?? undefined}
-                    compact
-                  />
-                </div>
-
-                {/* Layer History: show completed layers for context */}
-                {Object.keys(completedLayers).length > 0 && (
-                  <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 8 }}>Layer History</div>
-                    {Object.entries(completedLayers)
-                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                      .map(([layerNum, layer]) => {
-                        const isRejected = layer.status?.toLowerCase().includes("reject");
-                        const isApproved = layer.status?.toLowerCase().includes("approv") || layer.status?.toLowerCase().includes("confirm");
-                        return (
-                          <div key={layerNum} style={{
-                            display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginBottom: 4,
-                            borderRadius: 8, fontSize: 12,
-                            background: isRejected ? C.redPale : isApproved ? C.greenPale : "transparent",
-                          }}>
-                            <span style={{
-                              width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                              background: isRejected ? C.red : isApproved ? C.green : C.textMuted,
-                            }} />
-                            <span style={{ fontWeight: 600, color: C.textPrimary, minWidth: 16 }}>
-                              L{layerNum}
-                            </span>
-                            <span style={{ color: isRejected ? C.red : isApproved ? "#065F46" : C.textMuted, fontWeight: 500, minWidth: 80 }}>
-                              {layer.status || "Pending"}
-                            </span>
-                            {layer.email && (
-                              <span style={{ color: C.textSecond }}>{layer.email}</span>
-                            )}
-                            {layer.rejection && (
-                              <span style={{ color: C.red, marginLeft: 4 }}>— {layer.rejection}</span>
-                            )}
-                            {layer.signedAt && (
-                              <span style={{ color: C.textMuted, marginLeft: "auto" }}>
-                                {formatDateTime(layer.signedAt)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-
-                {/* Evaluation Form: editable SurveyJS for evaluation layers */}
-                {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) && evalSurveyModel && (
-                  <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 12 }}>
-                      Evaluation Form
-                    </div>
-                    <div className="approval-survey-preview">
-                      <Survey model={evalSurveyModel} />
-                    </div>
-                  </div>
-                )}
-
-                {currentLayerConfig?.type === "approval" &&
-                  currentLayerConfig.confirmationType === "signature" &&
-                  getItemStatus(selectedItem) === "pending" &&
-                  !isCurrentLayerTerminal(selectedItem, completedLayers) && (
-                    <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, marginBottom: 10 }}>
-                        Approval signature
-                      </div>
-                      <SignatureCapture value={approvalSignature} onChange={setApprovalSignature} disabled={actionLoading} />
-                    </div>
-                  )}
-
-                <div style={{ padding: 16, borderTop: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
-                  {currentLayerType === "evaluation" && getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
-                    <button onClick={handleEvaluationSubmit} disabled={actionLoading || (!!evalSurveyModel && !evalValid)}
-                      style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
-                        background: (!evalSurveyModel || evalValid) ? C.purple : C.border, color: "#fff", fontWeight: 600,
-                        cursor: (actionLoading || (!!evalSurveyModel && !evalValid)) ? "not-allowed" : "pointer", opacity: (actionLoading || (!!evalSurveyModel && !evalValid)) ? 0.6 : 1 }}>
-                      {actionLoading ? "Submitting..." : evalSurveyModel && !evalValid ? "Fill required fields" : <><DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> Submit Evaluation</>}
-                    </button>
-                  ) : getItemStatus(selectedItem) === "pending" && !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
-                    <>
-                      <button onClick={handleApprove} disabled={actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature)}
-                        style={{ flex: 1, padding: "12px 16px", borderRadius: 8, border: "none",
-                          background: C.green, color: "#fff", fontWeight: 600,
-                          cursor: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? "not-allowed" : "pointer",
-                          opacity: actionLoading || (currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature) ? 0.6 : 1 }}>
-                        {currentLayerConfig?.type === "approval" && currentLayerConfig.confirmationType === "signature" && !approvalSignature ? "Signature required" : "✓ Approve"}
-                      </button>
-                      <button onClick={() => setShowRejectDialog(true)} disabled={actionLoading}
-                        style={{ flex: 1, padding: "12px 16px", borderRadius: 8,
-                          border: `1px solid ${C.red}`, background: "transparent", color: C.red, fontWeight: 600,
-                          cursor: actionLoading ? "not-allowed" : "pointer", opacity: actionLoading ? 0.6 : 1 }}>
-                        <CloseIcon style={{ fontSize: 14, marginRight: 4 }} /> Reject
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap", color: C.textMuted, fontSize: 13 }}>
-                      <span>
-                        {getItemDisplayStatus(selectedItem)} — {selectedItem.PdfUrl ? (
-                          <a href={selectedItem.PdfUrl.startsWith("http") ? selectedItem.PdfUrl : `${new URL(SP_SITE_URL).origin}${selectedItem.PdfUrl}`}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{ color: C.purple, fontWeight: 600 }}>View PDF</a>
-                        ) : "No PDF available"}
-                      </span>
-                      {(isAdmin || isSuperuser) && (
-                        <button
-                          onClick={() => void handleRegeneratePdf(selectedItem)}
-                          disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
-                          style={{
-                            padding: "7px 11px", borderRadius: 7, border: `1px solid ${C.purpleMid}`,
-                            background: "#fff", color: C.purple, fontSize: 11, fontWeight: 700,
-                            cursor: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "not-allowed" : "pointer",
-                            opacity: pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? 0.55 : 1,
-                          }}
-                        >
-                          {pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "Rebuilding..." : "Rebuild PDF"}
-                        </button>
+                      </Stack>
+                      {branchLoading && (
+                        <Typography sx={{ mt: 1.5, fontSize: 11.5, color: editorial.muted }}>
+                          Saving branch selection...
+                        </Typography>
                       )}
-                    </div>
-                  )}
-                </div>
+                    </Box>
                   </>
-                )}
+                ) : selectedItemLocked ? (
+                  <Box sx={{ p: 4, textAlign: "center" }}>
+                    <Box
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: "50%",
+                        backgroundColor: editorial.yellowSoft,
+                        color: editorial.warning,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        mx: "auto",
+                        mb: 1.75,
+                      }}
+                    >
+                      <LockIcon sx={{ fontSize: 24 }} />
+                    </Box>
+                    <Typography sx={{ fontSize: 15, fontWeight: 800 }}>Item locked</Typography>
+                    <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.75, lineHeight: 1.6, maxWidth: 360, mx: "auto" }}>
+                      This layer is assigned to {selectedLayerAccess?.assignedEmail || "another approver"}. Only that
+                      assignee can review or act on it unless a superuser overrides access.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <>
+                    <Box sx={{ p: 2, maxHeight: 400, overflow: "auto" }}>
+                      <ReadOnlySubmissionPreview
+                        surveyJson={surveyJson}
+                        data={responseData}
+                        accessToken={token}
+                        fallbackData={responseData ?? undefined}
+                        compact
+                      />
+                    </Box>
+
+                    {/* Layer history: completed layers, for context on the decision */}
+                    {Object.keys(completedLayers).length > 0 && (
+                      <Box sx={{ px: 2, pb: 2, pt: 2, borderTop: editorialHairline }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1 }}>Layer history</Typography>
+                        <Stack spacing={0.5}>
+                          {Object.entries(completedLayers)
+                            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                            .map(([layerNum, layer]) => {
+                              const isRejected = layer.status?.toLowerCase().includes("reject");
+                              const isApproved =
+                                layer.status?.toLowerCase().includes("approv") ||
+                                layer.status?.toLowerCase().includes("confirm");
+                              const dot = isRejected ? editorial.error : isApproved ? editorial.success : editorial.softMuted;
+                              return (
+                                <Stack
+                                  key={layerNum}
+                                  direction="row"
+                                  spacing={1}
+                                  sx={{
+                                    alignItems: "center",
+                                    px: 1.25,
+                                    py: 0.75,
+                                    borderRadius: "8px",
+                                    fontSize: 12,
+                                    flexWrap: "wrap",
+                                    backgroundColor: isRejected
+                                      ? "rgba(198, 40, 40, 0.08)"
+                                      : isApproved
+                                        ? "rgba(16, 124, 16, 0.08)"
+                                        : "transparent",
+                                  }}
+                                >
+                                  <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: dot, flexShrink: 0 }} />
+                                  <Typography sx={{ fontSize: 12, fontWeight: 800, minWidth: 18 }}>L{layerNum}</Typography>
+                                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: dot, minWidth: 80 }}>
+                                    {layer.status || "Pending"}
+                                  </Typography>
+                                  {layer.email && (
+                                    <Typography sx={{ fontSize: 12, color: editorial.muted }}>{layer.email}</Typography>
+                                  )}
+                                  {layer.rejection && (
+                                    <Typography sx={{ fontSize: 12, color: editorial.error }}>— {layer.rejection}</Typography>
+                                  )}
+                                  {layer.signedAt && (
+                                    <Typography sx={{ fontSize: 11.5, color: editorial.softMuted, ml: "auto" }}>
+                                      {formatDateTime(layer.signedAt)}
+                                    </Typography>
+                                  )}
+                                </Stack>
+                              );
+                            })}
+                        </Stack>
+                      </Box>
+                    )}
+
+                    {/* Evaluation form: editable SurveyJS for evaluation layers */}
+                    {currentLayerType === "evaluation" &&
+                      getItemStatus(selectedItem) === "pending" &&
+                      !isCurrentLayerTerminal(selectedItem, completedLayers) &&
+                      evalSurveyModel && (
+                        <Box sx={{ px: 2, pb: 2, pt: 2, borderTop: editorialHairline }}>
+                          <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.5 }}>Evaluation form</Typography>
+                          <div className="approval-survey-preview">
+                            <Survey model={evalSurveyModel} />
+                          </div>
+                        </Box>
+                      )}
+
+                    {currentLayerConfig?.type === "approval" &&
+                      currentLayerConfig.confirmationType === "signature" &&
+                      getItemStatus(selectedItem) === "pending" &&
+                      !isCurrentLayerTerminal(selectedItem, completedLayers) && (
+                        <Box sx={{ px: 2, pb: 2, pt: 2, borderTop: editorialHairline }}>
+                          <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.25 }}>Approval signature</Typography>
+                          <SignatureCapture value={approvalSignature} onChange={setApprovalSignature} disabled={actionLoading} />
+                        </Box>
+                      )}
+
+                    <Divider />
+
+                    <Stack direction="row" spacing={1.5} sx={{ p: 2, flexWrap: "wrap", rowGap: 1.5 }}>
+                      {currentLayerType === "evaluation" &&
+                      getItemStatus(selectedItem) === "pending" &&
+                      !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
+                        <Button
+                          variant="contained"
+                          fullWidth
+                          startIcon={<DescriptionIcon />}
+                          onClick={handleEvaluationSubmit}
+                          disabled={actionLoading || (!!evalSurveyModel && !evalValid)}
+                          sx={{ minHeight: 44 }}
+                        >
+                          {actionLoading
+                            ? "Submitting..."
+                            : evalSurveyModel && !evalValid
+                              ? "Fill required fields"
+                              : "Submit evaluation"}
+                        </Button>
+                      ) : getItemStatus(selectedItem) === "pending" &&
+                        !isCurrentLayerTerminal(selectedItem, completedLayers) ? (
+                        <>
+                          <Button
+                            variant="contained"
+                            color="success"
+                            startIcon={<CheckIcon />}
+                            onClick={handleApprove}
+                            disabled={
+                              actionLoading ||
+                              (currentLayerConfig?.type === "approval" &&
+                                currentLayerConfig.confirmationType === "signature" &&
+                                !approvalSignature)
+                            }
+                            sx={{ flex: 1, minHeight: 44 }}
+                          >
+                            {currentLayerConfig?.type === "approval" &&
+                            currentLayerConfig.confirmationType === "signature" &&
+                            !approvalSignature
+                              ? "Signature required"
+                              : "Approve"}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            startIcon={<CloseIcon />}
+                            onClick={() => setShowRejectDialog(true)}
+                            disabled={actionLoading}
+                            sx={{ flex: 1, minHeight: 44 }}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      ) : (
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          sx={{ flex: 1, alignItems: "center", justifyContent: "center", flexWrap: "wrap", rowGap: 1 }}
+                        >
+                          <Typography sx={{ fontSize: 13, color: editorial.muted }}>
+                            {getItemDisplayStatus(selectedItem)} —{" "}
+                            {selectedItem.PdfUrl ? (
+                              <Link
+                                href={absolutePdfUrl(selectedItem.PdfUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{ fontWeight: 700 }}
+                              >
+                                View PDF
+                              </Link>
+                            ) : (
+                              "No PDF available"
+                            )}
+                          </Typography>
+                          {(isAdmin || isSuperuser) && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => void handleRegeneratePdf(selectedItem)}
+                              disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
+                            >
+                              {pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "Rebuilding..." : "Rebuild PDF"}
+                            </Button>
+                          )}
+                        </Stack>
+                      )}
+                    </Stack>
                   </>
                 )}
               </>
             )}
-          </div>
-        </div>
-      </div>
+          </Box>
+        </Box>
+      </WorkspacePage>
 
-      {/* ── Success Animation Overlay ── */}
+      {/* Action confirmation — a full-page pause so the result is not missed. */}
       {actionSuccess && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.92)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ width: 80, height: 80, borderRadius: "50%", background: actionSuccess.type === "rejected" ? C.red : C.green, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <span style={{ fontSize: 36, color: "#fff", fontWeight: 700, display: 'inline-flex', alignItems: 'center' }}>
-              {actionSuccess.type === "rejected" ? <CloseIcon style={{ fontSize: 36 }} /> : <CheckIcon style={{ fontSize: 36 }} />}
-            </span>
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: actionSuccess.type === "rejected" ? C.red : C.green }}>{actionSuccessTitle}</div>
-            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontWeight: 500 }}>{actionSuccess.message}</div>
-            {actionSuccess.pdfUrl && (
-              <a href={actionSuccess.pdfUrl.startsWith("http") ? actionSuccess.pdfUrl : `${new URL(SP_SITE_URL).origin}${actionSuccess.pdfUrl}`}
-                target="_blank" rel="noopener noreferrer" style={{ display: "inline-block", marginTop: 16, padding: "8px 20px", borderRadius: 8, background: C.purple, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-                <DescriptionIcon style={{ fontSize: 14, marginRight: 4 }} /> View PDF
-              </a>
-            )}
-            <div style={{ marginTop: 12 }}>
-              <button onClick={() => { setActionSuccess(null); setSelectedItem(null); }}
-                style={{ padding: "8px 16px", borderRadius: 6, border: `1px solid ${C.border}`, background: "#fff", color: C.textSecond, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                Back to Approvals
-              </button>
-            </div>
-          </div>
-        </div>
+        <Box
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2000,
+            backgroundColor: "rgba(247, 250, 253, 0.94)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            p: 3,
+          }}
+        >
+          <Box sx={{ textAlign: "center", maxWidth: 420 }}>
+            <Box
+              sx={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                mx: "auto",
+                mb: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: editorial.white,
+                backgroundColor: actionSuccess.type === "rejected" ? editorial.error : editorial.success,
+              }}
+            >
+              {actionSuccess.type === "rejected" ? <CloseIcon sx={{ fontSize: 36 }} /> : <CheckIcon sx={{ fontSize: 36 }} />}
+            </Box>
+            <Typography
+              sx={{
+                fontSize: 21,
+                fontWeight: 800,
+                color: actionSuccess.type === "rejected" ? editorial.error : editorial.success,
+              }}
+            >
+              {actionSuccessTitle}
+            </Typography>
+            <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 1 }}>{actionSuccess.message}</Typography>
+            <Stack spacing={1.5} sx={{ mt: 3, alignItems: "center" }}>
+              {actionSuccess.pdfUrl && (
+                <Button
+                  component="a"
+                  href={absolutePdfUrl(actionSuccess.pdfUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="contained"
+                  startIcon={<DescriptionIcon />}
+                >
+                  View PDF
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setActionSuccess(null);
+                  setSelectedItem(null);
+                }}
+              >
+                Back to submissions
+              </Button>
+            </Stack>
+          </Box>
+        </Box>
       )}
-    </div>
+    </>
   );
 }

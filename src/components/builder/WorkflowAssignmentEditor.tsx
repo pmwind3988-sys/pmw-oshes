@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type { LayerConfigItem } from "../../types";
 import { getWorkflowAssignment } from "../../utils/workflowAssignmentData";
-import { C } from "./constants";
+import { editorial, editorialHairline } from "../../theme/editorial";
 
 interface LayerRuntimeState {
   status: string;
@@ -35,26 +47,6 @@ const TERMINAL_STATUSES = new Set([
   "cancelled",
   "skipped",
 ]);
-
-const fieldStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "8px 10px",
-  border: `1px solid ${C.border}`,
-  borderRadius: 7,
-  background: C.white,
-  color: C.textPrimary,
-  font: "inherit",
-  fontSize: 12,
-} as const;
-
-const labelStyle = {
-  display: "block",
-  marginBottom: 4,
-  color: C.textSecond,
-  fontSize: 11,
-  fontWeight: 700,
-} as const;
 
 function isLayerEditable(
   layer: LayerConfigItem,
@@ -111,156 +103,146 @@ export default function WorkflowAssignmentEditor({
   const selectedLayer = layers.find((layer) => layer.layerNumber === selectedLayerNumber);
   const assignment = getWorkflowAssignment(rawAssignments, selectedLayerNumber);
 
+  const canSave = !saving && Boolean(email.trim()) && Boolean(reason.trim());
+
   return (
-    <details style={{
-      marginTop: 12,
-      border: `1px solid ${C.border}`,
-      borderRadius: 10,
-      background: C.white,
-    }}>
-      <summary style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 9,
-        padding: "11px 12px",
-        cursor: "pointer",
-        color: C.textPrimary,
-        fontSize: 12,
-        fontWeight: 750,
-      }}>
-        <ManageAccountsIcon style={{ color: C.purpleAccent, fontSize: 19 }} />
-        Reconfigure this submission
-      </summary>
+    <Accordion
+      disableGutters
+      elevation={0}
+      sx={{
+        mt: 1.5,
+        border: editorialHairline,
+        borderRadius: "12px",
+        backgroundColor: editorial.panel,
+        "&::before": { display: "none" },
+        "& .MuiAccordionSummary-root": { minHeight: 44 },
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 1.5 }}>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+          <ManageAccountsIcon sx={{ fontSize: 19, color: editorial.pmwPurple }} />
+          <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Reconfigure this submission</Typography>
+        </Stack>
+      </AccordionSummary>
 
-      <div style={{ padding: "2px 12px 12px", borderTop: `1px solid ${C.borderLight}` }}>
-        <p style={{ margin: "10px 0", color: C.textSecond, fontSize: 11, lineHeight: 1.55 }}>
+      <AccordionDetails sx={{ px: 1.5, pb: 1.5, pt: 0, borderTop: editorialHairline }}>
+        <Typography sx={{ fontSize: 11.5, color: editorial.muted, lineHeight: 1.55, my: 1.25 }}>
           Changes apply only to this submission. Completed layers cannot be edited.
-        </p>
+        </Typography>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 10 }}>
-          <label>
-            <span style={labelStyle}>Workflow layer</span>
-            <select
-              value={selectedLayerNumber}
-              onChange={(event) => setSelectedLayerNumber(Number(event.target.value))}
-              style={fieldStyle}
-            >
-              {editableLayers.map((layer) => (
-                <option key={layer.layerNumber} value={layer.layerNumber}>
-                  Layer {layer.layerNumber}: {layer.title || (layer.type === "evaluation" ? "Evaluation" : "Approval")}
-                </option>
-              ))}
-            </select>
-          </label>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 1.25 }}>
+          <TextField
+            select
+            size="small"
+            label="Workflow layer"
+            value={selectedLayerNumber}
+            onChange={(event) => setSelectedLayerNumber(Number(event.target.value))}
+          >
+            {editableLayers.map((layer) => (
+              <MenuItem key={layer.layerNumber} value={layer.layerNumber}>
+                Layer {layer.layerNumber}: {layer.title || (layer.type === "evaluation" ? "Evaluation" : "Approval")}
+              </MenuItem>
+            ))}
+          </TextField>
 
-          <label>
-            <span style={labelStyle}>Approver or evaluator email *</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@company.com"
-              style={fieldStyle}
-            />
-          </label>
-
-          <label>
-            <span style={labelStyle}>Display name</span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Person responsible"
-              style={fieldStyle}
-            />
-          </label>
-
-          <label>
-            <span style={labelStyle}>Position</span>
-            <input
-              value={position}
-              onChange={(event) => setPosition(event.target.value)}
-              placeholder="e.g. OSHES Manager"
-              style={fieldStyle}
-            />
-          </label>
-
-          <label>
-            <span style={labelStyle}>Workflow role</span>
-            <input
-              value={workflowRole}
-              onChange={(event) => setWorkflowRole(event.target.value)}
-              placeholder={selectedLayer?.type === "evaluation" ? "Evaluator" : "Approver"}
-              style={fieldStyle}
-            />
-          </label>
-
-          <label>
-            <span style={labelStyle}>Reason for change *</span>
-            <input
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Why this assignment changed"
-              style={fieldStyle}
-            />
-          </label>
-        </div>
-
-        <label style={{ display: "block", marginTop: 10 }}>
-          <span style={labelStyle}>Assignment notes</span>
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            rows={2}
-            placeholder="Optional item-specific context"
-            style={{ ...fieldStyle, resize: "vertical" }}
+          <TextField
+            size="small"
+            required
+            type="email"
+            label="Approver or evaluator email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="name@company.com"
           />
-        </label>
+
+          <TextField
+            size="small"
+            label="Display name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder="Person responsible"
+          />
+
+          <TextField
+            size="small"
+            label="Position"
+            value={position}
+            onChange={(event) => setPosition(event.target.value)}
+            placeholder="e.g. OSHES Manager"
+          />
+
+          <TextField
+            size="small"
+            label="Workflow role"
+            value={workflowRole}
+            onChange={(event) => setWorkflowRole(event.target.value)}
+            placeholder={selectedLayer?.type === "evaluation" ? "Evaluator" : "Approver"}
+          />
+
+          <TextField
+            size="small"
+            required
+            label="Reason for change"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Why this assignment changed"
+          />
+        </Box>
+
+        <TextField
+          size="small"
+          fullWidth
+          multiline
+          rows={2}
+          label="Assignment notes"
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          placeholder="Optional item-specific context"
+          sx={{ mt: 1.25 }}
+        />
 
         {assignment ? (
-          <div style={{
-            marginTop: 9,
-            padding: "8px 10px",
-            borderRadius: 7,
-            background: C.offWhite,
-            color: C.textSecond,
-            fontSize: 10,
-            lineHeight: 1.5,
-          }}>
-            Last changed by {assignment.updatedBy} on {new Date(assignment.updatedAt).toLocaleString("en-MY")}.
-            {assignment.history.length > 0 ? ` ${assignment.history.length} earlier assignment${assignment.history.length === 1 ? "" : "s"} retained.` : ""}
-          </div>
-        ) : null}
-
-        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 11 }}>
-          <button
-            type="button"
-            disabled={saving || !email.trim() || !reason.trim()}
-            onClick={() => void onSave({
-              layer: selectedLayerNumber,
-              email,
-              displayName,
-              position,
-              workflowRole,
-              notes,
-              reason,
-            })}
-            style={{
-              minHeight: 36,
-              padding: "8px 13px",
-              border: "none",
-              borderRadius: 7,
-              background: C.purple,
-              color: C.white,
-              cursor: saving || !email.trim() || !reason.trim() ? "not-allowed" : "pointer",
-              opacity: saving || !email.trim() || !reason.trim() ? 0.55 : 1,
-              fontSize: 11,
-              fontWeight: 750,
+          <Box
+            sx={{
+              mt: 1.25,
+              px: 1.25,
+              py: 1,
+              borderRadius: "8px",
+              backgroundColor: editorial.paperSoft,
+              border: editorialHairline,
             }}
           >
+            <Typography sx={{ fontSize: 10.5, color: editorial.muted, lineHeight: 1.5 }}>
+              Last changed by {assignment.updatedBy} on {new Date(assignment.updatedAt).toLocaleString("en-MY")}.
+              {assignment.history.length > 0
+                ? ` ${assignment.history.length} earlier assignment${assignment.history.length === 1 ? "" : "s"} retained.`
+                : ""}
+            </Typography>
+          </Box>
+        ) : null}
+
+        <Stack direction="row" sx={{ justifyContent: "flex-end", mt: 1.5 }}>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={!canSave}
+            onClick={() =>
+              void onSave({
+                layer: selectedLayerNumber,
+                email,
+                displayName,
+                position,
+                workflowRole,
+                notes,
+                reason,
+              })
+            }
+            sx={{ minHeight: 36 }}
+          >
             {saving ? "Saving assignment..." : "Save assignment"}
-          </button>
-        </div>
-      </div>
-    </details>
+          </Button>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
   );
 }

@@ -12,8 +12,10 @@ import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
 import DOMPurify from "dompurify";
+import { Alert, Box, Button, Link, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";
 import BlockIcon from "@mui/icons-material/Block";
+import DownloadIcon from "@mui/icons-material/Download";
 import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
@@ -21,29 +23,18 @@ import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
 import { getSelectedCompany } from "../../utils/companySelection";
+import { editorial, editorialHairline } from "../../theme/editorial";
+import {
+  WorkspaceHeader,
+  WorkspaceNotice,
+  WorkspacePage,
+  WorkspacePanelHeader,
+  WorkspaceTag,
+} from "./WorkspaceLayout";
+import { workspacePanelSx, workspaceSurfaceSx } from "./workspaceStyles";
+import type { WorkspaceTone } from "./WorkspaceLayout";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-
-// Theme
-const C = {
-  purple: "#0078D4",
-  purpleLight: "#106EBE",
-  purplePale: "#E6F2FB",
-  purpleMid: "#B4D5F0",
-  bg: "#F9FAFB",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  textPrimary: "#111827",
-  textSecond: "#6B7280",
-  textMuted: "#9CA3AF",
-  green: "#059669",
-  greenPale: "#D1FAE5",
-  greenBorder: "#6EE7B7",
-  red: "#DC2626",
-  redPale: "#FEE2E2",
-  amber: "#D97706",
-  amberPale: "#FEF3C7",
-};
 
 interface MatrixTableEntry {
   columns: MatrixColumnDef[];
@@ -308,301 +299,258 @@ export default function ResponseViewer() {
 
   const selectedCompany = getSelectedCompany(selectedResponseData, surveyJson);
 
-  // Status badge color
-  const getStatusColor = (status: string) => {
+  /** Status tone, shared by the row tag and the detail header tag. */
+  const getStatusTone = (status: string): WorkspaceTone => {
     const s = status.toLowerCase();
-    if (s.includes("approved") || s.includes("submitted")) return { bg: C.greenPale, color: C.green };
-    if (s.includes("pending")) return { bg: C.amberPale, color: C.amber };
-    if (s.includes("rejected")) return { bg: C.redPale, color: C.red };
-    return { bg: C.purplePale, color: C.purple };
+    if (s.includes("approved") || s.includes("submitted")) return "success";
+    if (s.includes("pending")) return "warning";
+    if (s.includes("rejected")) return "error";
+    return "info";
   };
 
   if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: C.textMuted }}>Loading submissions...</div>
-      </div>
-    );
+    return <WorkspaceNotice title="Loading submissions..." message="Reading responses for this form from SharePoint." />;
   }
 
   if (!isAuthenticated) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><LockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.textPrimary, marginBottom: 8 }}>Sign in required</div>
-          <div style={{ color: C.textSecond }}>You must be signed in to view submissions.</div>
-        </div>
-      </div>
+      <WorkspaceNotice
+        icon={<LockIcon sx={{ fontSize: 28 }} />}
+        title="Sign in required"
+        message="You must be signed in with your Microsoft 365 account to view submissions."
+      />
     );
   }
 
   if (adminChecked && !isAdmin) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ background: C.cardBg, borderRadius: 16, padding: 40, textAlign: "center", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 32, marginBottom: 16, display: 'flex', justifyContent: 'center' }}><BlockIcon style={{ fontSize: 40 }} /></div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: C.red, marginBottom: 8 }}>Access Denied</div>
-          <div style={{ color: C.textSecond }}>You need OSHES Forms Owner permissions to view this page.</div>
-          <div style={{ color: C.textMuted, marginTop: 8, fontSize: 13 }}>Please return to the dashboard.</div>
-        </div>
-      </div>
+      <WorkspaceNotice
+        tone="error"
+        icon={<BlockIcon sx={{ fontSize: 28 }} />}
+        title="Access denied"
+        message="This page is limited to the OSHES admin group. Ask an administrator to add you if you need to read responses."
+      />
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-        <header style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: C.textPrimary, margin: 0 }}>
-              {formTitle} Responses
-            </h1>
-            <p style={{ color: C.textSecond, marginTop: 4 }}>
-              {submissions.length} submission{submissions.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <select
+    <WorkspacePage>
+      <WorkspaceHeader
+        eyebrow="OSHES admin workspace"
+        title={`${formTitle} responses`}
+        subtitle={`${submissions.length} submission${submissions.length !== 1 ? "s" : ""} recorded for this form.`}
+        actions={
+          <>
+            <TextField
+              select
+              size="small"
+              label="Status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                border: `1px solid ${C.border}`,
-                background: C.cardBg,
-                color: C.textPrimary,
-                fontSize: 13,
-              }}
+              sx={{ minWidth: 150 }}
             >
-              <option value="all">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-            <button
-              onClick={handleExportCSV}
-              style={{
-                padding: "8px 16px",
-                borderRadius: 8,
-                border: `1px solid ${C.border}`,
-                background: C.cardBg,
-                color: C.textPrimary,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              📥 Export CSV
-            </button>
-          </div>
-        </header>
+              <MenuItem value="all">All status</MenuItem>
+              <MenuItem value="Pending">Pending</MenuItem>
+              <MenuItem value="Approved">Approved</MenuItem>
+              <MenuItem value="Rejected">Rejected</MenuItem>
+            </TextField>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCSV} sx={{ minHeight: 40 }}>
+              Export CSV
+            </Button>
+          </>
+        }
+      />
 
-        {error && (
-          <div style={{ background: C.redPale, border: "1px solid #FCA5A5", borderRadius: 8, padding: 12, color: C.red, marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-          {/* Submissions List */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 600, color: C.textPrimary }}>Submissions</span>
-              <span style={{ fontSize: 12, color: C.textMuted }}>{filteredSubmissions.length} items</span>
-            </div>
-            <div style={{ maxHeight: 600, overflow: "auto" }}>
-              {filteredSubmissions.length === 0 ? (
-                <div style={{ padding: 24, textAlign: "center", color: C.textMuted }}>No submissions found</div>
-              ) : (
-                filteredSubmissions.map((item) => {
-                  const statusStyle = getStatusColor(item.Status);
-                  return (
-                    <div
-                      key={item.Id}
-                      onClick={() => loadSubmissionDetails(item)}
-                      style={{
-                        padding: 16,
-                        borderBottom: `1px solid ${C.border}`,
-                        cursor: "pointer",
-                        background: selectedSubmission?.Id === item.Id ? C.purplePale : "transparent",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, color: C.textMuted }}>#{item.Id}</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 600,
-                            padding: "2px 8px",
-                            borderRadius: 12,
-                            background: statusStyle.bg,
-                            color: statusStyle.color,
-                          }}
-                        >
-                          {item.Status}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 13, color: C.textSecond }}>
-                        By {item.SubmittedBy}
-                      </div>
-                      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
-                        {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleString() : "N/A"}
-                      </div>
-                      {(item.CurrentLayer ?? item.CurrentApprovalLayer) > 0 && (
-                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-                          Layer {item.CurrentLayer || item.CurrentApprovalLayer}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Detail Panel */}
-          <div style={{ background: C.cardBg, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-            {!selectedSubmission ? (
-              <div style={{ padding: 48, textAlign: "center", color: C.textMuted }}>
-                Select a submission to view details
-              </div>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1fr)" },
+          gap: 3,
+          alignItems: "start",
+        }}
+      >
+        {/* Submissions list */}
+        <Box sx={workspacePanelSx}>
+          <WorkspacePanelHeader label="Submissions" hint={`${filteredSubmissions.length} items`} />
+          <Box sx={{ maxHeight: 600, overflow: "auto" }}>
+            {filteredSubmissions.length === 0 ? (
+              <Typography sx={{ p: 3, textAlign: "center", fontSize: 13, color: editorial.muted }}>
+                No submissions found
+              </Typography>
             ) : (
-              <>
-                <div style={{ padding: 16, borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 600, color: C.textPrimary }}>Submission #{selectedSubmission.Id}</div>
-                      <div style={{ fontSize: 13, color: C.textSecond, marginTop: 4 }}>
-                        {selectedSubmission.SubmittedAt ? new Date(selectedSubmission.SubmittedAt).toLocaleString() : "N/A"}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {selectedSubmission.PdfUrl && (
-                        <a
-                          href={selectedSubmission.PdfUrl.startsWith("http") ? selectedSubmission.PdfUrl : `${SP_SITE_URL}${selectedSubmission.PdfUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "4px 12px",
-                            borderRadius: 12,
-                            background: C.purplePale,
-                            color: C.purple,
-                            textDecoration: "none",
-                          }}
-                        >
-                          View PDF
-                        </a>
-                      )}
-                      <div
-                        style={{
+              filteredSubmissions.map((item) => {
+                const selected = selectedSubmission?.Id === item.Id;
+                const layer = item.CurrentLayer || item.CurrentApprovalLayer;
+                return (
+                  <Box
+                    key={item.Id}
+                    onClick={() => loadSubmissionDetails(item)}
+                    sx={{
+                      p: 2,
+                      borderBottom: editorialHairline,
+                      cursor: "pointer",
+                      borderLeft: `3px solid ${selected ? editorial.pmwBlue : "transparent"}`,
+                      backgroundColor: selected ? editorial.blueWash : "transparent",
+                      transition: "background-color 0.15s ease",
+                      "&:hover": { backgroundColor: selected ? editorial.blueWash : editorial.blueSoft },
+                    }}
+                  >
+                    <Stack direction="row" spacing={1.5} sx={{ justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
+                      <Typography sx={{ fontSize: 12, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
+                        #{item.Id}
+                      </Typography>
+                      <WorkspaceTag tone={getStatusTone(item.Status)}>{item.Status}</WorkspaceTag>
+                    </Stack>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700 }}>By {item.SubmittedBy}</Typography>
+                    <Typography sx={{ fontSize: 11.5, color: editorial.muted, mt: 0.25 }}>
+                      {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleString() : "N/A"}
+                      {(layer ?? 0) > 0 && ` · Layer ${layer}`}
+                    </Typography>
+                  </Box>
+                );
+              })
+            )}
+          </Box>
+        </Box>
+
+        {/* Detail panel */}
+        <Box sx={workspacePanelSx}>
+          {!selectedSubmission ? (
+            <Typography sx={{ p: 6, textAlign: "center", fontSize: 13, color: editorial.muted }}>
+              Select a submission to view details
+            </Typography>
+          ) : (
+            <>
+              <Box sx={{ p: 2, borderBottom: editorialHairline }}>
+                <Stack direction="row" spacing={1.5} sx={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 16, fontWeight: 800 }}>Submission #{selectedSubmission.Id}</Typography>
+                    <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.25 }}>
+                      {selectedSubmission.SubmittedAt ? new Date(selectedSubmission.SubmittedAt).toLocaleString() : "N/A"}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    {selectedSubmission.PdfUrl && (
+                      <Link
+                        href={
+                          selectedSubmission.PdfUrl.startsWith("http")
+                            ? selectedSubmission.PdfUrl
+                            : `${SP_SITE_URL}${selectedSubmission.PdfUrl}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
                           fontSize: 11,
-                          fontWeight: 600,
-                          padding: "4px 12px",
-                          borderRadius: 12,
-                          ...getStatusColor(selectedSubmission.Status),
+                          fontWeight: 800,
+                          px: 1.25,
+                          py: 0.5,
+                          borderRadius: "999px",
+                          backgroundColor: editorial.blueWash,
+                          color: editorial.pmwBlueDark,
+                          textDecoration: "none",
                         }}
                       >
-                        {selectedSubmission.Status}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 12, color: C.textMuted }}>
-                    Submitted by: <strong>{selectedSubmission.SubmittedBy}</strong> • Version: {selectedSubmission.FormVersion}
-                    {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (
-                      <> • Layer: <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong></>
+                        View PDF
+                      </Link>
                     )}
-                  </div>
-                  {selectedCompany && (
-                    <div style={{ marginTop: 4, fontSize: 12, color: C.purple, fontWeight: 600 }}>
-                      Company: {selectedCompany}
-                    </div>
+                    <WorkspaceTag tone={getStatusTone(selectedSubmission.Status)}>{selectedSubmission.Status}</WorkspaceTag>
+                  </Stack>
+                </Stack>
+                <Typography sx={{ mt: 1, fontSize: 12, color: editorial.muted }}>
+                  Submitted by <strong>{selectedSubmission.SubmittedBy}</strong> · Version {selectedSubmission.FormVersion}
+                  {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (
+                    <>
+                      {" · Layer "}
+                      <strong>{selectedSubmission.CurrentLayer || selectedSubmission.CurrentApprovalLayer}</strong>
+                    </>
                   )}
-                </div>
+                </Typography>
+                {selectedCompany && (
+                  <Typography sx={{ mt: 0.5, fontSize: 12, fontWeight: 700, color: editorial.pmwBlueDark }}>
+                    Company: {selectedCompany}
+                  </Typography>
+                )}
+              </Box>
 
-                <div style={{ padding: 16, maxHeight: 500, overflow: "auto" }}>
-                  {previewSurvey ? (
-                    <div className="response-survey-preview">
-                      <Survey model={previewSurvey} />
-                    </div>
-                  ) : (
-                    <div style={{ color: C.textMuted }}>Loading form preview...</div>
-                  )}
-                </div>
-
-                {/* Matrix Tables — from child lists, fallback to _Html */}
-                {Object.keys(matrixTables).length > 0 && (
-                  <div style={{ padding: "0 16px 16px" }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: C.textSecond,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        marginBottom: 12,
-                      }}
-                    >
-                      Matrix Tables
-                    </div>
-                    {Object.entries(matrixTables).map(([fieldName, entry]) => (
-                      <div key={fieldName} style={{ marginBottom: 18 }}>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: C.purple,
-                            marginBottom: 4,
-                          }}
-                        >
-                          {entry.columns[0]?.title ? entry.columns[0].title : fieldName}
-                        </div>
-                        <div
-                          style={{
-                            overflow: "auto",
-                            border: `1px solid ${C.border}`,
-                            borderRadius: 8,
-                          }}
-                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
-                        />
-                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>
-                          {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
-                        </div>
-                      </div>
-                    ))}
+              <Box sx={{ p: 2, maxHeight: 500, overflow: "auto" }}>
+                {previewSurvey ? (
+                  <div className="response-survey-preview">
+                    <Survey model={previewSurvey} />
                   </div>
+                ) : (
+                  <Typography sx={{ fontSize: 13, color: editorial.muted }}>Loading form preview...</Typography>
                 )}
-                {matrixLoading && (
-                  <div style={{ padding: "0 16px 16px", color: C.textMuted, fontSize: 12 }}>Loading matrix data...</div>
-                )}
+              </Box>
 
-                {selectedSubmission.RawJSON && (
-                  <details style={{ padding: 16, borderTop: `1px solid ${C.border}`, background: C.bg }}>
-                    <summary style={{ cursor: "pointer", color: C.textSecond, fontSize: 13 }}>
-                      View Raw JSON
-                    </summary>
-                    <pre
-                      style={{
-                        marginTop: 12,
-                        padding: 12,
-                        background: C.cardBg,
-                        borderRadius: 8,
-                        fontSize: 11,
-                        overflow: "auto",
-                        maxHeight: 200,
-                      }}
-                    >
-                      {selectedSubmission.RawJSON}
-                    </pre>
-                  </details>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+              {/* Matrix tables — from child lists, fallback to _Html */}
+              {Object.keys(matrixTables).length > 0 && (
+                <Box sx={{ px: 2, pb: 2 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 11.5,
+                      fontWeight: 800,
+                      letterSpacing: "0.06em",
+                      color: editorial.muted,
+                      mb: 1.5,
+                    }}
+                  >
+                    MATRIX TABLES
+                  </Typography>
+                  {Object.entries(matrixTables).map(([fieldName, entry]) => (
+                    <Box key={fieldName} sx={{ mb: 2.25 }}>
+                      <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: editorial.pmwBlueDark, mb: 0.5 }}>
+                        {entry.columns[0]?.title ? entry.columns[0].title : fieldName}
+                      </Typography>
+                      <Box
+                        sx={{ ...workspaceSurfaceSx, overflow: "auto" }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
+                      />
+                      <Typography sx={{ fontSize: 10.5, color: editorial.softMuted, mt: 0.5 }}>
+                        {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              {matrixLoading && (
+                <Typography sx={{ px: 2, pb: 2, fontSize: 12, color: editorial.muted }}>Loading matrix data...</Typography>
+              )}
+
+              {selectedSubmission.RawJSON && (
+                <Box
+                  component="details"
+                  sx={{ p: 2, borderTop: editorialHairline, backgroundColor: editorial.paperSoft }}
+                >
+                  <Box component="summary" sx={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: editorial.muted }}>
+                    View raw JSON
+                  </Box>
+                  <Box
+                    component="pre"
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      backgroundColor: editorial.panel,
+                      border: editorialHairline,
+                      borderRadius: "8px",
+                      fontSize: 11,
+                      overflow: "auto",
+                      maxHeight: 200,
+                    }}
+                  >
+                    {selectedSubmission.RawJSON}
+                  </Box>
+                </Box>
+              )}
+            </>
+          )}
+        </Box>
+      </Box>
+    </WorkspacePage>
   );
 }

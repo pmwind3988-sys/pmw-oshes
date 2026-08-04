@@ -1,11 +1,13 @@
 import type {
   CatalogueEntry,
+  LayerConfigItem,
   PortalChainStep,
   PortalRecord,
   PortalStatus,
   SeverityTone,
   Submission,
 } from "../types";
+import { describeWorkflow } from "./formWorkflow";
 import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDirectory } from "./portalPeople";
 import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
@@ -67,12 +69,15 @@ export function buildReference(code: string, submission: Submission): string {
   return `${code}-${stamp}-${pad(Number(submission.id) || 0, 4)}`;
 }
 
-function resolveStatus(submission: Submission, overdue: boolean): PortalStatus {
+function resolveStatus(submission: Submission, overdue: boolean, hasWorkflow: boolean): PortalStatus {
   const raw = (submission.formStatus ?? "").toLowerCase();
   if (/return/.test(raw)) return "Returned";
   if (/cancel|withdraw/.test(raw)) return "Cancelled";
   if (/reject/.test(raw)) return "Rejected";
   if (/complete|approved|closed/.test(raw)) return "Approved";
+  // Nothing is approving a form that has no approval step. It is filed, and
+  // that is the whole of its lifecycle.
+  if (!hasWorkflow) return "Recorded";
   return overdue ? "Past SLA" : "In approval";
 }
 
@@ -94,12 +99,47 @@ function layerNote(submission: Submission, index: number): string {
 }
 
 /**
+ * The chain to render for one submission.
+ *
+ * Normally the form's configured layers. When a submission carries workflow
+ * columns its form no longer configures — a legacy filing, or a chain removed
+ * after the fact — the layers it was filed under are reconstructed, so its
+ * history is not silently dropped. When there is neither, there is no chain,
+ * and that is a real answer rather than a missing one.
+ */
+function resolveChainLayers(entry: CatalogueEntry, submission: Submission): LayerConfigItem[] {
+  if (entry.layers.length > 0) return entry.layers;
+
+  const inflight = submission.enhancedLayers ?? [];
+  const count = Math.max(inflight.length, submission.layers.length, submission.totalLayers, 0);
+  if (count <= 0) return [];
+
+  return Array.from({ length: count }, (_, index): LayerConfigItem => {
+    const step = inflight[index];
+    const email = step?.email ?? submission.layers[index]?.email ?? "";
+    const base = {
+      layerNumber: step?.layerNumber ?? index + 1,
+      authMode: "365" as const,
+      assignee: email
+        ? { type: "user" as const, value: email }
+        : { type: "field-reference" as const, value: `L${index + 1}_Email` },
+    };
+    return step?.type === "evaluation"
+      ? { ...base, type: "evaluation", surveyElements: [] }
+      : { ...base, type: "approval", confirmationType: "signature", allowRejectionReason: true };
+  });
+}
+
+/**
  * Project a SharePoint submission into the shape the role dashboards read.
  *
  * Age is measured on the **current layer only** — from the previous layer's
  * signature (or the submission time for layer 1) to now. Overdue is that age
  * against the layer's own SLA, so "overdue" is computable per form type
  * instead of one global constant.
+ *
+ * A form with no layers gets none of that. It is not on layer 1 of 1, it is not
+ * in approval, and it cannot be past an SLA it was never given.
  */
 export function toPortalRecord(
   submission: Submission,
@@ -109,27 +149,33 @@ export function toPortalRecord(
   now: Date = new Date(),
 ): PortalRecord {
   const data = submission.submissionData;
-  const layers = entry.layers;
-  const totalLayers = Math.max(layers.length, submission.totalLayers, 1);
-  const at = Math.min(Math.max((submission.currentLayer ?? 1) - 1, 0), Math.max(totalLayers - 1, 0));
+  const layers = resolveChainLayers(entry, submission);
+  const workflow = entry.layers.length > 0 ? entry.workflow : describeWorkflow(layers);
+  const hasWorkflow = workflow.hasWorkflow;
+  const totalLayers = layers.length;
+  const at = hasWorkflow
+    ? Math.min(Math.max((submission.currentLayer ?? 1) - 1, 0), totalLayers - 1)
+    : 0;
 
   const filedAt = parseDate(submission.submittedAt);
   const hoursSinceFiled = hoursBetween(filedAt, now);
   const layerStartedAt = at > 0 ? layerSignedAt(submission, at - 1) ?? filedAt : filedAt;
-  const hoursOnLayer = hoursBetween(layerStartedAt, now);
+  const hoursOnLayer = hasWorkflow ? hoursBetween(layerStartedAt, now) : 0;
 
   const currentLayerConfig = layers[at];
-  const slaDays = Number(currentLayerConfig?.slaDays) > 0
-    ? Number(currentLayerConfig?.slaDays)
-    : entry.slaDays;
+  const slaDays = !hasWorkflow
+    ? 0
+    : Number(currentLayerConfig?.slaDays) > 0
+      ? Number(currentLayerConfig?.slaDays)
+      : entry.slaDays;
 
   const statusPreview = (submission.formStatus ?? "").toLowerCase();
   const done = /complete|approved|closed|cancel|withdraw|reject/.test(statusPreview);
   const returned = /return/.test(statusPreview);
 
-  const hoursOverdue = hoursOnLayer - slaDays * 24;
-  const overdue = !done && !returned && hoursOverdue > 0;
-  const status = resolveStatus(submission, overdue);
+  const hoursOverdue = hasWorkflow ? hoursOnLayer - slaDays * 24 : 0;
+  const overdue = hasWorkflow && !done && !returned && hoursOverdue > 0;
+  const status = resolveStatus(submission, overdue, hasWorkflow);
 
   const chain: PortalChainStep[] = layers.map((layer, index) => {
     const override = assignmentOverrides[String(layer.layerNumber)] ?? "";
@@ -163,9 +209,10 @@ export function toPortalRecord(
     } satisfies PortalChainStep;
   });
 
-  const currentStep = chain[at];
+  const currentStep = hasWorkflow ? chain[at] : undefined;
   const severity = findField(data, SEVERITY_HINTS);
   const subject = findField(data, DESCRIPTION_HINTS) || submission.title;
+  const settled = done || returned;
 
   return {
     submission,
@@ -186,24 +233,32 @@ export function toPortalRecord(
     filedLabel: filedAt ? formatAgo(hoursSinceFiled) : "—",
     hoursSinceFiled,
     hoursOnLayer,
-    ageOnLayerLabel: formatHours(hoursOnLayer),
+    ageOnLayerLabel: hasWorkflow ? formatHours(hoursOnLayer) : "—",
     at,
     totalLayers,
+    hasWorkflow,
+    workflowKind: workflow.kind,
     chain,
-    currentRole: done || returned ? "" : currentStep?.roleLabel ?? "",
-    currentAssignee: done || returned ? "" : currentStep?.who ?? "",
-    currentAssigneeEmail: done || returned ? "" : currentStep?.email ?? "",
+    currentRole: settled ? "" : currentStep?.roleLabel ?? "",
+    currentAssignee: settled ? "" : currentStep?.who ?? "",
+    currentAssigneeEmail: settled ? "" : currentStep?.email ?? "",
     slaDays,
     overdue,
     hoursOverdue: Math.max(0, hoursOverdue),
-    slaNote: overdue
-      ? `${formatHours(hoursOverdue)} past a ${slaDays}-day SLA`
-      : `within a ${slaDays}-day SLA`,
+    slaNote: !hasWorkflow
+      ? "no approval step to wait on"
+      : overdue
+        ? `${formatHours(hoursOverdue)} past a ${slaDays}-day SLA`
+        : `within a ${slaDays}-day SLA`,
     status,
-    layerLabel: `Layer ${at + 1} of ${totalLayers}`,
+    layerLabel: hasWorkflow ? `Layer ${at + 1} of ${totalLayers}` : "No approval step",
     stage: done
       ? status === "Approved" ? "Complete" : "Withdrawn"
-      : returned ? "With the submitter" : `Layer ${at + 1} of ${totalLayers}`,
+      : returned
+        ? "With the submitter"
+        : hasWorkflow
+          ? `Layer ${at + 1} of ${totalLayers}`
+          : "Recorded",
     done,
     returned,
   } satisfies PortalRecord;
@@ -214,7 +269,7 @@ export function queueFor(records: PortalRecord[], userEmail: string): PortalReco
   const email = normalizeEmail(userEmail);
   if (!email) return [];
   return records
-    .filter((record) => !record.done && !record.returned && record.currentAssigneeEmail === email)
+    .filter((record) => record.hasWorkflow && !record.done && !record.returned && record.currentAssigneeEmail === email)
     .sort((a, b) => b.hoursOnLayer - a.hoursOnLayer);
 }
 

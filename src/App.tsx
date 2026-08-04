@@ -15,7 +15,9 @@ import {
   clearAuthTimeoutReloginAttempt,
   hasAuthTimeoutReloginAttempted,
   isAuthTimeoutReloginRequiredError,
+  isStaleAuthError,
   markAuthTimeoutReloginAttempted,
+  notifyAuthRecoveryRequired,
   startFreshReauthentication,
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
@@ -42,7 +44,7 @@ import { DashboardProvider } from "./contexts/DashboardContext";
 
 const APP_BG = "var(--app-bg, linear-gradient(180deg, #BFDDF4 0%, #DCECF8 45%, #F7F5EF 100%))";
 const DASHBOARD_LIST_FETCH_CONCURRENCY = 4;
-const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 60000;
+const AUTH_PROFILE_REAUTH_TIMEOUT_MS = 20000;
 const INTERNAL_EMAIL_DOMAINS = String(import.meta.env.VITE_INTERNAL_EMAIL_DOMAINS || "pmw-group.com")
   .split(",")
   .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
@@ -416,9 +418,16 @@ function mapSubmission(
 
   let totalLayers = layersConfig.length;
   if (!totalLayers && !hasManualBranches) {
-    totalLayers = 1;
-    if (raw.L2_Email) totalLayers = 2;
-    if (raw.L3_Email) totalLayers = 3;
+    // No configured chain. Infer one only from the workflow columns this item
+    // actually carries — a form that never had an approval step must not be
+    // handed one here, or the dashboard reports it as awaiting a signature
+    // nobody was ever asked for.
+    for (let i = 3; i >= 1; i--) {
+      if (raw[`L${i}_Email`] || raw[`L${i}_Status`]) {
+        totalLayers = i;
+        break;
+      }
+    }
   }
 
   const layers: (ApprovalLayer | null)[] = [];
@@ -713,8 +722,14 @@ export default function App() {
         scopes: loginRequest.scopes,
         account,
       })
-        .catch(() => {
+        .catch((error: unknown) => {
           // Non-auth token errors are handled by the request that needs the token.
+          if (isAuthTimeoutReloginRequiredError(error) || isStaleAuthError(error)) {
+            notifyAuthRecoveryRequired({
+              reason: "silent_token_timeout",
+              message: "Microsoft 365 session timed out. Reconnecting...",
+            });
+          }
         })
         .finally(() => {
           validating = false;
@@ -1338,7 +1353,6 @@ export default function App() {
           loadedConfig={loadedConfig}
           spClient={portalSpClient}
           onSignOut={handleSignOut}
-          onSwitchAccount={handleSwitchAccount}
           onRefresh={handleRefreshSubmissions}
         />
       </Suspense>

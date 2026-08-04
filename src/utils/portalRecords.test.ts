@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bottlenecks, queueFor, severeRecords, severityTone, stuckRecords, toPortalRecord } from "./portalRecords";
+import { describeWorkflow, resolveFormVisibility } from "./formWorkflow";
 import type { ApprovalLayerConfig, CatalogueEntry, ListMetaEntry, Submission } from "../types";
 
 const META: ListMetaEntry = { icon: "Description", color: "#000", pale: "#fff", category: "General" };
@@ -22,14 +23,20 @@ function entry(overrides: Partial<CatalogueEntry> = {}): CatalogueEntry {
     layer(1, "nurul@pmw.gov.my", "Safety Officer"),
     layer(2, "faizal@pmw.gov.my", "Ops Manager"),
   ];
+  const workflow = describeWorkflow(layers);
+  const visibility = resolveFormVisibility({ masterFormIsPublic: true });
   return {
     listTitle: "Incident Report",
     code: "INC",
     name: "Incident Report",
+    slug: "incident-report",
     chain: layers.map((l) => l.roleLabel ?? ""),
     layers,
+    workflow,
+    hasWorkflow: workflow.hasWorkflow,
     slaDays: 3,
-    isPublic: true,
+    visibility,
+    isPublic: visibility.isPublic,
     severityCapture: "required",
     volume: 0,
     today: 0,
@@ -141,6 +148,71 @@ describe("toPortalRecord", () => {
     expect(record.currentRole).toBe("Safety Officer");
   });
 
+  it("does not invent an approval layer for a form that declares none", () => {
+    const record = toPortalRecord(
+      submission({ totalLayers: 0, currentLayer: 0, formStatus: null }),
+      entry({ layers: [], chain: [], firstApprover: "" }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.hasWorkflow).toBe(false);
+    expect(record.totalLayers).toBe(0);
+    expect(record.chain).toEqual([]);
+    expect(record.status).toBe("Recorded");
+    expect(record.stage).toBe("Recorded");
+    expect(record.layerLabel).toBe("No approval step");
+    expect(record.currentAssigneeEmail).toBe("");
+  });
+
+  it("cannot make a form with no layers overdue, however long ago it was filed", () => {
+    const record = toPortalRecord(
+      submission({ submittedAt: "2020-01-01T00:00:00.000Z", totalLayers: 0, currentLayer: 0, formStatus: null }),
+      entry({ layers: [], chain: [], firstApprover: "" }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.overdue).toBe(false);
+    expect(record.slaDays).toBe(0);
+    expect(record.slaNote).toBe("no approval step to wait on");
+  });
+
+  it("still reports a closed outcome on a form with no layers", () => {
+    const record = toPortalRecord(
+      submission({ totalLayers: 0, currentLayer: 0, formStatus: "Cancelled" }),
+      entry({ layers: [], chain: [], firstApprover: "" }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.status).toBe("Cancelled");
+  });
+
+  it("reconstructs the chain a legacy filing was submitted under when its form no longer configures one", () => {
+    const record = toPortalRecord(
+      submission({
+        totalLayers: 2,
+        currentLayer: 2,
+        layers: [
+          { status: "approved", outcome: "approved", email: "nurul@pmw.gov.my", signedAt: "2026-07-30T13:00:00.000Z", rejectionReason: null, signature: null },
+          { status: "pending", outcome: undefined, email: "faizal@pmw.gov.my", signedAt: null, rejectionReason: null, signature: null },
+        ],
+      }),
+      entry({ layers: [], chain: [], firstApprover: "" }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.hasWorkflow).toBe(true);
+    expect(record.totalLayers).toBe(2);
+    expect(record.currentAssigneeEmail).toBe("faizal@pmw.gov.my");
+  });
+
   it("names the chain state per step, including whose turn it is", () => {
     const record = toPortalRecord(
       submission({ currentLayer: 2, layers: [{ status: "approved", outcome: "approved", email: "nurul@pmw.gov.my", signedAt: "2026-07-30T13:00:00.000Z", rejectionReason: null, signature: null }] }),
@@ -177,6 +249,20 @@ describe("queue and dashboard selectors", () => {
   it("puts only the current assignee's items in their queue", () => {
     expect(queueFor([open, overdueRecord], "nurul@pmw.gov.my")).toHaveLength(2);
     expect(queueFor([open, overdueRecord], "faizal@pmw.gov.my")).toHaveLength(0);
+  });
+
+  it("never queues a form with no approval step", () => {
+    const recorded = toPortalRecord(
+      submission({ id: "12", totalLayers: 0, currentLayer: 0, formStatus: null }),
+      entry({ layers: [], chain: [], firstApprover: "" }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(queueFor([recorded], "nurul@pmw.gov.my")).toHaveLength(0);
+    expect(stuckRecords([recorded])).toHaveLength(0);
+    expect(bottlenecks([recorded])).toHaveLength(0);
   });
 
   it("surfaces high-severity filings from the last 24 hours", () => {

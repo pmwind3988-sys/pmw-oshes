@@ -24,3 +24,5 @@ tmp/
 .impeccable/config.local.json
 .env.local.bak-*
 .env.*.bak
+
+.vercel

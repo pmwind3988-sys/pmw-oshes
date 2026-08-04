@@ -1,7 +1,6 @@
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
-import { canExportCsv } from "../../utils/portalRole";
 import { exportAuditCsv } from "../../utils/portalExport";
 
 /**
@@ -9,7 +8,7 @@ import { exportAuditCsv } from "../../utils/portalExport";
  * same code path as the action it records — never separately.
  */
 export default function AuditScreen() {
-  const { audit, role, toast } = usePortal();
+  const { audit, access, toast } = usePortal();
 
   return (
     <Box sx={{ maxWidth: 1060 }}>
@@ -22,7 +21,7 @@ export default function AuditScreen() {
             append-only · every signature, nudge, reassignment and cancellation, including the ones made in this session
           </Typography>
         </Box>
-        {canExportCsv(role) && (
+        {access.canExport && (
           <Button
             variant="outlined"
             onClick={() => toast(`Exported ${exportAuditCsv(audit)} trail rows.`)}

@@ -4,7 +4,6 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { ProportionBar, SeverityPill } from "../../components/portal/PortalPills";
 import { bottlenecks, severeRecords, stuckRecords } from "../../utils/portalRecords";
-import { canChase, canExportCsv } from "../../utils/portalRole";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
 import { nudgeApprover } from "../../utils/portalActions";
@@ -47,7 +46,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   showBottlenecks?: boolean;
 }) {
   const portal = usePortal();
-  const { records, queue, catalogue, role, openDrawer, nudged, markNudged, applyPatch, appendAudit, toast, spClient, userName, userEmail } = portal;
+  const { records, queue, catalogue, access, openDrawer, nudged, markNudged, applyPatch, appendAudit, toast, spClient, userName, userEmail } = portal;
   const [reassignTarget, setReassignTarget] = useState<PortalRecord | null>(null);
 
   const severe = useMemo(() => severeRecords(records), [records]);
@@ -57,7 +56,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
 
   const maxToday = Math.max(1, ...catalogue.map((entry) => entry.today));
   const inbound = [...catalogue].sort((a, b) => b.today - a.today);
-  const showChase = canChase(role);
+  const showChase = access.canChase;
 
   const handleNudge = async (record: PortalRecord) => {
     try {
@@ -202,7 +201,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
             {formatTodayDate()} · {filedToday} filed in the last 24 h · {stuck.length} approvals past SLA
           </Typography>
         </Box>
-        {canExportCsv(role) && (
+        {access.canExport && (
           <Button
             variant="outlined"
             onClick={() => toast(`Exported ${exportRecordsCsv(records)} rows with the columns you can see, plus approval history.`)}
