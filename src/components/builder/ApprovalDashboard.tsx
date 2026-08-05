@@ -82,6 +82,7 @@ import {
   routedAssigneeEmail,
   validFixedAssigneeEmails,
 } from "../../utils/layerAssignees";
+import { buildLayerReviewLink, describeMissingReviewLink } from "../../utils/layerReviewLink";
 import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
@@ -1219,6 +1220,7 @@ export default function ApprovalDashboard() {
       await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`, evalPatch);
 
       let nextApproverEmails: string[] = [];
+      let nextReviewLink: string | undefined;
       if (nextLayerConfig) {
         let storedNextEmail = "";
         try {
@@ -1252,6 +1254,15 @@ export default function ApprovalDashboard() {
         if (nextLayerConfig.authMode === "365" && nextApproverEmails.length === 0) {
           throw new Error(`Layer ${nextLayerNum} has no valid assignee email. Fix the workflow before advancing.`);
         }
+        // A public next layer is reached only by its own token — the mailbox it
+        // is sent to forwards the link on to whoever actually signs.
+        nextReviewLink = buildLayerReviewLink({
+          baseUrl: window.location.origin,
+          layer: nextLayerConfig,
+          formSlug: valueToText(formConfig?.Slug),
+          responseItemId: respId,
+        });
+        if (!nextReviewLink) throw new Error(describeMissingReviewLink(nextLayerConfig));
       }
 
       let pdfUrl: string | undefined;
@@ -1278,7 +1289,9 @@ export default function ApprovalDashboard() {
         nextApproverEmail: nextApproverEmails,
         ...(nextLayerConfig?.type ? { nextLayerType: nextLayerConfig.type } : {}),
         ...(nextLayerConfig?.layerNumber ? { nextLayerNumber: nextLayerConfig.layerNumber } : {}),
+        ...(nextLayerConfig?.authMode ? { nextLayerAuthMode: nextLayerConfig.authMode } : {}),
         ...(nextLayerConfig?.type === "evaluation" ? { nextEmailSchedule: nextLayerConfig.emailSchedule } : {}),
+        ...(nextReviewLink ? { reviewLink: nextReviewLink } : {}),
         pdfUrl,
       });
 
@@ -1366,6 +1379,15 @@ export default function ApprovalDashboard() {
 
       const firstApproverEmail = resolvedEmails[firstLayerNumber] || "";
       if (firstApproverEmail) {
+        // The branch's own first layer decides the link — a public one is
+        // reachable only by its token, never by the admin workspace.
+        const branchReviewLink = buildLayerReviewLink({
+          baseUrl: window.location.origin,
+          layer: bLayers[0],
+          formSlug: valueToText(formConfig?.Slug),
+          responseItemId: respId,
+        });
+        if (!branchReviewLink && bLayers[0]) throw new Error(describeMissingReviewLink(bLayers[0]));
         await triggerApprovalNotification(token, {
           formTitle: selectedItem.Title,
           submittedBy: selectedItem.SubmittedBy,
@@ -1375,8 +1397,9 @@ export default function ApprovalDashboard() {
           action: "submit",
           nextApproverEmail: firstApproverEmail,
           ...(bLayers[0]?.type ? { nextLayerType: bLayers[0].type } : {}),
+          ...(bLayers[0]?.authMode ? { nextLayerAuthMode: bLayers[0].authMode } : {}),
           ...(bLayers[0]?.type === "evaluation" ? { nextEmailSchedule: bLayers[0].emailSchedule } : {}),
-          reviewLink: `${window.location.origin}/admin/submissions?form=${encodeURIComponent(listName)}&item=${respId}`,
+          ...(branchReviewLink ? { reviewLink: branchReviewLink } : {}),
         });
       }
 
@@ -1433,11 +1456,13 @@ export default function ApprovalDashboard() {
       }
 
       const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
-      const publicToken = currentLayer.publicToken || "";
-      const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = currentLayer.authMode === "public" && publicToken
-        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${item.Id}`
-        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${item.Id}/${currentLayerNumber}`;
+      const reviewLink = buildLayerReviewLink({
+        baseUrl: window.location.origin,
+        layer: currentLayer,
+        formSlug: valueToText(cfg?.Slug),
+        responseItemId: item.Id,
+      });
+      if (!reviewLink) throw new Error(describeMissingReviewLink(currentLayer));
 
       await triggerApprovalNotification(token, {
         formTitle: item.Title,
@@ -1448,6 +1473,7 @@ export default function ApprovalDashboard() {
         action: "submit",
         nextApproverEmail: recipient,
         nextLayerType: currentLayer.type,
+        nextLayerAuthMode: currentLayer.authMode,
         reviewLink,
         responseListTitle: item.Title,
         throwOnEmailError: true,
@@ -1628,11 +1654,13 @@ export default function ApprovalDashboard() {
       const recipient = recipientList.join("; ");
 
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
-      const publicToken = currentLayer.publicToken || "";
-      const formSlug = valueToText(cfg?.Slug);
-      const reviewLink = currentLayer.authMode === "public" && publicToken
-        ? `${window.location.origin}/eval/${encodeURIComponent(publicToken)}?item=${selectedItem.Id}`
-        : `${window.location.origin}/eval/${encodeURIComponent(formSlug)}/${selectedItem.Id}/${currentLayerNumber}`;
+      const reviewLink = buildLayerReviewLink({
+        baseUrl: window.location.origin,
+        layer: currentLayer,
+        formSlug: valueToText(cfg?.Slug),
+        responseItemId: selectedItem.Id,
+      });
+      if (!reviewLink) throw new Error(describeMissingReviewLink(currentLayer));
       const updatedAt = new Date().toISOString();
       const schedule = setScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, {
         layer: currentLayerNumber,
@@ -1805,6 +1833,7 @@ export default function ApprovalDashboard() {
 
       // Get next approver email
       let nextApproverEmails: string[] = [];
+      let nextReviewLink: string | undefined;
       if (!isFinal) {
         let storedNextEmail = "";
         try {
@@ -1845,6 +1874,17 @@ export default function ApprovalDashboard() {
         nextApproverEmails = layerRecipients(nextLayer, storedNextEmail);
         if (nextLayer?.authMode === "365" && nextApproverEmails.length === 0) {
           throw new Error(`Layer ${nextLayerNumber} has no valid assignee email. Fix the workflow before advancing.`);
+        }
+        // A public next layer is reached only by its own token — the mailbox it
+        // is sent to forwards the link on to whoever actually signs.
+        if (nextLayer) {
+          nextReviewLink = buildLayerReviewLink({
+            baseUrl: window.location.origin,
+            layer: nextLayer,
+            formSlug: valueToText(formConfig?.Slug),
+            responseItemId: selectedItem.Id,
+          });
+          if (!nextReviewLink) throw new Error(describeMissingReviewLink(nextLayer));
         }
       }
 
@@ -1895,7 +1935,9 @@ export default function ApprovalDashboard() {
         nextApproverEmail: nextApproverEmails,
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
+        ...(nextLayer?.authMode ? { nextLayerAuthMode: nextLayer.authMode } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
+        ...(nextReviewLink ? { reviewLink: nextReviewLink } : {}),
         pdfUrl,
       });
 

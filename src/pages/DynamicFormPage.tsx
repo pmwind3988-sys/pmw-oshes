@@ -20,6 +20,7 @@ import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { isFixedAssignee, layerRecipients, routedAssigneeEmail, validFixedAssigneeEmails } from "../utils/layerAssignees";
+import { buildLayerReviewLink } from "../utils/layerReviewLink";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
@@ -1479,25 +1480,18 @@ export default function DynamicFormPage() {
           const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
           const baseUrl = window.location.origin;
+          const firstLayer = layerConfigParsed?.layers?.[0];
+          // A public first layer is reachable only by its own token; the signed-in
+          // route and the admin link both wall off the outside reviewer.
+          const firstLayerReviewLink = buildLayerReviewLink({
+            baseUrl,
+            layer: firstLayer,
+            formSlug,
+            responseItemId: result.Id,
+          });
 
           if (firstLayerManualPaper) {
             // Manual-paper workflow notices are sent with the generated PDF below.
-          } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Recipients.length > 0) {
-            const reviewLink = formSlug
-              ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
-              : undefined;
-            await triggerApprovalNotification(token, {
-              formTitle: cfg.Title as string,
-              submittedBy: submittedByEmail,
-              responseItemId: result.Id,
-              layer: 1,
-              totalLayers: resolvedLayerCount,
-              action: "submit",
-              nextApproverEmail: layer1Recipients,
-              nextLayerType: layerConfigParsed.layers[0].type,
-              nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule,
-              reviewLink,
-            });
           } else if (resolvedLayerCount > 0) {
             await triggerApprovalNotification(token, {
               formTitle: cfg.Title as string,
@@ -1507,10 +1501,10 @@ export default function DynamicFormPage() {
               totalLayers: resolvedLayerCount,
               action: "submit",
               ...(layer1Recipients.length > 0 ? { nextApproverEmail: layer1Recipients } : {}),
-              ...(layerConfigParsed?.layers?.[0]?.type ? { nextLayerType: layerConfigParsed.layers[0].type } : {}),
-              ...(layerConfigParsed?.layers?.[0]?.type === "evaluation"
-                ? { nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule }
-                : {}),
+              ...(firstLayer?.type ? { nextLayerType: firstLayer.type } : {}),
+              ...(firstLayer?.authMode ? { nextLayerAuthMode: firstLayer.authMode } : {}),
+              ...(firstLayer?.type === "evaluation" ? { nextEmailSchedule: firstLayer.emailSchedule } : {}),
+              ...(firstLayerReviewLink ? { reviewLink: firstLayerReviewLink } : {}),
             });
           }
         }

@@ -12,6 +12,7 @@ import { FlatLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
 import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
+import { buildLayerReviewLink, describeMissingReviewLink } from "../utils/layerReviewLink";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
 import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
@@ -525,6 +526,20 @@ export default function EvaluationPage() {
       const nextLayerNumber = nextLayer?.layerNumber ?? displayLayerNumber + 1;
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
 
+      // Resolved before anything is written: a next layer nobody can open is a
+      // broken workflow, and advancing into it strands the submission.
+      const nextReviewLink = !isFinal && nextLayer
+        ? buildLayerReviewLink({
+            baseUrl: window.location.origin,
+            layer: nextLayer,
+            formSlug: formSlug || "",
+            responseItemId: respId,
+          })
+        : undefined;
+      if (!isFinal && nextLayer && !nextReviewLink) {
+        throw new Error(describeMissingReviewLink(nextLayer));
+      }
+
       if (action === "reject") {
         const rejectedBy = claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail);
         await spPatch(token, itemUrl, {
@@ -589,7 +604,9 @@ export default function EvaluationPage() {
         ...(nextApproverEmail.length > 0 ? { nextApproverEmail } : {}),
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
+        ...(nextLayer?.authMode ? { nextLayerAuthMode: nextLayer.authMode } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),
+        ...(nextReviewLink ? { reviewLink: nextReviewLink } : {}),
       });
 
       setActionState("success");
@@ -597,7 +614,7 @@ export default function EvaluationPage() {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, evalSurveyModel, isPublic, routeToken, currentLayer, formTitle, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
+  }, [token, userEmail, evalSurveyModel, isPublic, routeToken, currentLayer, formTitle, formSlug, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (

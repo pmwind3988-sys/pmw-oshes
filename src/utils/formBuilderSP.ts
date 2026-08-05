@@ -1222,6 +1222,8 @@ interface ApprovalNotificationParams {
   nextApproverEmail?: string | string[];
   nextLayerType?: 'approval' | 'evaluation';
   nextLayerNumber?: number;
+  /** How the next layer is reached — a public step's link is meant to be forwarded on. */
+  nextLayerAuthMode?: '365' | 'public';
   reviewLink?: string;
   pdfUrl?: string;
   responseListTitle?: string;
@@ -1331,7 +1333,7 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, nextLayerAuthMode, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule } = params;
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -1339,6 +1341,12 @@ export async function triggerApprovalNotification(
   const submissionId = `#${responseItemId}`;
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  // A public step is usually addressed to a shared mailbox whose watchers are
+  // not the ones who sign — the link opens without an account so it can be
+  // passed on. Saying so stops it being treated as the reader's own task.
+  const actionNote = nextLayerAuthMode === 'public'
+    ? 'This link opens without a sign-in. Forward it to the person who needs to complete this step; whoever completes it is recorded against this layer.'
+    : 'Only the assigned reviewer or an authorized superuser should act on this workflow step.';
   // A shared layer is addressed to everyone named on it until one of them claims it.
   const nextApproverEmails = (Array.isArray(nextApproverEmail) ? nextApproverEmail : [nextApproverEmail ?? ''])
     .map((entry) => (entry ?? '').trim())
@@ -1410,7 +1418,9 @@ export async function triggerApprovalNotification(
             ],
             link: requestLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-            note: 'Please complete this step when you have enough context to make the decision.',
+            note: nextLayerAuthMode === 'public'
+              ? actionNote
+              : 'Please complete this step when you have enough context to make the decision.',
           }),
         });
       }
@@ -1447,7 +1457,7 @@ export async function triggerApprovalNotification(
             link: requestLink,
             linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
             pdfUrl,
-            note: 'Only the assigned reviewer or an authorized superuser should act on this workflow step.',
+            note: actionNote,
           }),
         });
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
