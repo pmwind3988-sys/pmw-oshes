@@ -186,7 +186,7 @@ export function resolveOshesFormSender(): string {
     process.env.EMAIL_FROM_ADDRESS ||
     process.env.VITE_EMAIL_FROM_ADDRESS ||
     ""
-  );
+  ).trim();
 }
 
 export async function sendGraphEmail(
@@ -232,8 +232,50 @@ export async function sendGraphEmail(
   );
 
   if (!graphRes.ok) {
-    throw new Error(`Graph sendMail failed with status ${graphRes.status}.`);
+    throw new Error(await describeSendMailFailure(graphRes, fromAddress));
   }
+}
+
+/**
+ * Graph reports an unresolvable sender as a bare 404, which reads like a wrong
+ * URL rather than the configuration error it is. The status alone sent whoever
+ * read the log looking for a broken endpoint, so name the sender and quote what
+ * Graph actually said.
+ */
+async function describeSendMailFailure(response: Response, fromAddress: string): Promise<string> {
+  let detail = "";
+  let code = "";
+  try {
+    const text = await response.text();
+    try {
+      code = String((JSON.parse(text) as { error?: { code?: unknown } })?.error?.code ?? "");
+    } catch {
+      /* Graph returned something other than its usual error envelope. */
+    }
+    detail = text.slice(0, 300);
+  } catch {
+    /* Body already consumed or unreadable — the status still says something. */
+  }
+
+  // 404 is never transient, and it does not necessarily mean the address is
+  // wrong: sendMail only accepts a user or shared mailbox. A Microsoft 365 group
+  // or distribution list — which people reasonably call a shared mailbox — is
+  // rejected identically, as ErrorInvalidUser. Retrying cannot fix either case.
+  if (response.status === 404) {
+    return (
+      `Graph sendMail failed with status 404: Graph could not resolve "${fromAddress}" as a sending mailbox. ` +
+      `Either it does not exist in this tenant, or it is a Microsoft 365 group or distribution list rather ` +
+      `than a user or shared mailbox, which cannot send app-only mail. Check with: ` +
+      `Get-Recipient <address> | Format-List RecipientTypeDetails. ${detail}`
+    );
+  }
+  if (response.status === 403) {
+    return (
+      `Graph sendMail failed with status 403: the app is not allowed to send as "${fromAddress}". ` +
+      `Check the Mail.Send application permission and any Exchange application access policy. ${detail}`
+    );
+  }
+  return `Graph sendMail failed with status ${response.status}${code ? ` (${code})` : ""}. ${detail}`;
 }
 
 async function persistWorkflowEmailAttempt(
