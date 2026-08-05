@@ -48,6 +48,12 @@ interface ApiFixedUserLayerAssignee {
   value: string;
 }
 
+/** Several mailboxes in one "a@x.com; b@x.com" string — see FixedUsersLayerAssignee. */
+interface ApiFixedUsersLayerAssignee {
+  type: "users";
+  value: string;
+}
+
 interface ApiFieldReferenceLayerAssignee {
   type: "field-reference";
   value: string;
@@ -66,6 +72,7 @@ interface ApiDepartmentApproverLayerAssignee {
 
 type ApiLayerAssignee =
   | ApiFixedUserLayerAssignee
+  | ApiFixedUsersLayerAssignee
   | ApiFieldReferenceLayerAssignee
   | ApiDepartmentApproverLayerAssignee;
 
@@ -271,6 +278,36 @@ function buildRawJson(value: Record<string, unknown>): string {
 
 function stripFieldReference(value: string): string {
   return value.replace(/^\$\{/, "").replace(/\}$/, "");
+}
+
+/**
+ * Mailboxes a fixed-assignee layer names outright. A "users" layer holds several
+ * in one semicolon-separated string.
+ * Mirrors src/utils/layerAssignees.ts — api/ does not import from src/.
+ */
+function fixedAssigneeEmails(value: string): string[] {
+  return value.split(/[;,\n]/).map((entry) => entry.trim()).filter((entry) => EMAIL_RE.test(entry));
+}
+
+/**
+ * Whether an assignee names its people outright. Types we do not recognise count
+ * when their value spells out addresses — a question name never contains "@" —
+ * so a variant spelling cannot fail the way "users" did.
+ */
+function isFixedApiAssignee(assignee: ApiLayerAssignee): boolean {
+  if (assignee.type === "user" || assignee.type === "users") return true;
+  if (assignee.type === "field-reference" || assignee.type === "department-approver") return false;
+  return fixedAssigneeEmails((assignee as { value?: string }).value ?? "").length > 0;
+}
+
+/**
+ * The address written to `L{n}_Email` at submit time. A layer naming two or more
+ * people is shared — it routes to nobody, and stays blank until whoever acts on
+ * it claims it, so this is deliberately empty for that case.
+ */
+function routedAssigneeEmail(value: string): string {
+  const emails = fixedAssigneeEmails(value);
+  return emails.length > 1 ? "" : emails[0] ?? "";
 }
 
 function valueToText(value: unknown): string {
@@ -1000,15 +1037,29 @@ async function resolveLayerAssignee(
     return resolveDepartmentApproverFromList(token, layer.assignee, formBody, label);
   }
 
-  const rawEmail =
-    layer.assignee.type === "user"
-      ? layer.assignee.value
-      : valueToText(formBody[stripFieldReference(layer.assignee.value)]);
-  const email = rawEmail.trim();
+  if (isFixedApiAssignee(layer.assignee)) {
+    // A shared layer is left unassigned, so the roster is what has to be valid
+    // here — not the (empty) routed address.
+    if (layer.authMode === "365" && fixedAssigneeEmails(layer.assignee.value).length === 0) {
+      throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
+    }
+    return { email: routedAssigneeEmail(layer.assignee.value), name: "" };
+  }
+
+  const email = valueToText(formBody[stripFieldReference(layer.assignee.value)]).trim();
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
     throw new Error(`${label} needs a valid assignee email before the workflow can start.`);
   }
   return { email, name: "" };
+}
+
+/** Who to tell a layer is waiting: its holder, or everyone named on a shared layer. */
+function layerNotificationRecipients(
+  layer: ApiLayerConfigItem,
+  storedEmail: string,
+): string[] {
+  if (EMAIL_RE.test(storedEmail)) return [storedEmail];
+  return isFixedApiAssignee(layer.assignee) ? fixedAssigneeEmails(layer.assignee.value) : [];
 }
 
 async function applyLayerConfigWorkflow(
@@ -1259,8 +1310,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const firstLayer = parsedLayerConfig?.layers?.[0];
     if (firstLayer) {
-      const recipient = valueToText(submissionBody[`L${firstLayer.layerNumber}_Email`]);
-      if (EMAIL_RE.test(recipient)) {
+      const recipients = layerNotificationRecipients(
+        firstLayer,
+        valueToText(submissionBody[`L${firstLayer.layerNumber}_Email`]),
+      );
+      if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = valueToText(formConfig.Slug);
         const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
@@ -1275,7 +1329,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               responseItemId: parentId,
               layer: firstLayer.layerNumber,
               totalLayers: parsedLayerConfig?.layers?.length ?? 1,
-              recipient,
+              recipient: recipients,
               layerType: firstLayer.type,
               reviewLink,
             }),

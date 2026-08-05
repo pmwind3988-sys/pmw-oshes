@@ -25,6 +25,7 @@ import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateM
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
+import { fixedAssigneeEmails } from "./utils/layerAssignees";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
 import { isRejectedStatus, resolveWorkflowDisplayState } from "./utils/workflowStatus";
 
@@ -898,9 +899,12 @@ export default function App() {
         for (const [title, cfg] of Object.entries(config.layerConfigs || {})) {
           if (!cfg?.layers) continue;
           for (const layer of cfg.layers) {
-            if (layer.assignee.type === "user" && layer.assignee.value) {
+            // A layer may name several people; every one of them should see the
+            // submissions for the form they are on, even though only the routed
+            // address in L{n}_Email can act on it.
+            for (const assigneeEmail of fixedAssigneeEmails(layer.assignee)) {
               if (!assigneeVisibilityMap[title]) assigneeVisibilityMap[title] = new Set();
-              assigneeVisibilityMap[title].add(layer.assignee.value.toLowerCase());
+              assigneeVisibilityMap[title].add(assigneeEmail.toLowerCase());
             }
           }
         }

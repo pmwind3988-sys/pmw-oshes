@@ -1,4 +1,5 @@
 import type { LayerConfigItem } from "../types";
+import { primaryFixedAssigneeEmail } from "./layerAssignees";
 
 /** email (lowercased) → display name, built from the SharePoint site user list. */
 export type PeopleDirectory = Record<string, string>;
@@ -51,6 +52,5 @@ export function layerRoleLabel(layer: LayerConfigItem | undefined, fallbackIndex
 /** The email a layer is assigned to, when the config names one directly. */
 export function layerAssigneeEmail(layer: LayerConfigItem | undefined): string {
   if (!layer) return "";
-  if (layer.assignee.type === "user") return normalizeEmail(layer.assignee.value);
-  return "";
+  return normalizeEmail(primaryFixedAssigneeEmail(layer.assignee));
 }

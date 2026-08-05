@@ -34,6 +34,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { editorial, editorialShadow } from "../theme/editorial";
 import { WorkspaceNotice } from "../components/builder/WorkspaceLayout";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
+import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -409,9 +410,12 @@ export default function EvaluationPage() {
 
         const data = await getLayerResponseData(token, resolvedTitle, parseInt(responseId, 10), displayLayerNumber);
         if (!data) { setError("Could not load evaluation data."); setLoading(false); return; }
-        const assignedEmail = String(data.responseFields[`L${displayLayerNumber}_Email`] || "").trim().toLowerCase();
-        const signedInEmail = (userEmail || "").trim().toLowerCase();
-        if (data.currentLayer?.authMode !== "public" && (!assignedEmail || assignedEmail !== signedInEmail)) {
+        // A layer naming several people is held by none of them until one acts,
+        // so while L{n}_Email is blank any of them may open it.
+        if (
+          data.currentLayer?.authMode !== "public" &&
+          !canActOnLayer(data.currentLayer, data.responseFields[`L${displayLayerNumber}_Email`], userEmail)
+        ) {
           setError("This approval layer is not assigned to your account.");
           setLoading(false);
           return;
@@ -522,7 +526,12 @@ export default function EvaluationPage() {
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
 
       if (action === "reject") {
-        await spPatch(token, itemUrl, buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason));
+        const rejectedBy = claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail);
+        await spPatch(token, itemUrl, {
+          ...buildRejectedWorkflowPatch(displayLayerNumber, effectiveTotalLayers, now, rejectionReason),
+          // A rejection closes the layer too — record who turned it down.
+          ...(rejectedBy ? { [`L${displayLayerNumber}_Email`]: rejectedBy } : {}),
+        });
         await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
       } else if (action === "confirm" && currentLayer?.type === "evaluation") {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
@@ -535,6 +544,8 @@ export default function EvaluationPage() {
           status: SP_LAYER_STATUS.CONFIRMED,
           signedAt: now,
           signature: signatureData || undefined,
+          // Claims a shared layer for whoever actually reviewed it.
+          email: claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail),
         });
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Completed" : "In Review",
@@ -550,6 +561,8 @@ export default function EvaluationPage() {
           status: SP_LAYER_STATUS.APPROVED,
           signedAt: now,
           signature: signatureData || undefined,
+          // Claims a shared layer for whoever actually approved it.
+          email: claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail),
         });
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
@@ -562,7 +575,10 @@ export default function EvaluationPage() {
         }
       }
 
-      const nextApproverEmail = !isFinal ? valueToText(responseData?.[`L${nextLayerNumber}_Email`]) : "";
+      // A shared next layer has no holder yet, so everyone named on it is told.
+      const nextApproverEmail = !isFinal
+        ? layerRecipients(nextLayer, responseData?.[`L${nextLayerNumber}_Email`])
+        : [];
       await triggerApprovalNotification(token, {
         formTitle,
         submittedBy: valueToText(responseData?.SubmittedBy) || userEmail,
@@ -570,7 +586,7 @@ export default function EvaluationPage() {
         layer: displayLayerNumber,
         totalLayers: effectiveTotalLayers,
         action: action === "reject" ? "reject" : "approve",
-        ...(nextApproverEmail ? { nextApproverEmail } : {}),
+        ...(nextApproverEmail.length > 0 ? { nextApproverEmail } : {}),
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),

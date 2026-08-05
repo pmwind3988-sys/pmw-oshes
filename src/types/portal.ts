@@ -156,6 +156,8 @@ export interface PortalRecord {
   hasWorkflow: boolean;
   workflowKind: WorkflowKind;
   chain: PortalChainStep[];
+  /** Layer config behind `chain` — carries the assignee roster a shared layer needs. */
+  layers: LayerConfigItem[];
   currentRole: string;
   currentAssignee: string;
   currentAssigneeEmail: string;

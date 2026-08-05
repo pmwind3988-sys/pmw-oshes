@@ -41,6 +41,27 @@ function isWorkflowField(key: string): boolean {
   return SYSTEM_FIELDS.has(key) || /^L\d+_/.test(key);
 }
 
+const RECIPIENT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Who to tell that a layer is waiting. `L{n}_Email` names the holder once there
+ * is one; a shared layer ("users" assignee) has none until somebody claims it,
+ * so everyone the config names is told instead.
+ * Mirrors src/utils/layerAssignees.ts — api/ does not import from src/.
+ */
+function nextLayerRecipients(layer: Record<string, unknown> | undefined, storedEmail: string): string[] {
+  const stored = storedEmail.trim();
+  if (RECIPIENT_EMAIL_RE.test(stored)) return [stored];
+
+  const assignee = layer?.assignee;
+  if (!assignee || typeof assignee !== "object") return [];
+  const { type, value } = assignee as { type?: unknown; value?: unknown };
+  if (typeof value !== "string") return [];
+  // field-reference / department-approver values are question names, not people.
+  if (type === "field-reference" || type === "department-approver") return [];
+  return value.split(/[;,\n]/).map((entry) => entry.trim()).filter((entry) => RECIPIENT_EMAIL_RE.test(entry));
+}
+
 function isTerminalLayerStatus(value: unknown): boolean {
   const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]/g, "");
   return ["approved", "confirmed", "rejected", "skipped", "cancelled"].includes(normalized) || normalized.includes("reject");
@@ -526,8 +547,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
-      const recipient = String(responseItem.fields[`L${nextLayerNumber}_Email`] || "").trim();
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      // A shared next layer has no holder yet — its L{n}_Email is blank until
+      // someone claims it — so fall back to everyone the config names.
+      const recipients = nextLayerRecipients(
+        notificationNextLayer,
+        String(responseItem.fields[`L${nextLayerNumber}_Email`] || ""),
+      );
+      if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
@@ -543,7 +569,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               responseItemId: safeResponseItemId,
               layer: nextLayerNumber,
               totalLayers: activeLayers.length,
-              recipient,
+              recipient: recipients,
               layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
               reviewLink,
             }),

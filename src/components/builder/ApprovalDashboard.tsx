@@ -73,6 +73,15 @@ import {
 } from "./WorkspaceLayout";
 import { workspacePanelSx, workspaceSurfaceSx } from "./workspaceStyles";
 import { foldOtherAnswers } from "../../utils/surveyOtherAnswers";
+import {
+  canActOnLayer,
+  claimLayerEmail,
+  isFixedAssignee,
+  isSharedAssigneeLayer,
+  layerRecipients,
+  routedAssigneeEmail,
+  validFixedAssigneeEmails,
+} from "../../utils/layerAssignees";
 import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 registerSignaturePad();
@@ -431,9 +440,16 @@ async function resolveLayerAssigneeEmail(
     }
   }
 
-  const email = layer.assignee.type === "user"
-    ? layer.assignee.value.trim()
-    : valueToText(submittedData[stripFieldReference(layer.assignee.value)]);
+  if (isFixedAssignee(layer.assignee)) {
+    // A shared layer routes to nobody — it stays blank until someone claims it —
+    // so the roster is what has to be valid, not the (empty) routed address.
+    if (layer.authMode === "365" && validFixedAssigneeEmails(layer.assignee).length === 0) {
+      return { email: "", error: `${layerLabel} needs a valid assignee email before the workflow can start.` };
+    }
+    return { email: routedAssigneeEmail(layer.assignee) };
+  }
+
+  const email = valueToText(submittedData[stripFieldReference(layer.assignee.value)]);
 
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
     return {
@@ -1059,10 +1075,11 @@ export default function ApprovalDashboard() {
         setCurrentLayerConfig(currentResolution.currentLayer ?? null);
         const currentLayerNumber = currentResolution.currentLayerNumber;
         const assignedEmail = normalizeEmailAddress(respItem[`L${currentLayerNumber}_Email`]);
-        const signedInEmail = normalizeEmailAddress(accounts[0]?.username);
         const override = isSuperuser;
         setSelectedLayerAccess({
-          allowed: override || (!!assignedEmail && assignedEmail === signedInEmail),
+          // A layer naming several people is held by none of them until one acts,
+          // so while L{n}_Email is blank any of them may pick it up.
+          allowed: override || canActOnLayer(currentResolution.currentLayer, assignedEmail, accounts[0]?.username),
           assignedEmail,
           currentLayerNumber,
           override,
@@ -1188,6 +1205,8 @@ export default function ApprovalDashboard() {
       await updateLayerStatus(token, listName, respId, currLayerNum, {
         status: SP_LAYER_STATUS.CONFIRMED,
         signedAt: now,
+        // Claims a shared layer for whoever actually reviewed it.
+        email: claimLayerEmail(currentLayerConfig ?? undefined, selectedLayerAccess?.assignedEmail, accounts[0]?.username),
       });
 
       // Patch FormStatus, CurrentLayer, Status to SP so the change persists on refresh
@@ -1199,34 +1218,38 @@ export default function ApprovalDashboard() {
       };
       await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`, evalPatch);
 
-      let nextApproverEmail = "";
+      let nextApproverEmails: string[] = [];
       if (nextLayerConfig) {
+        let storedNextEmail = "";
         try {
           const itemEmail = await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})?$select=L${nextLayerNum}_Email`
           ) as Record<string, unknown>;
-          nextApproverEmail = valueToText(itemEmail[`L${nextLayerNum}_Email`]);
+          storedNextEmail = valueToText(itemEmail[`L${nextLayerNum}_Email`]);
         } catch {
-          nextApproverEmail = "";
+          storedNextEmail = "";
         }
-        if (!nextApproverEmail) {
+        // A shared next layer is meant to stay blank until one of its people
+        // claims it, so it is never resolved down to a single holder here.
+        if (!storedNextEmail && !isSharedAssigneeLayer(nextLayerConfig.assignee)) {
           const submittedData = responseData ?? (await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`
           ) as Record<string, unknown>);
           const result = await resolveLayerAssigneeEmail(token, nextLayerConfig, submittedData);
           if (result.error) throw new Error(result.error);
-          nextApproverEmail = result.email;
-          if (nextApproverEmail) {
+          storedNextEmail = result.email;
+          if (storedNextEmail) {
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${respId})`,
-              { [`L${nextLayerNum}_Email`]: nextApproverEmail },
+              { [`L${nextLayerNum}_Email`]: storedNextEmail },
             );
           }
         }
-        if (nextLayerConfig.authMode === "365" && !EMAIL_RE.test(nextApproverEmail)) {
+        nextApproverEmails = layerRecipients(nextLayerConfig, storedNextEmail);
+        if (nextLayerConfig.authMode === "365" && nextApproverEmails.length === 0) {
           throw new Error(`Layer ${nextLayerNum} has no valid assignee email. Fix the workflow before advancing.`);
         }
       }
@@ -1252,7 +1275,7 @@ export default function ApprovalDashboard() {
         layer: currLayerNum,
         totalLayers,
         action: "approve",
-        nextApproverEmail,
+        nextApproverEmail: nextApproverEmails,
         ...(nextLayerConfig?.type ? { nextLayerType: nextLayerConfig.type } : {}),
         ...(nextLayerConfig?.layerNumber ? { nextLayerNumber: nextLayerConfig.layerNumber } : {}),
         ...(nextLayerConfig?.type === "evaluation" ? { nextEmailSchedule: nextLayerConfig.emailSchedule } : {}),
@@ -1389,20 +1412,23 @@ export default function ApprovalDashboard() {
       const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
       if (!currentLayer) throw new Error(`Layer ${currentLayerNumber} is not available in the workflow configuration.`);
 
-      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
-      if (!EMAIL_RE.test(recipient)) {
+      let storedEmail = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      // A shared layer stays blank until someone claims it, so it is not pinned
+      // to one holder here — the reminder goes to everyone named on it.
+      if (!EMAIL_RE.test(storedEmail) && !isSharedAssigneeLayer(currentLayer.assignee)) {
         const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
         if (resolved.error) throw new Error(resolved.error);
-        recipient = resolved.email;
-        if (recipient) {
+        storedEmail = resolved.email;
+        if (storedEmail) {
           await spPatch(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`,
-            { [`L${currentLayerNumber}_Email`]: recipient },
+            { [`L${currentLayerNumber}_Email`]: storedEmail },
           );
         }
       }
-      if (!EMAIL_RE.test(recipient)) {
+      const recipient = layerRecipients(currentLayer, storedEmail);
+      if (recipient.length === 0) {
         throw new Error(`Layer ${currentLayerNumber} has no valid evaluator email.`);
       }
 
@@ -1589,13 +1615,17 @@ export default function ApprovalDashboard() {
         throw new Error("Only the active evaluation layer can be scheduled.");
       }
 
-      let recipient = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
-      if (!EMAIL_RE.test(recipient)) {
+      let storedEmail = valueToText(rawItem[`L${currentLayerNumber}_Email`]);
+      // A shared layer stays blank until someone claims it — schedule for all of them.
+      if (!EMAIL_RE.test(storedEmail) && !isSharedAssigneeLayer(currentLayer.assignee)) {
         const resolved = await resolveLayerAssigneeEmail(token, currentLayer, rawItem);
         if (resolved.error) throw new Error(resolved.error);
-        recipient = resolved.email;
+        storedEmail = resolved.email;
       }
-      if (!EMAIL_RE.test(recipient)) throw new Error("The active evaluation layer has no valid evaluator email.");
+      const recipientList = layerRecipients(currentLayer, storedEmail);
+      if (recipientList.length === 0) throw new Error("The active evaluation layer has no valid evaluator email.");
+      // The schedule log keeps one recipient string; the cron splits it on send.
+      const recipient = recipientList.join("; ");
 
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
       const publicToken = currentLayer.publicToken || "";
@@ -1774,41 +1804,46 @@ export default function ApprovalDashboard() {
       const isFinal = !nextLayer && currentLayer >= totalLayers;
 
       // Get next approver email
-      let nextApproverEmail = "";
+      let nextApproverEmails: string[] = [];
       if (!isFinal) {
+        let storedNextEmail = "";
         try {
           const itemEmail = await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})?$select=L${nextLayerNumber}_Email`
           ) as Record<string, unknown>;
-          nextApproverEmail = valueToText(itemEmail[`L${nextLayerNumber}_Email`]);
+          storedNextEmail = valueToText(itemEmail[`L${nextLayerNumber}_Email`]);
         } catch {
-          nextApproverEmail = "";
+          storedNextEmail = "";
         }
-        if (!nextApproverEmail) {
+        // A shared next layer is meant to stay blank until one of its people
+        // claims it, so it is never resolved down to a single holder here.
+        const nextIsShared = !!nextLayer && isSharedAssigneeLayer(nextLayer.assignee);
+        if (!storedNextEmail && !nextIsShared) {
           const approvers = await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(selectedItem.Title)}' and LayerNumber eq ${nextLayerNumber}&$select=ApproverEmail&$top=1`
           ) as { value?: { ApproverEmail: string }[] };
-          nextApproverEmail = approvers.value?.[0]?.ApproverEmail || "";
+          storedNextEmail = approvers.value?.[0]?.ApproverEmail || "";
         }
-        if (!nextApproverEmail && nextLayer) {
+        if (!storedNextEmail && !nextIsShared && nextLayer) {
           const submittedData = responseData ?? (await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`
           ) as Record<string, unknown>);
           const result = await resolveLayerAssigneeEmail(token, nextLayer, submittedData);
           if (result.error) throw new Error(result.error);
-          nextApproverEmail = result.email;
-          if (nextApproverEmail) {
+          storedNextEmail = result.email;
+          if (storedNextEmail) {
             await spPatch(
               token,
               `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
-              { [`L${nextLayerNumber}_Email`]: nextApproverEmail },
+              { [`L${nextLayerNumber}_Email`]: storedNextEmail },
             );
           }
         }
-        if (nextLayer?.authMode === "365" && !EMAIL_RE.test(nextApproverEmail)) {
+        nextApproverEmails = layerRecipients(nextLayer, storedNextEmail);
+        if (nextLayer?.authMode === "365" && nextApproverEmails.length === 0) {
           throw new Error(`Layer ${nextLayerNumber} has no valid assignee email. Fix the workflow before advancing.`);
         }
       }
@@ -1825,6 +1860,9 @@ export default function ApprovalDashboard() {
       patchBody[`L${currentLayer}_Status`] = SP_LAYER_STATUS.APPROVED;
       patchBody[`L${currentLayer}_SignedAt`] = new Date().toISOString();
       if (approvalSignature) patchBody[`L${currentLayer}_Signature`] = approvalSignature;
+      // Claims a shared layer for whoever actually approved it.
+      const claimedBy = claimLayerEmail(currentLayerConfig ?? undefined, selectedLayerAccess?.assignedEmail, accounts[0]?.username);
+      if (claimedBy) patchBody[`L${currentLayer}_Email`] = claimedBy;
       await spPatch(
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${selectedItem.Id})`,
@@ -1854,7 +1892,7 @@ export default function ApprovalDashboard() {
         layer: currentLayer,
         totalLayers,
         action: "approve",
-        nextApproverEmail,
+        nextApproverEmail: nextApproverEmails,
         ...(nextLayer?.type ? { nextLayerType: nextLayer.type } : {}),
         ...(nextLayer?.layerNumber ? { nextLayerNumber: nextLayer.layerNumber } : {}),
         ...(nextLayer?.type === "evaluation" ? { nextEmailSchedule: nextLayer.emailSchedule } : {}),

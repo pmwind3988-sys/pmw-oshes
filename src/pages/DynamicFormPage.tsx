@@ -19,6 +19,7 @@ import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../typ
 import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { registerSignaturePad } from "../utils/SignaturePad";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
+import { isFixedAssignee, layerRecipients, routedAssigneeEmail, validFixedAssigneeEmails } from "../utils/layerAssignees";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
@@ -312,12 +313,19 @@ function safePdfFileName(title: string, id: number): string {
 }
 
 function resolveLayerEmail(layer: LayerConfigItem, submittedData: Record<string, unknown>): string {
-  const rawEmail = layer.assignee.type === "user"
-    ? layer.assignee.value
-    : submittedValueToString(submittedData[stripFieldReference(layer.assignee.value)]);
-  const email = rawEmail.trim();
+  const label = layer.title || `Layer ${layer.layerNumber}`;
+
+  if (isFixedAssignee(layer.assignee)) {
+    // A layer naming several people is left unassigned — whoever acts claims it —
+    // so the roster is what has to be valid here, not the (empty) routed address.
+    if (layer.authMode === "365" && validFixedAssigneeEmails(layer.assignee).length === 0) {
+      throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
+    }
+    return routedAssigneeEmail(layer.assignee);
+  }
+
+  const email = submittedValueToString(submittedData[stripFieldReference(layer.assignee.value)]).trim();
   if (layer.authMode === "365" && !EMAIL_RE.test(email)) {
-    const label = layer.title || `Layer ${layer.layerNumber}`;
     throw new Error(`${label} needs a valid assignee email before this form can be submitted.`);
   }
   return email;
@@ -643,6 +651,9 @@ export default function DynamicFormPage() {
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  // Kept alongside the status so a failed submit can say *why* — swallowing this
+  // is what reduced a specific, fixable config error to "could not be completed".
+  const [submitError, setSubmitError] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
   const [isLastSurveyPage, setIsLastSurveyPage] = useState(true);
@@ -1454,7 +1465,8 @@ export default function DynamicFormPage() {
 
         // Step 7: Trigger notification
         if (resolvedLayerCount > 0 && result?.Id) {
-          const layer1Email = activeLayers[0]?.email;
+          // A shared first layer routes to nobody, so everyone named on it is told.
+          const layer1Recipients = layerRecipients(layerConfigParsed?.layers?.[0], activeLayers[0]?.email);
           const firstLayerNumber = layerConfigParsed?.layers?.[0]?.layerNumber ?? 1;
           const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
@@ -1462,7 +1474,7 @@ export default function DynamicFormPage() {
 
           if (firstLayerManualPaper) {
             // Manual-paper workflow notices are sent with the generated PDF below.
-          } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Email) {
+          } else if (layerConfigParsed?.layers?.[0]?.type === "evaluation" && layerConfigParsed.layers[0].authMode === "365" && layer1Recipients.length > 0) {
             const reviewLink = formSlug
               ? `${baseUrl}/eval/${encodeURIComponent(formSlug)}/${result.Id}/1`
               : undefined;
@@ -1473,7 +1485,7 @@ export default function DynamicFormPage() {
               layer: 1,
               totalLayers: resolvedLayerCount,
               action: "submit",
-              nextApproverEmail: layer1Email,
+              nextApproverEmail: layer1Recipients,
               nextLayerType: layerConfigParsed.layers[0].type,
               nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule,
               reviewLink,
@@ -1486,7 +1498,7 @@ export default function DynamicFormPage() {
               layer: 1,
               totalLayers: resolvedLayerCount,
               action: "submit",
-              ...(layer1Email ? { nextApproverEmail: layer1Email } : {}),
+              ...(layer1Recipients.length > 0 ? { nextApproverEmail: layer1Recipients } : {}),
               ...(layerConfigParsed?.layers?.[0]?.type ? { nextLayerType: layerConfigParsed.layers[0].type } : {}),
               ...(layerConfigParsed?.layers?.[0]?.type === "evaluation"
                 ? { nextEmailSchedule: layerConfigParsed.layers[0].emailSchedule }
@@ -1684,9 +1696,11 @@ export default function DynamicFormPage() {
     if (submitStatus !== "loading") return;
     let cancelled = false;
     doSubmitForm()
-      .then(() => { if (!cancelled) setSubmitStatus("success"); })
-      .catch(() => {
-        if (!cancelled) setSubmitStatus("error");
+      .then(() => { if (!cancelled) { setSubmitError(""); setSubmitStatus("success"); } })
+      .catch((submitErr) => {
+        if (cancelled) return;
+        setSubmitError(submitErr instanceof Error ? submitErr.message : String(submitErr));
+        setSubmitStatus("error");
       });
     return () => { cancelled = true; };
   }, [submitStatus, doSubmitForm]);
@@ -1705,6 +1719,7 @@ export default function DynamicFormPage() {
   }, [instance]);
   const handleReset = useCallback(() => {
     setSubmitStatus(null);
+    setSubmitError("");
     setPdpaAccepted(false);
     setPdpaConsentError("");
     setCompanyChoiceValue("");
@@ -1901,6 +1916,7 @@ export default function DynamicFormPage() {
             {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13, fontWeight: 700 }}><Spinner size={14} t={t} /> Submitting your response...</div>}
             {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>Submission could not be completed. Your answers are still on this page; review them and try again.</div>
+              {submitError && <div style={{ fontWeight: 400, lineHeight: 1.6, wordBreak: "break-word" }}>{submitError}</div>}
               <button onClick={() => survey?.tryComplete()} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
             </div>}
           </div>

@@ -1182,7 +1182,8 @@ interface ApprovalNotificationParams {
   layer: number;
   totalLayers: number;
   action?: 'submit' | 'approve' | 'reject';
-  nextApproverEmail?: string;
+  /** One address, or every address on a shared layer that nobody has claimed. */
+  nextApproverEmail?: string | string[];
   nextLayerType?: 'approval' | 'evaluation';
   nextLayerNumber?: number;
   reviewLink?: string;
@@ -1302,7 +1303,13 @@ export async function triggerApprovalNotification(
   const submissionId = `#${responseItemId}`;
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  const persistSchedule = async (recipient: string, targetLayer: number, targetLink: string) => {
+  // A shared layer is addressed to everyone named on it until one of them claims it.
+  const nextApproverEmails = (Array.isArray(nextApproverEmail) ? nextApproverEmail : [nextApproverEmail ?? ''])
+    .map((entry) => (entry ?? '').trim())
+    .filter(Boolean);
+  // The schedule log keeps one recipient string; the cron splits it again on send.
+  const persistSchedule = async (recipients: string[], targetLayer: number, targetLink: string) => {
+    const recipient = recipients.join('; ');
     await ensureWorkflowColumns(token, responseListTitle, totalLayers);
     const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})`;
     const item = await spGet(token, `${itemUrl}?$select=WorkflowEmailSchedule`) as { WorkflowEmailSchedule?: string };
@@ -1324,26 +1331,26 @@ export async function triggerApprovalNotification(
   try {
     if (action === 'submit') {
       // New submission — prefer the caller's resolved layer email, then fall back to the legacy Approvers list.
-      let targetEmail = nextApproverEmail || '';
-      if (!targetEmail) {
+      let targetEmails = nextApproverEmails;
+      if (targetEmails.length === 0) {
         try {
           const approvers = await spGet(
             token,
             `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
           ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
-          targetEmail = approvers.value?.[0]?.ApproverEmail || '';
+          targetEmails = [approvers.value?.[0]?.ApproverEmail || ''].filter(Boolean);
         } catch {
-          targetEmail = '';
+          targetEmails = [];
         }
       }
 
-      if (targetEmail) {
-        await persistSchedule(targetEmail, layer, requestLink);
+      if (targetEmails.length > 0) {
+        await persistSchedule(targetEmails, layer, requestLink);
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }
         await sendSpEmail(token, {
-          to: targetEmail,
+          to: targetEmails,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
           workflow: {
             listTitle: responseListTitle,
@@ -1372,14 +1379,14 @@ export async function triggerApprovalNotification(
         });
       }
     } else if (action === 'approve') {
-      if (layer < totalLayers && nextApproverEmail) {
+      if (layer < totalLayers && nextApproverEmails.length > 0) {
         // Notify next layer approver
-        await persistSchedule(nextApproverEmail, displayNextLayerNumber, requestLink);
+        await persistSchedule(nextApproverEmails, displayNextLayerNumber, requestLink);
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
           return;
         }
         await sendSpEmail(token, {
-          to: nextApproverEmail,
+          to: nextApproverEmails,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
           workflow: {
             listTitle: responseListTitle,

@@ -73,9 +73,19 @@ export interface WorkflowActionEmailParams {
   responseItemId: string | number;
   layer: number;
   totalLayers: number;
-  recipient: string;
+  /**
+   * One address, several, or the "a@x.com; b@x.com" string a shared layer's
+   * schedule entry stores — a shared layer has no single holder to address.
+   */
+  recipient: string | string[];
   layerType: "approval" | "evaluation";
   reviewLink: string;
+}
+
+/** Splits a recipient field into addresses, whichever shape it arrived in. */
+export function toRecipientList(recipient: string | string[]): string[] {
+  const entries = Array.isArray(recipient) ? recipient : recipient.split(/[;,\n]/);
+  return entries.map((entry) => entry.trim()).filter(Boolean);
 }
 
 function parseWorkflowEmailLog(raw: unknown): WorkflowEmailLog {
@@ -399,7 +409,7 @@ export function buildWorkflowActionEmail(
   const actionNoun = params.layerType === "evaluation" ? "evaluation review" : "approval";
   const actionVerb = params.layerType === "evaluation" ? "review" : "approve";
   return {
-    to: params.recipient,
+    to: toRecipientList(params.recipient),
     subject: `Action required: ${params.formTitle} needs your ${actionNoun}`,
     body: `<!doctype html>
 <html>

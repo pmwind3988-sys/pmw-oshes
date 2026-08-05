@@ -1,5 +1,6 @@
 import type { AuditEntry, PortalRecord, SharePointClient } from "../types";
 import { writeAuditEntry } from "./portalAudit";
+import { claimLayerEmail } from "./layerAssignees";
 import { normalizeEmail } from "./portalPeople";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "./statusConstants";
 import { setWorkflowAssignmentOverride } from "./workflowAssignmentData";
@@ -81,6 +82,9 @@ export async function signLayer(
     [`L${layerNumber}_Status`]: step?.type === "evaluation" ? SP_LAYER_STATUS.CONFIRMED : SP_LAYER_STATUS.APPROVED,
     [`L${layerNumber}_SignedAt`]: now,
   };
+  // Claims a shared layer for whoever actually signed it.
+  const claimedBy = claimLayerEmail(record.layers[record.at], step?.email, context.actorEmail);
+  if (claimedBy) fields[`L${layerNumber}_Email`] = claimedBy;
   if (note) fields.EvaluationData = withLayerNote(record, layerNumber, note, context);
 
   if (isLast) {

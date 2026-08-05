@@ -8,6 +8,7 @@ import type {
   Submission,
 } from "../types";
 import { describeWorkflow } from "./formWorkflow";
+import { routedAssigneeEmail } from "./layerAssignees";
 import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDirectory } from "./portalPeople";
 import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
@@ -179,10 +180,12 @@ export function toPortalRecord(
 
   const chain: PortalChainStep[] = layers.map((layer, index) => {
     const override = assignmentOverrides[String(layer.layerNumber)] ?? "";
+    // The stored L{n}_Email comes before the config: on a shared layer that is
+    // where the claim lands, and the config names several people, not a holder.
     const email = normalizeEmail(
       override
-      || (layer.assignee.type === "user" ? layer.assignee.value : "")
       || submission.layers[index]?.email
+      || routedAssigneeEmail(layer.assignee)
       || "",
     );
     const who = email ? displayName(email, directory) : layerRoleLabel(layer, index);
@@ -239,6 +242,7 @@ export function toPortalRecord(
     hasWorkflow,
     workflowKind: workflow.kind,
     chain,
+    layers,
     currentRole: settled ? "" : currentStep?.roleLabel ?? "",
     currentAssignee: settled ? "" : currentStep?.who ?? "",
     currentAssigneeEmail: settled ? "" : currentStep?.email ?? "",

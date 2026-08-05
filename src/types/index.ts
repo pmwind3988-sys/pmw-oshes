@@ -123,6 +123,16 @@ export interface FixedUserLayerAssignee {
   value: string;
 }
 
+/**
+ * Several named mailboxes on one layer, held in a single "a@x.com; b@x.com"
+ * string — the shape a people picker hands back. `L{n}_Email` stays one
+ * address, so the first entry is the one the workflow routes to.
+ */
+export interface FixedUsersLayerAssignee {
+  type: "users";
+  value: string;
+}
+
 export interface FieldReferenceLayerAssignee {
   type: "field-reference";
   value: string;
@@ -141,6 +151,7 @@ export interface DepartmentApproverLayerAssignee {
 
 export type LayerAssignee =
   | FixedUserLayerAssignee
+  | FixedUsersLayerAssignee
   | FieldReferenceLayerAssignee
   | DepartmentApproverLayerAssignee;
 
