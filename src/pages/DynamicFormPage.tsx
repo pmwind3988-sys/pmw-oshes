@@ -12,7 +12,7 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnResolvers } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -69,6 +69,7 @@ function mapBodyToSharePointColumnKeys(
   body: Record<string, unknown>,
   resolveColumnKey: (fieldName: string) => string | null,
   listTitle: string,
+  isMultiValueColumn: (fieldName: string) => boolean = () => false,
 ): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [fieldName, value] of Object.entries(body)) {
@@ -77,7 +78,11 @@ function mapBodyToSharePointColumnKeys(
       if (isOptionalSignedInSubmissionColumn(fieldName)) continue;
       throw new Error(`The form field "${fieldName}" is not provisioned in "${listTitle}". Please republish the form before trying again.`);
     }
-    mapped[columnKey] = value;
+    // A MultiChoice column wants the array itself; anything else (a multi-file
+    // list landing in a Text column) still travels as JSON text.
+    mapped[columnKey] = Array.isArray(value) && !isMultiValueColumn(fieldName)
+      ? JSON.stringify(value)
+      : value;
   }
   return mapped;
 }
@@ -1275,7 +1280,10 @@ export default function DynamicFormPage() {
         if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
           body[`${k}_Response`] = (v as Record<string, unknown>).html;
           body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
-        } else if (Array.isArray(v)) { body[k] = JSON.stringify(v); }
+        }
+        // Arrays stay arrays here — only the column mapping knows whether the
+        // target is a MultiChoice column (wants the array) or text (wants JSON).
+        else if (Array.isArray(v)) { body[k] = v; }
         else if (v && typeof v === "object") {
           if ("Url" in (v as Record<string, unknown>)) {
             body[k] = v;
@@ -1355,13 +1363,13 @@ export default function DynamicFormPage() {
           await new Promise((r) => setTimeout(r, 1500));
         }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
-        const resolveColumnKey = await getSharePointColumnKeyResolver(token, cfg.Title as string);
+        const { resolveColumnKey, isMultiValueColumn } = await getSharePointColumnResolvers(token, cfg.Title as string);
         let result: { Id?: number } | undefined;
         try {
           result = await spPost(
             token,
             listUrl,
-            mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+            mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
           ) as { Id?: number };
         } catch (submitErr) {
           const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
@@ -1373,7 +1381,7 @@ export default function DynamicFormPage() {
             result = await spPost(
               token,
               listUrl,
-              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
             ) as { Id?: number };
           } else if (msg.includes('_Response') || msg.includes('_Json')) {
             // Retry without _Response/_Json columns (matrix fields published before
@@ -1386,7 +1394,7 @@ export default function DynamicFormPage() {
             result = await spPost(
               token,
               listUrl,
-              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string),
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
             ) as { Id?: number };
           } else {
             throw submitErr;

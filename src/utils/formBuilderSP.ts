@@ -43,6 +43,9 @@ export interface ExistingFieldInfo {
   InternalName?: string;
   StaticName?: string;
   EntityPropertyName?: string;
+  /** "MultiChoice", "UserMulti", "LookupMulti", … — every multi-value name carries "Multi". */
+  TypeAsString?: string;
+  FieldTypeKind?: number;
 }
 
 export interface EnsureColumnsResult {
@@ -136,15 +139,48 @@ export function createSharePointColumnKeyResolver(
   return (fieldName: string) => byName.get(normalizeColumnName(fieldName)) ?? null;
 }
 
-export async function getSharePointColumnKeyResolver(
+/**
+ * Columns that expect a JSON array rather than a scalar.
+ *
+ * A SurveyJS checkbox is provisioned as a SharePoint MultiChoice column, and
+ * posting a JSON *string* to one fails the whole item create with "An unexpected
+ * 'PrimitiveValue' node was found ... A 'StartArray' node was expected." Every
+ * multi-value type name carries "Multi" (MultiChoice, UserMulti, LookupMulti,
+ * TaxonomyFieldTypeMulti); no single-value type does.
+ */
+export function createSharePointMultiValueResolver(
+  fields: ExistingFieldInfo[],
+): (fieldName: string) => boolean {
+  const multiValue = new Set<string>();
+  for (const field of fields) {
+    const isMulti = field.FieldTypeKind === SP_FIELD_KIND.multiChoice
+      || /multi/i.test(field.TypeAsString ?? '');
+    if (!isMulti) continue;
+    for (const name of [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName]) {
+      if (name) multiValue.add(normalizeColumnName(name));
+    }
+  }
+  return (fieldName: string) => multiValue.has(normalizeColumnName(fieldName));
+}
+
+export interface SharePointColumnResolvers {
+  resolveColumnKey: (fieldName: string) => string | null;
+  isMultiValueColumn: (fieldName: string) => boolean;
+}
+
+export async function getSharePointColumnResolvers(
   token: string,
   listTitle: string,
-): Promise<(fieldName: string) => string | null> {
+): Promise<SharePointColumnResolvers> {
   const data = await spGet(
     token,
-    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName&$top=5000`,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName,TypeAsString,FieldTypeKind&$top=5000`,
   ) as { value?: ExistingFieldInfo[] };
-  return createSharePointColumnKeyResolver(data.value || []);
+  const fields = data.value || [];
+  return {
+    resolveColumnKey: createSharePointColumnKeyResolver(fields),
+    isMultiValueColumn: createSharePointMultiValueResolver(fields),
+  };
 }
 
 function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
