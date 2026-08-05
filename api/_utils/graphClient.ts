@@ -946,3 +946,25 @@ export async function listExistsGraph(
     return false;
   }
 }
+
+/**
+ * The list a form's submissions actually live in.
+ *
+ * Submissions are written to a list named exactly after the form, but older
+ * forms were provisioned as "<form> Responses" and both shapes are still in
+ * this tenant. Guessing one name is how a public evaluation link ended up
+ * failing with `List "PERMIT TO WORK Responses" not found` on a form whose
+ * list is plain "PERMIT TO WORK", so ask which one is there.
+ *
+ * Falls back to the bare title, matching where new submissions are created —
+ * the caller then fails against the name it would have used anyway.
+ */
+export async function resolveResponseListName(
+  token: string,
+  formTitle: string,
+): Promise<string> {
+  for (const candidate of [formTitle, `${formTitle} Responses`]) {
+    if (await listExistsGraph(token, candidate)) return candidate;
+  }
+  return formTitle;
+}

@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, updateListItemFields } from "./_utils/graphClient.js";
+import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, resolveResponseListName, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { OSHES_LISTS } from "./_utils/oshesConfig.js";
 import {
@@ -293,7 +293,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     const responseItemId = req.query.responseItemId ? Number(req.query.responseItemId) : undefined;
     if (!responseItemId) return res.status(400).json({ error: "Missing responseItemId query parameter" });
 
-    const responseListName = `${foundFormTitle} Responses`;
+    const responseListName = await resolveResponseListName(graphToken, foundFormTitle);
     const responseItem = await queryListItemById(graphToken, responseListName, String(responseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
 
@@ -462,7 +462,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     // 2. Fetch the response item using Graph API
-    const responseListName = `${formTitle} Responses`;
+    const responseListName = await resolveResponseListName(graphToken, formTitle);
     const responseItem = await queryListItemById(graphToken, responseListName, String(safeResponseItemId));
     if (!responseItem) return res.status(404).json({ error: "Response item not found" });
     const latestCurrentLayer = Number(responseItem.fields.CurrentLayer || responseItem.fields.CurrentApprovalLayer || 0);

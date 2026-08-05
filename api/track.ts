@@ -1,5 +1,5 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken, queryListItemById, queryListItems } from "./_utils/graphClient.js";
+import { getGraphToken, queryListItemById, queryListItems, resolveResponseListName } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import { OSHES_LISTS } from "./_utils/oshesConfig.js";
 
@@ -101,13 +101,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // Response data lives either in a list named after the form or in
     // "<form> Responses", depending on when the form was provisioned.
     let item = null;
-    for (const candidate of [listTitle, `${listTitle} Responses`]) {
-      try {
-        item = await queryListItemById(token, candidate, String(parsed.itemId));
-      } catch {
-        item = null;
-      }
-      if (item) break;
+    try {
+      item = await queryListItemById(token, await resolveResponseListName(token, listTitle), String(parsed.itemId));
+    } catch {
+      item = null;
     }
     if (!item) return res.status(404).json({ error: NOT_FOUND });
 
