@@ -1,7 +1,5 @@
 import type { Submission } from "../types";
-
-const DASHBOARD_DATE_LOCALE = "en-GB";
-const DAY_PERIOD_PATTERN = /\b(am|pm)\b/gi;
+import { formatDisplayDateShort, formatDisplayDateTimeLong, formatDisplayTime } from "./displayDateTime";
 
 const PLACEHOLDER_VALUES = new Set([
   "",
@@ -19,56 +17,21 @@ const PLACEHOLDER_VALUES = new Set([
   "authenticated-user",
 ]);
 
-function parseDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function uppercaseDayPeriod(value: string): string {
-  return value.replace(DAY_PERIOD_PATTERN, (match) => match.toUpperCase());
-}
-
 export function isPlaceholderDisplayValue(value: string | null | undefined): boolean {
   const normalized = (value ?? "").trim().toLowerCase();
   return PLACEHOLDER_VALUES.has(normalized) || normalized.startsWith("untitled");
 }
 
 export function formatDashboardDate(value: string | null | undefined, fallback = "N/A"): string {
-  const parsed = parseDate(value);
-  if (!parsed) return fallback;
-  return parsed.toLocaleDateString(DASHBOARD_DATE_LOCALE, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatDisplayDateShort(value, fallback);
 }
 
 export function formatDashboardTime(value: string | null | undefined): string {
-  const parsed = parseDate(value);
-  if (!parsed) return "";
-  return uppercaseDayPeriod(
-    parsed.toLocaleTimeString(DASHBOARD_DATE_LOCALE, {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }),
-  );
+  return formatDisplayTime(value, "");
 }
 
 export function formatDashboardDateTime(value: string | null | undefined, fallback = "Not available"): string {
-  const parsed = parseDate(value);
-  if (!parsed) return fallback;
-  return uppercaseDayPeriod(
-    parsed.toLocaleString(DASHBOARD_DATE_LOCALE, {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }),
-  );
+  return formatDisplayDateTimeLong(value, fallback);
 }
 
 export function coerceFieldDisplayText(value: unknown): string {

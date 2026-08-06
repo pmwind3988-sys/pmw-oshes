@@ -2,6 +2,8 @@
  * Duration and clock formatting shared by every portal screen.
  * The prototype's `hrs()` — kept verbatim in behaviour so the copy reads the same.
  */
+import { formatClock } from "./displayDateTime";
+
 export function formatHours(hours: number): string {
   if (!Number.isFinite(hours) || hours <= 0) return "0 h";
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
@@ -33,12 +35,12 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-/** "Today 09:14" / "Yest. 16:40" / "27 Jul 14:05" — the audit trail's When column. */
+/** "Today 09:14 AM" / "Yest. 04:40 PM" / "27 Jul 02:05 PM" — the audit trail's When column. */
 export function formatAuditWhen(value: string | Date | null | undefined): string {
   const date = value instanceof Date ? value : parseDate(typeof value === "string" ? value : null);
   if (!date) return "—";
 
-  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const time = formatClock(date);
   const today = new Date();
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -54,7 +56,7 @@ export function formatTodayDate(now: Date = new Date()): string {
   return now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 }
 
-/** "HH:MM" — the public confirmation's "Received HH:MM". */
+/** "02:05 PM" — the public confirmation's "Received ...". */
 export function formatClockTime(now: Date = new Date()): string {
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return formatClock(now);
 }

@@ -23,6 +23,7 @@ import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
 import { getSelectedCompany } from "../../utils/companySelection";
+import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import {
   WorkspaceHeader,
@@ -409,7 +410,7 @@ export default function ResponseViewer() {
                     </Stack>
                     <Typography sx={{ fontSize: 13, fontWeight: 700 }}>By {item.SubmittedBy}</Typography>
                     <Typography sx={{ fontSize: 11.5, color: editorial.muted, mt: 0.25 }}>
-                      {item.SubmittedAt ? new Date(item.SubmittedAt).toLocaleString() : "N/A"}
+                      {formatDisplayDateTimeLong(item.SubmittedAt, "N/A")}
                       {(layer ?? 0) > 0 && ` · Layer ${layer}`}
                     </Typography>
                   </Box>
@@ -432,7 +433,7 @@ export default function ResponseViewer() {
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontSize: 16, fontWeight: 800 }}>Submission #{selectedSubmission.Id}</Typography>
                     <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.25 }}>
-                      {selectedSubmission.SubmittedAt ? new Date(selectedSubmission.SubmittedAt).toLocaleString() : "N/A"}
+                      {formatDisplayDateTimeLong(selectedSubmission.SubmittedAt, "N/A")}
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>

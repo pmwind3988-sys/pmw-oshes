@@ -15,6 +15,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type { LayerConfigItem } from "../../types";
 import { getWorkflowAssignment } from "../../utils/workflowAssignmentData";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 
 interface LayerRuntimeState {
   status: string;
@@ -213,7 +214,7 @@ export default function WorkflowAssignmentEditor({
             }}
           >
             <Typography sx={{ fontSize: 10.5, color: editorial.muted, lineHeight: 1.5 }}>
-              Last changed by {assignment.updatedBy} on {new Date(assignment.updatedAt).toLocaleString("en-MY")}.
+              Last changed by {assignment.updatedBy} on {formatDisplayDateTimeLong(assignment.updatedAt)}.
               {assignment.history.length > 0
                 ? ` ${assignment.history.length} earlier assignment${assignment.history.length === 1 ? "" : "s"} retained.`
                 : ""}

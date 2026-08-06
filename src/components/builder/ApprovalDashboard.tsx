@@ -22,6 +22,7 @@ import { buildRejectedWorkflowPatch } from "../../utils/workflowStatus";
 import { buildSurveyJson } from "../../utils/FormBuilderEngine";
 import { formatLayerProgress, getActiveLayers, resolveCurrentLayer, resolveTotalLayerCount } from "./approvalDashboardLayerProgress";
 import { getSelectedCompany } from "../../utils/companySelection";
+import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import { OSHES_LISTS } from "../../config/oshes";
@@ -218,15 +219,7 @@ function getItemDisplayStatus(item: PendingItem): string {
 
 function formatDateTime(d: string | undefined | null): string {
   if (!d) return "N/A";
-  try {
-    const dt = new Date(d);
-    return dt.toLocaleString("en-MY", {
-      year: "numeric", month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit", hour12: true,
-    }).replace(/\b(am|pm)\b/gi, m => m.toUpperCase());
-  } catch {
-    return d;
-  }
+  return formatDisplayDateTimeLong(d, d);
 }
 
 function toDateTimeLocalValue(date: Date): string {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { editorial } from "../../theme/editorial";
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime } from "../../utils/displayDateTime";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -176,23 +177,8 @@ function isDateLikeValue(value: unknown): value is string {
 
 function formatDateTimeValue(value: string, field: PreviewField): string {
   const trimmed = value.trim();
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) return value;
-  if (field.type === "date" || field.inputType === "date" || !trimmed.includes("T")) {
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  }
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).replace(",", "");
+  if (field.type === "date" || field.inputType === "date") return formatDisplayDate(trimmed, value);
+  return formatDisplayDateTime(trimmed, value);
 }
 
 function fieldLooksCurrencyLike(field: PreviewField, value: unknown): boolean {
@@ -228,6 +214,9 @@ function formatScalarValue(value: unknown, field: PreviewField): string {
     if (label) return label;
   }
   if (fieldLooksCurrencyLike(field, normalized)) return formatCurrencyValue(normalized, field);
+  if (typeof normalized === "string" && (field.type === "time" || field.inputType === "time")) {
+    return formatDisplayTime(normalized) || normalized;
+  }
   if (isDateLikeValue(normalized) && (field.type === "date" || field.type === "datetime" || field.inputType === "date" || field.inputType === "datetime-local")) {
     return formatDateTimeValue(normalized, field);
   }

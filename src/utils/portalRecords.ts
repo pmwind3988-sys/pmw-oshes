@@ -11,6 +11,7 @@ import { describeWorkflow } from "./formWorkflow";
 import { routedAssigneeEmail } from "./layerAssignees";
 import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDirectory } from "./portalPeople";
 import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
+import { formatDisplayDayMonthTime } from "./displayDateTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
 
 function normalizeFieldKey(key: string): string {
@@ -203,7 +204,7 @@ export function toPortalRecord(
       statusText: signed ? "Signed" : current ? `Awaiting ${firstName(who)}` : "Not started",
       subText: signed
         ? signedAt
-          ? signedAt.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+          ? formatDisplayDayMonthTime(signedAt)
           : "signed"
         : current
           ? `on this layer ${formatHours(hoursOnLayer)}`

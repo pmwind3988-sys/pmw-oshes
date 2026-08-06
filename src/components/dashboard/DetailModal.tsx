@@ -36,9 +36,10 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { useMsal } from "@azure/msal-react";
-import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult } from "../../types";
+import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult, EvaluationLayerConfig } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
+import { getActiveLayers } from "../builder/approvalDashboardLayerProgress";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
@@ -438,6 +439,13 @@ function formatFieldName(key: string): string {
     .trim();
 
   return decoded.replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/** The stored config for an evaluation layer, respecting the submission's branch. */
+function evaluationLayerConfig(item: Submission, layerNumber: number): EvaluationLayerConfig | undefined {
+  const layer = getActiveLayers(item.layerConfig, item.selectedBranch)
+    .find((candidate) => candidate.layerNumber === layerNumber);
+  return layer?.type === "evaluation" ? layer : undefined;
 }
 
 function formatDateValue(value: string): string | null {
@@ -1511,11 +1519,17 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                     {item.enhancedLayers.map((layer, i) => {
                       if (!layer) return null;
                       if (layer.type === "evaluation") {
+                        // The layer's own config supplies the field titles, types
+                        // and declaration order, so the card lists every question
+                        // the evaluator was asked — not only the ones they filled.
+                        const config = evaluationLayerConfig(item, layer.layerNumber);
                         return (
                           <EvaluationSummary
                             key={i}
                             result={layer}
-                            layerTitle={`Layer ${layer.layerNumber}`}
+                            layerTitle={config?.title || `Layer ${layer.layerNumber}`}
+                            layerDescription={config?.description}
+                            surveyElements={config?.surveyElements}
                           />
                         );
                       }

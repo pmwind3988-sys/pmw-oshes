@@ -36,6 +36,7 @@ import { editorial, editorialShadow } from "../theme/editorial";
 import { WorkspaceNotice } from "../components/builder/WorkspaceLayout";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
+import { formatDisplayDateTime } from "../utils/displayDateTime";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -191,16 +192,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function formatDateTime(value: unknown): string {
   const text = valueToText(value);
   if (!text) return "-";
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  }).replace(",", "");
+  return formatDisplayDateTime(text, text);
 }
 
 function buildEvaluationSurveyJson(elements: Record<string, unknown>[], title: string): Record<string, unknown> {
