@@ -207,36 +207,84 @@ function sharePointFileValueUrl(value: string): string {
   return `${SP_SITE_URL}/_api/web/getFileByServerRelativePath(decodedurl='${encodeServerRelativePathParam(serverPath)}')/$value`;
 }
 
-async function sourceToDataUrl(token: string, source: string): Promise<string> {
-  if (source.startsWith("data:image/")) return source;
-  const requestUrl = sharePointFileValueUrl(source) || source;
+async function fetchAsDataUrl(token: string, requestUrl: string): Promise<string> {
   const response = await fetch(requestUrl, {
     headers: {
       Authorization: `Bearer ${token}`,
+      Accept: "image/*,*/*",
     },
   });
   if (!response.ok) throw new Error(`Media fetch failed: ${response.status}`);
   const contentType = response.headers.get("content-type") || "application/octet-stream";
-  if (!contentType.startsWith("image/")) return source;
+  if (!contentType.startsWith("image/")) throw new Error(`Media is not an image: ${contentType}`);
   const buffer = Buffer.from(await response.arrayBuffer());
   return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
+/**
+ * Inline a stored image so a public reviewer — who holds no SharePoint token —
+ * can actually see it. The `$value` endpoint is tried first because it is the
+ * one that serves raw bytes, then the URL as stored, since library layouts vary
+ * and a failure here shows the reviewer a broken image.
+ */
+async function sourceToDataUrl(token: string, source: string): Promise<string> {
+  if (source.startsWith("data:image/")) return source;
+  const candidates = [sharePointFileValueUrl(source), source].filter(Boolean);
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      return await fetchAsDataUrl(token, candidate);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Media fetch failed");
+}
+
+function isImageLikeSource(source: string): boolean {
+  return /^data:image\//i.test(source) || /\.(png|jpe?g|gif|webp|bmp|svg)([?#].*)?$/i.test(source);
+}
+
+/**
+ * Which fields to inline. The declared media questions always count, but a form
+ * may hold an image in a plain column too — a signature written to a URL field,
+ * an older form whose question type was never one of the media types — so any
+ * value that resolves to an image source is inlined as well.
+ */
+function collectInlinableFields(surveyJson: unknown, fields: Record<string, unknown>): Map<string, string[]> {
+  const declared = collectMediaFieldNames(surveyJson);
+  const inlinable = new Map<string, string[]>();
+
+  for (const [fieldName, value] of Object.entries(fields)) {
+    if (isWorkflowField(fieldName)) continue;
+    const sources = mediaSourcesFromValue(value);
+    if (sources.length === 0) continue;
+    if (!declared.has(fieldName) && !sources.some(isImageLikeSource)) continue;
+    inlinable.set(fieldName, sources);
+  }
+
+  return inlinable;
+}
+
 async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, unknown>): Promise<Record<string, string | string[]>> {
-  const mediaFields = collectMediaFieldNames(surveyJson);
-  if (mediaFields.size === 0) return {};
+  const inlinable = collectInlinableFields(surveyJson, fields);
+  if (inlinable.size === 0) return {};
   let spToken = "";
   const result: Record<string, string | string[]> = {};
 
-  for (const fieldName of mediaFields) {
-    const sources = mediaSourcesFromValue(fields[fieldName]);
-    if (sources.length === 0) continue;
+  for (const [fieldName, sources] of inlinable) {
     const converted: string[] = [];
     for (const source of sources) {
       try {
         if (!spToken) spToken = await getSharePointToken();
         converted.push(await sourceToDataUrl(spToken, source));
-      } catch {
+      } catch (err) {
+        // Best-effort: the reviewer still gets a link, but this is the only
+        // place that knows why the image did not inline.
+        logWarn("api:evaluate:get", "Could not inline media for public review", {
+          fieldName,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
         converted.push(source);
       }
     }

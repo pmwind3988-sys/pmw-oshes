@@ -367,14 +367,21 @@ function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByFie
 
 function MediaValue({ source, accessToken }: { source: string; accessToken?: string | null }) {
   const { src, loading } = useAuthenticatedMediaSource(source, accessToken);
+  // A source the reader is not authorised for — a SharePoint URL reached from a
+  // public evaluation link — would otherwise sit in the card as a broken-image
+  // glyph. Falling back to the link keeps the file reachable and readable.
+  // Remembering *which* source failed rather than a flag means a later src (the
+  // authenticated blob arriving) gets its own chance to render.
+  const [failedSrc, setFailedSrc] = useState("");
 
-  if (isImageLike(src)) {
+  if (isImageLike(src) && failedSrc !== src) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: 10, overflow: "hidden" }}>
           <img
             src={src}
             alt={filenameFromUrl(source)}
+            onError={() => setFailedSrc(src)}
             style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", borderRadius: 6 }}
           />
         </div>
@@ -384,7 +391,7 @@ function MediaValue({ source, accessToken }: { source: string; accessToken?: str
   }
 
   return (
-    <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600 }}>
+    <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, overflowWrap: "anywhere" }}>
       {filenameFromUrl(source)}
     </a>
   );

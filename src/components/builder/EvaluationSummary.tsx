@@ -8,9 +8,17 @@
  * that are really images (signature pads, uploads) render as images rather than
  * as the data URL behind them.
  */
+import { useState } from "react";
 import type { EvaluationLayerResult } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
 import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, isDisplayDateLike } from "../../utils/displayDateTime";
+import {
+  collectDisplayRows,
+  collectFieldDefinitions,
+  isEmptyValue,
+  isRecord,
+  type EvaluationFieldDefinition,
+} from "./evaluationSummaryRows";
 
 interface EvaluationSummaryProps {
   result: EvaluationLayerResult;
@@ -19,41 +27,7 @@ interface EvaluationSummaryProps {
   surveyElements?: Record<string, unknown>[];
 }
 
-interface EvaluationFieldDefinition {
-  name: string;
-  title: string;
-  type: string;
-  inputType?: string;
-  choices?: unknown[];
-  rateMin?: number;
-  rateMax?: number;
-  minRateDescription?: string;
-  maxRateDescription?: string;
-  currency?: string;
-  currencySymbol?: string;
-  locale?: string;
-  decimalPlaces?: number;
-  displayFormat?: string;
-}
-
-const CONTAINER_TYPES = new Set(["panel", "paneldynamic", "page"]);
-const DECORATION_TYPES = new Set(["html", "expression", "formula", "image"]);
 const MEDIA_TYPES = new Set(["signaturepad", "imageupload", "file"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function formatFieldName(key: string): string {
-  return key
-    .replace(/_x0020_/gi, " ")
-    .replace(/_x002f_/gi, "/")
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (character) => character.toUpperCase()) || key;
-}
 
 function numberFromValue(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -71,14 +45,6 @@ function normalizeMaybeJson(value: unknown): unknown {
   } catch {
     return value;
   }
-}
-
-function isEmptyValue(value: unknown): boolean {
-  if (value === null || value === undefined) return true;
-  if (typeof value === "string") return value.trim() === "";
-  if (Array.isArray(value)) return value.length === 0;
-  if (isRecord(value)) return Object.keys(value).length === 0;
-  return false;
 }
 
 function fieldLooksCurrencyLike(field: EvaluationFieldDefinition, value: unknown): boolean {
@@ -141,67 +107,6 @@ function formatValue(value: unknown, field?: EvaluationFieldDefinition): string 
   return String(normalized);
 }
 
-function toFieldDefinition(element: Record<string, unknown>): EvaluationFieldDefinition {
-  const name = typeof element.name === "string" ? element.name : "";
-  return {
-    name,
-    title: typeof element.title === "string" && element.title.trim() ? element.title.trim() : formatFieldName(name),
-    type: typeof element.type === "string" ? element.type : "text",
-    inputType: typeof element.inputType === "string" ? element.inputType : undefined,
-    choices: Array.isArray(element.choices) ? element.choices : undefined,
-    rateMin: typeof element.rateMin === "number" ? element.rateMin : undefined,
-    rateMax: typeof element.rateMax === "number" ? element.rateMax : undefined,
-    minRateDescription: typeof element.minRateDescription === "string" ? element.minRateDescription : undefined,
-    maxRateDescription: typeof element.maxRateDescription === "string" ? element.maxRateDescription : undefined,
-    currency: typeof element.currency === "string" ? element.currency : undefined,
-    currencySymbol: typeof element.currencySymbol === "string" ? element.currencySymbol : undefined,
-    locale: typeof element.locale === "string" ? element.locale : undefined,
-    decimalPlaces: typeof element.decimalPlaces === "number" ? element.decimalPlaces : undefined,
-    displayFormat: typeof element.displayFormat === "string" ? element.displayFormat : undefined,
-  };
-}
-
-/** Declared fields, flattened in declaration order — containers contribute their children, not themselves. */
-function collectFieldDefinitions(elements: Record<string, unknown>[] | undefined): EvaluationFieldDefinition[] {
-  const definitions: EvaluationFieldDefinition[] = [];
-  const seen = new Set<string>();
-
-  const visit = (element: Record<string, unknown>) => {
-    const type = typeof element.type === "string" ? element.type : "";
-    const name = typeof element.name === "string" ? element.name : "";
-    if (name && !CONTAINER_TYPES.has(type) && !DECORATION_TYPES.has(type) && !seen.has(name)) {
-      seen.add(name);
-      definitions.push(toFieldDefinition(element));
-    }
-    for (const key of ["elements", "templateElements", "questions", "pages"]) {
-      const children = element[key];
-      if (Array.isArray(children)) children.filter(isRecord).forEach(visit);
-    }
-  };
-
-  elements?.filter(isRecord).forEach(visit);
-  return definitions;
-}
-
-/**
- * Every row to show: the layer's declared fields first, then anything the stored
- * answer holds that the current layer config no longer declares.
- */
-function collectDisplayRows(
-  fields: Record<string, unknown>,
-  definitions: EvaluationFieldDefinition[],
-): { field: EvaluationFieldDefinition; value: unknown }[] {
-  const declared = new Set(definitions.map((definition) => definition.name));
-  const rows = definitions.map((field) => ({ field, value: fields[field.name] }));
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (declared.has(key) || isEmptyValue(value)) continue;
-    rows.push({ field: { name: key, title: formatFieldName(key), type: "text" }, value });
-  }
-
-  return rows;
-}
-
 function isImageLike(source: string): boolean {
   return /^data:image\//i.test(source) || /\.(png|jpe?g|gif|webp|bmp|svg)([?#].*)?$/i.test(source);
 }
@@ -254,39 +159,57 @@ function filenameFromUrl(source: string): string {
   }
 }
 
+function MediaLink({ source }: { source: string }) {
+  return (
+    <a
+      href={source}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: editorial.pmwBlueDark, fontWeight: 600, overflowWrap: "anywhere" }}
+    >
+      {filenameFromUrl(source)}
+    </a>
+  );
+}
+
+/**
+ * An image that steps aside when it cannot load. A source the reader is not
+ * authorised for — a SharePoint URL opened from a public link — otherwise leaves
+ * a broken-image glyph in a bordered box, which reads as "the signature is
+ * corrupt" rather than "open this to see it".
+ */
+function MediaImage({ source }: { source: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <MediaLink source={source} />;
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${editorial.border}`,
+        borderRadius: 10,
+        background: "#fff",
+        padding: 8,
+        maxWidth: 280,
+        width: "100%",
+      }}
+    >
+      <img
+        src={source}
+        alt={filenameFromUrl(source)}
+        onError={() => setFailed(true)}
+        style={{ display: "block", width: "100%", maxHeight: 160, objectFit: "contain" }}
+      />
+    </div>
+  );
+}
+
 function MediaValue({ sources }: { sources: string[] }) {
   return (
     <div className="eval-summary-media" style={{ display: "grid", gap: 8, justifyItems: "end" }}>
       {sources.map((source, index) => (
-        isImageLike(source) ? (
-          <div
-            key={`${source}-${index}`}
-            style={{
-              border: `1px solid ${editorial.border}`,
-              borderRadius: 10,
-              background: "#fff",
-              padding: 8,
-              maxWidth: 280,
-              width: "100%",
-            }}
-          >
-            <img
-              src={source}
-              alt={filenameFromUrl(source)}
-              style={{ display: "block", width: "100%", maxHeight: 160, objectFit: "contain" }}
-            />
-          </div>
-        ) : (
-          <a
-            key={`${source}-${index}`}
-            href={source}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: editorial.pmwBlueDark, fontWeight: 600, overflowWrap: "anywhere" }}
-          >
-            {filenameFromUrl(source)}
-          </a>
-        )
+        isImageLike(source)
+          ? <MediaImage key={`${source}-${index}`} source={source} />
+          : <MediaLink key={`${source}-${index}`} source={source} />
       ))}
     </div>
   );
@@ -415,9 +338,16 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
       {displayRows.length > 0 && (
         <div>
           <div style={{ ...labelStyle, marginBottom: 8 }}>Evaluation Details</div>
-          {displayRows.map(({ field, value }) => (
-            <div key={field.name} className="eval-summary-row" style={fieldRowStyle}>
-              <div style={{ fontSize: 12, color: editorial.muted, overflowWrap: "anywhere" }}>{field.title}</div>
+          {displayRows.map(({ field, value, sharedNameWith }, index) => (
+            <div key={`${field.name}-${index}`} className="eval-summary-row" style={fieldRowStyle}>
+              <div style={{ fontSize: 12, color: editorial.muted, overflowWrap: "anywhere" }}>
+                {field.title}
+                {sharedNameWith && (
+                  <div style={{ fontSize: 10, color: editorial.warning, marginTop: 2, fontWeight: 600 }}>
+                    Shares the field name “{field.name}” with {sharedNameWith}, so both questions read the one stored answer.
+                  </div>
+                )}
+              </div>
               <div className="eval-summary-value" style={{ ...valueStyle, minWidth: 0, textAlign: "right", justifySelf: "stretch" }}>
                 <FieldValue field={field} value={value} />
               </div>
