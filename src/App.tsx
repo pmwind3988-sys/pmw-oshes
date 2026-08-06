@@ -1430,7 +1430,7 @@ export default function App() {
             path="/form/:formId"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                   <LazyRoute load={loadDynamicFormPage} fallback={<LoadingScreen status="Loading form..." />} />
                 </Box>
               </ErrorBoundary>
@@ -1441,7 +1441,7 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
                   </Box>
                 </ErrorBoundary>
@@ -1453,7 +1453,7 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                     <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
                   </Box>
                 </ErrorBoundary>
@@ -1465,7 +1465,7 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 <ErrorBoundary>
-                  <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                     <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
                   </Box>
                 </ErrorBoundary>
@@ -1492,7 +1492,7 @@ export default function App() {
             path="/eval/:token"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                   <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
                 </Box>
               </ErrorBoundary>
@@ -1502,7 +1502,7 @@ export default function App() {
             path="/eval/:formSlug/:responseId/:layerNumber"
             element={
               <ErrorBoundary>
-                <Box sx={{ minHeight: "100vh", background: APP_BG }}>
+                <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
                   <LazyRoute load={loadEvaluationPage} fallback={<LoadingScreen status="Loading evaluation..." />} />
                 </Box>
               </ErrorBoundary>

@@ -63,7 +63,7 @@ export default function LoadingScreen({ userEmail, progress, status, steps }: Lo
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",

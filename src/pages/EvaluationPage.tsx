@@ -747,7 +747,7 @@ export default function EvaluationPage() {
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
 
   return (
-    <div className="eval-page" style={{ minHeight: "100vh", padding: "clamp(16px, 3vw, 32px) 16px" }}>
+    <div className="eval-page" style={{ minHeight: "100dvh", padding: "clamp(16px, 3vw, 32px) 16px" }}>
       <style>{`
         .eval-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .eval-page h1, .eval-page h2, .eval-page h3 { text-wrap: balance; }

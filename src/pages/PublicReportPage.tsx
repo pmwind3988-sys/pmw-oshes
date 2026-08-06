@@ -56,7 +56,7 @@ function apiHeaders(): Record<string, string> {
 
 function Shell({ stage, children, onExit }: { stage: Stage; children: React.ReactNode; onExit: () => void }) {
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: editorial.skySoft, py: { xs: 2, md: 4 }, px: 2 }}>
+    <Box sx={{ minHeight: "100dvh", backgroundColor: editorial.skySoft, py: { xs: 2, md: 4 }, px: 2 }}>
       <Stack
         direction="row"
         spacing={2}

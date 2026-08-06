@@ -12,7 +12,9 @@ import { portalSections, roleLabel } from "../../utils/portalRole";
 import { builderUrl } from "../../config/oshes";
 import type { PortalNavSection, PortalScreen } from "../../types";
 
-const DRAWER_WIDTH = 288;
+// Capped against the viewport so the nav never fills a small phone edge to edge —
+// the sliver of dimmed page behind it is what tells you the drawer is dismissable.
+const DRAWER_WIDTH = "min(288px, 85vw)";
 const CONTENT_MAX_WIDTH = 1360;
 
 /** Two letters from the display name, or one from the email when there is no name yet. */
@@ -166,9 +168,14 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
+        // A column flex container sizes to its widest child, so without this a
+        // single wide row would stretch the shell — and the page — past the
+        // viewport rather than scrolling inside its own box.
+        maxWidth: "100%",
+        overflowX: "clip",
         background: editorial.skySoft,
         color: editorial.ink,
       }}

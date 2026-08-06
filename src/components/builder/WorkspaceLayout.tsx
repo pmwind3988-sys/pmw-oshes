@@ -101,7 +101,7 @@ export function WorkspaceNotice({ icon, title, message, tone = "neutral", action
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

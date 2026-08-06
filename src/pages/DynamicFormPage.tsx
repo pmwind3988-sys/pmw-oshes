@@ -610,7 +610,7 @@ const SuccessScreen = ({ formTitle, onReset, t }: { formTitle: string; onReset: 
 );
 
 const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
-  <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+  <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
     <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
       <div style={{ width: 66, height: 66, borderRadius: 18, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
       <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: t.textPrimary, marginBottom: 10 }}>Sign in required</div>
@@ -1750,7 +1750,7 @@ export default function DynamicFormPage() {
   }, [showQr]);
 
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <style>{globalCss(t)}</style>
       <Spinner t={t} />
       <div style={{ fontSize: 13, color: t.textMuted, animation: "pulse 1.5s infinite" }}>Loading form...</div>
@@ -1760,7 +1760,7 @@ export default function DynamicFormPage() {
   // A form that loaded without survey content can never be filled in or submitted —
   // say so instead of sitting on a spinner forever.
   if (!error && !formData?.surveyJson) return (
-    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <style>{globalCss(t)}</style>
       <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
@@ -1771,7 +1771,7 @@ export default function DynamicFormPage() {
   );
 
   if (error) return (
-    <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <style>{globalCss(t)}</style>
       <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
@@ -1784,7 +1784,7 @@ export default function DynamicFormPage() {
   if (!isPublicForm && !isAuthenticated) return (<><style>{globalCss(t)}</style><PrivateGate formTitle={formTitle} onSignIn={handleSignIn} t={t} /></>);
 
   return (
-    <div style={{ minHeight: "100vh", background: t.bg }}>
+    <div style={{ minHeight: "100dvh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
       <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>

@@ -49,7 +49,13 @@ export default function SubmissionRow({
   listMetaMap,
 }: SubmissionRowProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  // The row grid below is built from fixed minimums (≈1060px including gaps and
+  // padding), so it cannot be narrowed — below that it pushes the whole document
+  // wider than the viewport, which is what made tablets scroll sideways and let
+  // the page be zoomed out into empty space. Cards carry the same fields down to
+  // any width, so they own everything under lg. Keep this breakpoint in step
+  // with ListHeader, or the column titles appear over stacked cards.
+  const isStacked = useMediaQuery(theme.breakpoints.down("lg"));
   const meta = listMetaMap[item.listTitle] ?? {
     icon: "📋",
     color: editorial.ink,
@@ -110,7 +116,7 @@ export default function SubmissionRow({
     },
   } as const;
 
-  if (isMobile) {
+  if (isStacked) {
     return (
       <Box
         role="button"

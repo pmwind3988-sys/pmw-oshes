@@ -76,7 +76,16 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
       {severe.length === 0 ? (
         <EmptyLine>Nothing high-severity in the last 24 hours.</EmptyLine>
       ) : (
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" }, gap: 1.5 }}>
+        <Box
+          sx={{
+            display: "grid",
+            // minmax(0, 1fr) rather than a bare 1fr: 1fr floors at the track's
+            // min-content width, so one long unbroken reference or email would
+            // widen the whole grid past the viewport.
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+            gap: 1.5,
+          }}
+        >
           {severe.map((record) => (
             <Box
               key={record.reference}
@@ -215,7 +224,16 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
       <Stack spacing={3.4}>
         {severityFirst ? [severePanel, stuckPanel] : [stuckPanel, severePanel]}
 
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: showBottlenecks ? "1fr 1fr" : "1fr" }, gap: 3.4 }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              lg: showBottlenecks ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)",
+            },
+            gap: 3.4,
+          }}
+        >
           <Box sx={PANEL_SX}>
             <PanelHeading
               title="Awaiting your signature"

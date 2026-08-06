@@ -7,9 +7,12 @@ interface ListHeaderProps {
 
 export default function ListHeader({ isAdmin }: ListHeaderProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  // Column titles only make sense over the column grid. SubmissionRow stacks
+  // into cards under lg because the grid's fixed minimums do not fit — the two
+  // breakpoints must stay identical.
+  const isStacked = useMediaQuery(theme.breakpoints.down("lg"));
 
-  if (isMobile) return null;
+  if (isStacked) return null;
 
   return (
     <Box
@@ -19,7 +22,7 @@ export default function ListHeader({ isAdmin }: ListHeaderProps) {
           ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 88px"
           : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
         gap: 2,
-        px: 3,
+        px: 2.5,
         py: 1.5,
         backgroundColor: "rgba(255, 255, 255, 0.9)",
         borderRadius: "8px 8px 0 0",

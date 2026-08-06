@@ -264,7 +264,7 @@ export default function AdminHomePage() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background:
           "var(--app-bg, linear-gradient(180deg, #F6FAFD 0%, #F8FAFC 48%, #FFFFFF 100%))",
         color: editorial.ink,
@@ -485,7 +485,11 @@ export default function AdminHomePage() {
         )}
 
         {sortedSubmissions.length > 0 ? (
-          <>
+          // Above lg these render as a column grid with fixed minimums. It fits at
+          // lg, but browser zoom and long column content can still push past the
+          // page — so the table scrolls inside this box rather than dragging the
+          // whole document wider than the viewport.
+          <Box sx={{ maxWidth: "100%", overflowX: "auto" }}>
             <ListHeader isAdmin={isAdmin} />
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {sortedSubmissions.map((item) => (
@@ -501,7 +505,7 @@ export default function AdminHomePage() {
                 />
               ))}
             </Box>
-          </>
+          </Box>
         ) : (
           <EmptyState hasFilters={hasFilters} />
         )}

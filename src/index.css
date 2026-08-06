@@ -28,8 +28,22 @@
   --app-bg-fallback: linear-gradient(180deg, #eaf5fc 0%, #f7fafd 48%, #ffffff 100%);
 }
 
+html {
+  /* Stop iOS Safari inflating text on rotation, which reflows a fitted layout
+     into an overflowing one. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
+  /* A long reference or address — OSHES-2026-0000, a 40-character mailbox — has
+     no break opportunity, so it sets the min-content width of whatever holds it
+     and prises grid and flex tracks open until the page is wider than the phone.
+     `anywhere` rather than `break-word`: both break the line, but only
+     `anywhere` also counts the break when the intrinsic width is measured, which
+     is the part that decides how wide the track has to be. */
+  overflow-wrap: anywhere;
   font-family: var(--pmw-font-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -47,6 +61,27 @@ textarea {
 
 #root {
   min-height: 100vh;
+  /* dvh follows the mobile browser's collapsing address bar, so a full-height
+     screen is not 60-odd pixels too tall the moment the bar is showing. */
+  min-height: 100dvh;
+
+  /* Nothing inside the app may make the document wider than the device.
+   *
+   * Sideways overflow is not merely a stray scrollbar here: it lets a tablet
+   * pinch out until the page sits as a narrow column surrounded by empty space,
+   * and it turns every menu into a visible jolt — MUI locks body scrolling while
+   * an overlay is open, which clamps the horizontal scroll position and drags
+   * the layout sideways. Wide content (tables) scrolls inside its own
+   * `overflow-x: auto` box instead; this is the net that catches the rest.
+   *
+   * On #root rather than html/body on purpose. `clip` on either of those stops
+   * body's overflow propagating to the viewport, which is exactly the mechanism
+   * MUI's scroll lock relies on — putting it there leaves dialogs scrolling the
+   * page behind them and reintroduces the shift. `clip` also never creates a
+   * scroll container, so the sticky headers inside keep working, and MUI's
+   * overlays portal into <body>, outside this element entirely.
+   */
+  overflow-x: clip;
 }
 
 img,
