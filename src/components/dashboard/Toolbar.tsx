@@ -119,7 +119,7 @@ export default function Toolbar({
           }}
         >
           <TextField
-            placeholder="Search submissions..."
+            placeholder="Search reference no, form or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size="small"

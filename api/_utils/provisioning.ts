@@ -62,6 +62,20 @@ export async function ensureGraphListSchema(token: string, schema: GraphListSche
   await ensureListSchema(token, schema.displayName, schema.columns ?? [], schema.template ?? "genericList");
 }
 
+/**
+ * Reference numbers are provisioned by this deployment rather than by a form
+ * builder: OSHES forms are authored from the HR builder on a different origin,
+ * so a form can be switched to reference numbering without anyone republishing
+ * it here. Ensuring the column at submit time is what closes that gap.
+ */
+export const REFERENCE_COLUMNS: GraphColumnSpec[] = [
+  { name: "ReferenceNo", displayName: "ReferenceNo", type: "text" },
+];
+
+export async function ensureReferenceColumns(token: string, listDisplayName: string): Promise<void> {
+  await ensureListColumns(token, listDisplayName, REFERENCE_COLUMNS);
+}
+
 export async function ensurePdpaColumns(token: string, listDisplayName: string): Promise<void> {
   await ensureListColumns(token, listDisplayName, PDPA_COLUMNS);
 }

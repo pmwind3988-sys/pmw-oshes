@@ -12,6 +12,9 @@ export interface ScheduledWorkflowEmail {
   totalLayers?: number;
   reviewLink?: string;
   submittedBy?: string;
+  /** Lets the cron rebuild the same public/365 email the immediate send would have produced. */
+  authMode?: "365" | "public";
+  submittedAt?: string;
 }
 
 export type WorkflowEmailScheduleLog = Record<string, ScheduledWorkflowEmail>;

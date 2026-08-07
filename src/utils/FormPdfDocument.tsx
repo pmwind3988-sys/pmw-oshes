@@ -5,6 +5,7 @@ import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/render
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
+import { REFERENCE_NO_FIELD } from "./referenceNumber";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ export interface PdfFormData {
     formTitle: string;
     formVersion: string;
     formStatus?: string;
+    /** `[PREFIX-]DDMMYY-NNNN`, when the form issues reference numbers. */
+    referenceNo?: string;
   };
   /** Layer results: each entry is one layer's data */
   layerResults?: PdfLayerResult[];
@@ -587,6 +590,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
   const layoutConfig = pdfConfig?.enabled === false ? undefined : pdfConfig;
   const title = layoutConfig?.title?.trim() || surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
+  // Falls back to the stored column so any caller that hands over the raw list
+  // item gets the reference printed without having to lift it into meta itself.
+  const referenceNo = (meta.referenceNo || String(responseData?.[REFERENCE_NO_FIELD] ?? "")).trim();
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
   const primary = layoutConfig?.primaryColor?.trim() || C.primary;
   const secondary = layoutConfig?.secondaryColor?.trim() || C.secondary;
@@ -631,6 +637,11 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
 
         {/* ═══ INFO GRID ═══ */}
         <View style={S.infoGrid}>
+          {/* First cell: on a printed copy the reference is what someone reads
+              back over the phone, so it leads rather than trails the grid. */}
+          {referenceNo && (
+            <View style={S.infoCell}><Text style={S.infoLabel}>Reference No.</Text><Text style={S.infoValue}>{referenceNo}</Text></View>
+          )}
           <View style={S.infoCell}><Text style={S.infoLabel}>Submitted By</Text><Text style={S.infoValue}>{meta.submittedBy || "—"}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Date Submitted</Text><Text style={S.infoValue}>{fmtDate(meta.submittedAt)}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Form</Text><Text style={S.infoValue}>{meta.formTitle}</Text></View>

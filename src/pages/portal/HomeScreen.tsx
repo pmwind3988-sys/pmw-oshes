@@ -3,7 +3,7 @@ import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { SeverityPill, StatusPill } from "../../components/portal/PortalPills";
-import { severeRecords, stuckRecords } from "../../utils/portalRecords";
+import { recordKey, severeRecords, stuckRecords } from "../../utils/portalRecords";
 import { portalSections } from "../../utils/portalRole";
 import { formatTodayDate } from "../../utils/portalTime";
 import type { PortalRecord, PortalScreen } from "../../types";
@@ -232,14 +232,14 @@ export default function HomeScreen() {
               <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
                 {queue.slice(0, 3).map((record) => (
                   <RecordLine
-                    key={record.reference}
+                    key={recordKey(record)}
                     record={record}
-                    onOpen={() => openDrawer(record.reference)}
+                    onOpen={() => openDrawer(recordKey(record))}
                     right={
                       <Button
                         size="small"
                         variant="contained"
-                        onClick={() => openDrawer(record.reference)}
+                        onClick={() => openDrawer(recordKey(record))}
                         sx={{ minHeight: 32 }}
                       >
                         Review
@@ -265,9 +265,9 @@ export default function HomeScreen() {
             <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
               {myRecords.slice(0, 3).map((record) => (
                 <RecordLine
-                  key={record.reference}
+                  key={recordKey(record)}
                   record={record}
-                  onOpen={() => openDrawer(record.reference)}
+                  onOpen={() => openDrawer(recordKey(record))}
                   right={<StatusPill status={record.status} />}
                 />
               ))}
@@ -330,17 +330,17 @@ export default function HomeScreen() {
               <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
                 {severe.slice(0, 2).map((record) => (
                   <RecordLine
-                    key={`severe-${record.reference}`}
+                    key={`severe-${recordKey(record)}`}
                     record={record}
-                    onOpen={() => openDrawer(record.reference)}
+                    onOpen={() => openDrawer(recordKey(record))}
                     right={<SeverityPill label={record.severity} tone={record.tone} />}
                   />
                 ))}
                 {stuck.slice(0, 2).map((record) => (
                   <RecordLine
-                    key={`stuck-${record.reference}`}
+                    key={`stuck-${recordKey(record)}`}
                     record={record}
-                    onOpen={() => openDrawer(record.reference)}
+                    onOpen={() => openDrawer(recordKey(record))}
                     right={
                       <Typography sx={{ fontSize: 11.5, fontWeight: 800, color: editorial.error, whiteSpace: "nowrap" }}>
                         {record.ageOnLayerLabel}
@@ -367,9 +367,9 @@ export default function HomeScreen() {
               <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
                 {records.slice(0, 3).map((record) => (
                   <RecordLine
-                    key={record.reference}
+                    key={recordKey(record)}
                     record={record}
-                    onOpen={() => openDrawer(record.reference)}
+                    onOpen={() => openDrawer(recordKey(record))}
                     right={<StatusPill status={record.status} />}
                   />
                 ))}

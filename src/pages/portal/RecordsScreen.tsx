@@ -5,6 +5,7 @@ import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import type { PortalStatus } from "../../types";
+import { recordKey, recordMatchesQuery } from "../../utils/portalRecords";
 
 type Scope = "mine" | "all";
 type StatusFilter = "all" | "open" | PortalStatus;
@@ -59,9 +60,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
       } else if (statusFilter !== "all" && record.status !== statusFilter) {
         return false;
       }
-      if (needle && !`${record.reference} ${record.subject} ${record.formName}`.toLowerCase().includes(needle)) {
-        return false;
-      }
+      if (!recordMatchesQuery(record, needle)) return false;
       return true;
     });
   }, [source, formFilter, statusFilter, workflowFilter, query]);
@@ -208,14 +207,14 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
               {rows.map((record) => (
                 <Box
                   component="tr"
-                  key={record.reference}
-                  onClick={() => openDrawer(record.reference)}
+                  key={recordKey(record)}
+                  onClick={() => openDrawer(recordKey(record))}
                   tabIndex={0}
                   role="button"
                   onKeyDown={(event: React.KeyboardEvent) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      openDrawer(record.reference);
+                      openDrawer(recordKey(record));
                     }
                   }}
                   sx={{

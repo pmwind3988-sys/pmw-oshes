@@ -13,6 +13,7 @@ import {
   parseWorkflowEmailSchedule,
   setWorkflowEmailSchedule,
 } from "./_utils/workflowEmail.js";
+import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 
 interface ApiRequest {
   method: string;
@@ -86,6 +87,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 recipient: entry.recipient,
                 layerType: entry.layerType,
                 reviewLink: entry.reviewLink,
+                authMode: entry.authMode,
+                referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
+                submittedAt: entry.submittedAt,
               }),
               { listTitle: formTitle, responseItemId: item.id, layer: entry.layer },
             );

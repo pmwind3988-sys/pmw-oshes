@@ -3,6 +3,7 @@ import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workfl
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { SharePointHttpError } from "./sharepointClient";
 import { OSHES_LISTS } from "../config/oshes";
+import { REFERENCE_NO_FIELD } from "./referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
@@ -72,6 +73,8 @@ export const PDPA_COLUMN_SPECS: SpColumnSpec[] = [
 ];
 
 export const PDF_URL_COLUMN_SPEC: SpColumnSpec = { n: 'PdfUrl', k: SP_FIELD_KIND.text };
+
+export const REFERENCE_NO_COLUMN_SPEC: SpColumnSpec = { n: REFERENCE_NO_FIELD, k: SP_FIELD_KIND.text };
 
 export const SELECTED_BRANCH_COLUMN_SPEC: SpColumnSpec = {
   n: 'SelectedBranch',
@@ -638,6 +641,22 @@ export async function ensurePdpaColumns(token: string, listTitle: string): Promi
 
 export async function ensurePdfUrlColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
   return ensureColumns(token, listTitle, [PDF_URL_COLUMN_SPEC]);
+}
+
+/**
+ * Ensures the column a submission's reference is written to.
+ *
+ * Forms here are authored from the HR builder on another origin, so turning
+ * reference numbering on for a form does not necessarily provision anything on
+ * this site. Ensuring it at submit time — next to the PDPA columns, which exist
+ * for the same reason — means the setting takes effect without a republish.
+ */
+export async function ensureReferenceNoColumn(token: string, listTitle: string): Promise<EnsureColumnsResult> {
+  const result = await ensureColumns(token, listTitle, [REFERENCE_NO_COLUMN_SPEC]);
+  if (result.created.includes(REFERENCE_NO_FIELD)) {
+    await ensureIndexedColumns(token, listTitle, [REFERENCE_NO_FIELD]);
+  }
+  return result;
 }
 
 export async function ensureDocumentLibrary(
@@ -1235,10 +1254,17 @@ interface ApprovalNotificationParams {
 
 const SP_ORIGIN = (() => { try { return new URL(SP_SITE_URL).origin; } catch { return ''; } })();
 
-function makePdfLink(pdfUrl: string | undefined): string {
-  if (!pdfUrl) return '';
-  const absoluteUrl = pdfUrl.startsWith('http') ? pdfUrl : `${SP_ORIGIN}${pdfUrl}`;
-  return `<a href="${escapeHtml(absoluteUrl)}" style="display:inline-block;background:#FFFFFF;color:#0078D4;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;border:1px solid #B4D5F0">View PDF record</a>`;
+function absolutePdfUrl(pdfUrl: string): string {
+  return pdfUrl.startsWith('http') ? pdfUrl : `${SP_ORIGIN}${pdfUrl}`;
+}
+
+/**
+ * Mail clients strip scripts, so the email cannot put anything on the clipboard
+ * itself. The copy button points at this page instead, which holds the review
+ * link and does the clipboard write on click.
+ */
+export function buildShareLinkUrl(reviewLink: string): string {
+  return `${window.location.origin}/share-link?u=${encodeURIComponent(reviewLink)}`;
 }
 
 interface EmailDetail {
@@ -1246,6 +1272,54 @@ interface EmailDetail {
   value: string | number;
 }
 
+/**
+ * Reads the submission's reference so every workflow email can quote it.
+ *
+ * Fetched here rather than threaded through each caller: the reference is a
+ * property of the stored item, and reading it once at send time cannot drift
+ * out of step with what the record actually says.
+ */
+async function getReferenceNoForNotification(
+  token: string,
+  responseListTitle: string,
+  responseItemId: number,
+): Promise<string> {
+  try {
+    const item = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${responseItemId})?$select=${REFERENCE_NO_FIELD}`,
+    ) as Record<string, unknown>;
+    return String(item[REFERENCE_NO_FIELD] || "").trim();
+  } catch {
+    // A list without the column, or an unreadable item, simply means no
+    // reference line — never a failed notification.
+    return "";
+  }
+}
+
+function formatEmailTimestamp(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const formatted = parsed.toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Kuala_Lumpur',
+  });
+  return `${formatted} (MYT)`;
+}
+
+const EMAIL_FONT_STACK = "Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
+const EMAIL_MONO_STACK = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
+
+/**
+ * Shared shell for every workflow email. Table-based and inline-styled because
+ * Outlook ignores most of anything else; the `@media` block only has to sharpen
+ * what already reads acceptably at 600px.
+ */
 function emailBody(params: {
   title: string;
   subtitle: string;
@@ -1255,67 +1329,130 @@ function emailBody(params: {
   statusBg: string;
   statusBorder: string;
   details: EmailDetail[];
+  progress?: { current: number; total: number };
+  instructions?: string[];
   link?: string;
   linkLabel?: string;
+  /** Renders the copy-link card a public step needs before its button. */
+  shareLink?: { url: string; href: string };
+  secondaryLink?: { href: string; label: string };
   pdfUrl?: string;
   note?: string;
 }): string {
   const detailsRows = params.details
     .filter((detail) => String(detail.value).trim())
     .map((detail) => `<tr>
-      <td style="padding:9px 0;font-size:12px;line-height:18px;color:#6B7280;width:132px;vertical-align:top">${escapeHtml(detail.label)}</td>
-      <td style="padding:9px 0;font-size:13px;line-height:18px;color:#111827;font-weight:600;vertical-align:top">${escapeHtml(String(detail.value))}</td>
+      <td class="stack" style="padding:10px 0 0;font-size:12px;line-height:18px;color:#6B7280;width:150px;vertical-align:top">${escapeHtml(detail.label)}</td>
+      <td class="stack" style="padding:10px 0;font-size:14px;line-height:20px;color:#111827;font-weight:600;vertical-align:top;word-break:break-word">${escapeHtml(String(detail.value))}</td>
     </tr>`)
     .join('');
-  const linkHtml = params.link
-    ? `<a href="${escapeHtml(params.link)}" style="display:inline-block;background:#0078D4;color:#FFFFFF;padding:12px 18px;border-radius:8px;text-decoration:none;font-size:14px;line-height:20px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.08)">${escapeHtml(params.linkLabel || 'Open request')}</a>`
+
+  const progressHtml = params.progress && params.progress.total > 1 && params.progress.total <= 12
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px"><tr>${
+      Array.from({ length: params.progress.total }, (_, index) => {
+        const done = index + 1 <= params.progress!.current;
+        return `<td style="padding-right:${index + 1 === params.progress!.total ? 0 : 4}px"><div style="height:6px;border-radius:999px;background:${done ? '#0078D4' : '#E1E8F0'};font-size:0;line-height:0">&nbsp;</div></td>`;
+      }).join('')
+    }</tr></table>`
     : '';
-  const pdfHtml = params.pdfUrl ? makePdfLink(params.pdfUrl) : '';
-  const actionsHtml = linkHtml || pdfHtml
-    ? `<tr><td style="padding:20px 0 4px">
-        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-          ${linkHtml ? `<td style="padding-right:10px">${linkHtml}</td>` : ''}
-          ${pdfHtml ? `<td>${pdfHtml}</td>` : ''}
-        </tr></table>
+
+  const instructionsHtml = params.instructions?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;background:#F7FAFF;border:1px solid #E1E8F0;border-radius:12px">
+      <tr><td style="padding:18px 20px 6px;font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.06em">What you need to do</td></tr>
+      <tr><td style="padding:0 20px 18px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          ${params.instructions.map((step, index) => `<tr>
+            <td style="padding:8px 10px 0 0;width:24px;vertical-align:top"><div style="width:22px;height:22px;border-radius:999px;background:#0078D4;color:#FFFFFF;font-size:12px;line-height:22px;font-weight:800;text-align:center">${index + 1}</div></td>
+            <td style="padding:8px 0 0;font-size:14px;line-height:21px;color:#243B53">${escapeHtml(step)}</td>
+          </tr>`).join('')}
+        </table>
+      </td></tr>
+    </table>`
+    : '';
+
+  const shareHtml = params.shareLink
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0">
+      <tr><td style="padding:0 0 8px;font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.06em">Shareable review link</td></tr>
+      <tr><td style="padding:14px 16px;background:#F1F7FE;border:1px dashed #A9CDF0;border-radius:12px">
+        <a href="${escapeHtml(params.shareLink.url)}" style="font-family:${EMAIL_MONO_STACK};font-size:12px;line-height:19px;color:#0B4A80;text-decoration:none;word-break:break-all">${escapeHtml(params.shareLink.url)}</a>
+      </td></tr>
+    </table>`
+    : '';
+
+  const primaryHref = params.shareLink?.href || params.link;
+  const primaryHtml = primaryHref
+    ? `<tr><td align="center" style="padding:22px 0 0">
+        <a class="btn" href="${escapeHtml(primaryHref)}" style="display:inline-block;background:#0078D4;color:#FFFFFF;padding:14px 30px;border-radius:10px;text-decoration:none;font-size:15px;line-height:20px;font-weight:700;box-shadow:0 2px 6px rgba(0,120,212,0.28)">${escapeHtml(params.shareLink ? 'Copy review link' : (params.linkLabel || 'Open request'))}</a>
+      </td></tr>`
+    : '';
+  const secondaryHtml = params.secondaryLink
+    ? `<tr><td align="center" style="padding:12px 0 0;font-size:13px;line-height:19px;color:#6B7280">
+        <a href="${escapeHtml(params.secondaryLink.href)}" style="color:#0078D4;text-decoration:underline;font-weight:600">${escapeHtml(params.secondaryLink.label)}</a>
+      </td></tr>`
+    : '';
+  const pdfHtml = params.pdfUrl
+    ? `<tr><td align="center" style="padding:12px 0 0">
+        <a href="${escapeHtml(absolutePdfUrl(params.pdfUrl))}" style="display:inline-block;background:#FFFFFF;color:#0078D4;padding:11px 22px;border-radius:10px;text-decoration:none;font-size:13px;line-height:18px;font-weight:700;border:1px solid #B4D5F0">View PDF record</a>
       </td></tr>`
     : '';
   const noteHtml = params.note
-    ? `<tr><td style="padding:12px 0 0;font-size:12px;line-height:18px;color:#6B7280">${escapeHtml(params.note)}</td></tr>`
+    ? `<tr><td style="padding:22px 0 0;font-size:12px;line-height:19px;color:#6B7280">${escapeHtml(params.note)}</td></tr>`
     : '';
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F3F6FA;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>${escapeHtml(params.title)}</title>
+<style>
+  @media only screen and (max-width:600px) {
+    .shell { padding:16px 10px !important; }
+    .pad { padding:22px 20px !important; }
+    .title { font-size:20px !important; line-height:27px !important; }
+    .stack { display:block !important; width:100% !important; padding-bottom:0 !important; }
+    .btn { display:block !important; width:auto !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#F3F6FA;font-family:${EMAIL_FONT_STACK};-webkit-font-smoothing:antialiased">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
   <tr>
-    <td align="center" style="padding:32px 16px">
-      <table role="presentation" width="584" cellpadding="0" cellspacing="0" style="width:100%;max-width:584px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,0.06),0 10px 30px rgba(17,24,39,0.08)">
+    <td class="shell" align="center" style="padding:32px 16px">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(17,24,39,0.06),0 12px 32px rgba(17,24,39,0.08)">
+        <tr><td style="height:4px;background:${params.statusColor};font-size:0;line-height:0">&nbsp;</td></tr>
         <tr>
-          <td style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
-            <div style="font-size:12px;line-height:16px;color:#6B7280;font-weight:700;text-transform:uppercase;letter-spacing:0.08em">PMW OSHES Form</div>
-            <div style="margin-top:4px;font-size:13px;line-height:18px;color:#4B5563">Automated workflow notification</div>
+          <td class="pad" style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
+            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHES Form</div>
+            <div style="margin-top:4px;font-size:13px;line-height:18px;color:#6B7280">Automated workflow notification</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:28px">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;background:${params.statusBg};border:1px solid ${params.statusBorder};border-radius:999px">
+          <td class="pad" style="padding:28px">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:14px;background:${params.statusBg};border:1px solid ${params.statusBorder};border-radius:999px">
               <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:${params.statusColor};text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(params.statusLabel)}</td></tr>
             </table>
-            <h1 style="margin:0 0 8px;font-size:22px;line-height:28px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
-            <p style="margin:0 0 22px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
+            <h1 class="title" style="margin:0 0 8px;font-size:23px;line-height:30px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
+            <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
+            ${progressHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
               ${detailsRows}
             </table>
+            ${instructionsHtml}
+            ${shareHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              ${actionsHtml}
+              ${primaryHtml}
+              ${secondaryHtml}
+              ${pdfHtml}
               ${noteHtml}
             </table>
           </td>
         </tr>
         <tr>
-          <td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
-            This is an automated notification. For full details, attachments, comments, and audit history, open the request in PMW OSHES Forms.
+          <td class="pad" style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
+            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHES Forms.
           </td>
         </tr>
       </table>
@@ -1339,14 +1476,46 @@ export async function triggerApprovalNotification(
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
   const workflowStage = `Layer ${displayNextLayerNumber} of ${totalLayers}`;
   const submissionId = `#${responseItemId}`;
+  const referenceNo = await getReferenceNoForNotification(token, responseListTitle, responseItemId);
+  const refSuffix = referenceNo ? ` [${referenceNo}]` : "";
+  // Blank detail values are dropped by emailBody, so this row simply disappears
+  // on forms that do not issue references.
+  const referenceDetail: EmailDetail = { label: "Reference no.", value: referenceNo };
   const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  // Only a fresh submission knows when it was submitted; a later layer's email
+  // leaves the row out rather than showing the hand-off time as a submit time.
+  const submittedAtIso = action === 'submit' ? new Date().toISOString() : '';
+  const submittedOn = submittedAtIso ? formatEmailTimestamp(submittedAtIso) : '';
+  const isPublicStep = nextLayerAuthMode === 'public';
+  const openLabel = nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval';
   // A public step is usually addressed to a shared mailbox whose watchers are
   // not the ones who sign — the link opens without an account so it can be
   // passed on. Saying so stops it being treated as the reader's own task.
-  const actionNote = nextLayerAuthMode === 'public'
-    ? 'This link opens without a sign-in. Forward it to the person who needs to complete this step; whoever completes it is recorded against this layer.'
+  const actionNote = isPublicStep
+    ? 'Anyone holding this link can complete the step, so share it only with the person who should sign.'
     : 'Only the assigned reviewer or an authorized superuser should act on this workflow step.';
+  // A public step leads with the link and a copy button; a 365 step leads with a
+  // single centred call to action.
+  const actionBlock = (stepLayer: number) => (isPublicStep
+    ? {
+      shareLink: { url: requestLink, href: buildShareLinkUrl(requestLink) },
+      secondaryLink: { href: requestLink, label: `${openLabel} myself` },
+      instructions: [
+        'Copy the review link below — use the "Copy review link" button if you would rather not select it by hand.',
+        `Send the link to whoever must ${nextActionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHES account.`,
+        `They review the submission and record the decision. Whoever completes it is recorded against Layer ${stepLayer}, and the workflow then moves on by itself.`,
+      ],
+    }
+    : {
+      link: requestLink,
+      linkLabel: openLabel,
+      instructions: [
+        `Open the ${nextLayerType === 'evaluation' ? 'evaluation' : 'approval'} with the button below and sign in with your PMW OSHES account.`,
+        'Check the submission details, earlier layers’ decisions and any attachments.',
+        `Record your decision. Layer ${stepLayer} of ${totalLayers} closes and the workflow moves to the next step automatically.`,
+      ],
+    });
   // A shared layer is addressed to everyone named on it until one of them claims it.
   const nextApproverEmails = (Array.isArray(nextApproverEmail) ? nextApproverEmail : [nextApproverEmail ?? ''])
     .map((entry) => (entry ?? '').trim())
@@ -1368,6 +1537,8 @@ export async function triggerApprovalNotification(
       totalLayers,
       reviewLink: targetLink,
       submittedBy,
+      authMode: isPublicStep ? 'public' : '365',
+      ...(submittedAtIso ? { submittedAt: submittedAtIso } : {}),
     });
     await spPatch(token, itemUrl, { WorkflowEmailSchedule: JSON.stringify(schedule) });
   };
@@ -1395,32 +1566,41 @@ export async function triggerApprovalNotification(
         }
         await sendSpEmail(token, {
           to: targetEmails,
-          subject: `Action required: ${formTitle} needs your ${nextActionNoun}`,
+          subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
             layer,
           },
           body: emailBody({
-            title: `${formTitle} needs your ${nextActionNoun}`,
-            subtitle: `A new submission is waiting for you to ${nextActionVerb}. Review the request details and record your decision in PMW OSHES Forms.`,
-            preheader: `${formTitle} ${submissionId} is waiting for ${nextActionNoun}.`,
+            title: isPublicStep
+              ? `${formTitle} needs an ${nextActionNoun}`
+              : `${formTitle} needs your ${nextActionNoun}`,
+            subtitle: isPublicStep
+              ? 'This step is reached through a link that anyone can open, so it can be passed to the right person.'
+              : `A new submission is waiting for you to ${nextActionVerb} it.`,
+            preheader: isPublicStep
+              ? `${formTitle} ${submissionId} needs its ${nextActionNoun} link passed on.`
+              : `${formTitle} ${submissionId} is waiting for ${nextActionNoun}.`,
             statusColor: '#1E40AF',
             statusLabel: 'Action required',
             statusBg: '#EFF6FF',
             statusBorder: '#BFDBFE',
+            progress: { current: layer, total: totalLayers },
             details: [
+              referenceDetail,
               { label: 'Form', value: formTitle },
               { label: 'Submission ID', value: submissionId },
               { label: 'Submitted by', value: submittedBy },
+              { label: 'Submitted on', value: submittedOn },
               { label: 'Workflow stage', value: `Layer ${layer} of ${totalLayers}` },
+              { label: 'Step type', value: nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval' },
+              { label: 'Action needed', value: nextLayerType === 'evaluation' ? 'Complete the evaluation' : 'Approve or reject' },
               { label: 'Current status', value: 'Submitted' },
+              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHES account sign-in' },
             ],
-            link: requestLink,
-            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
-            note: nextLayerAuthMode === 'public'
-              ? actionNote
-              : 'Please complete this step when you have enough context to make the decision.',
+            ...actionBlock(layer),
+            note: actionNote,
           }),
         });
       }
@@ -1433,29 +1613,37 @@ export async function triggerApprovalNotification(
         }
         await sendSpEmail(token, {
           to: nextApproverEmails,
-          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}`,
+          subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
           workflow: {
             listTitle: responseListTitle,
             responseItemId,
             layer: displayNextLayerNumber,
           },
           body: emailBody({
-            title: `${formTitle} is ready for your ${nextActionNoun}`,
-            subtitle: `The previous workflow step has been completed. This request now needs you to ${nextActionVerb} Layer ${displayNextLayerNumber}.`,
+            title: isPublicStep
+              ? `${formTitle} is ready for its ${nextActionNoun}`
+              : `${formTitle} is ready for your ${nextActionNoun}`,
+            subtitle: isPublicStep
+              ? `Layer ${layer} is done. The next step is reached through a link that anyone can open, so it can be passed to the right person.`
+              : `The previous workflow step has been completed. This request now needs you to ${nextActionVerb} Layer ${displayNextLayerNumber}.`,
             preheader: `${formTitle} ${submissionId} has advanced to ${workflowStage}.`,
             statusColor: '#92400E',
             statusLabel: nextLayerType === 'evaluation' ? 'Pending review' : 'Pending approval',
             statusBg: '#FFFBEB',
             statusBorder: '#FDE68A',
+            progress: { current: displayNextLayerNumber, total: totalLayers },
             details: [
+              referenceDetail,
               { label: 'Form', value: formTitle },
               { label: 'Submission ID', value: submissionId },
               { label: 'Submitted by', value: submittedBy },
               { label: 'Completed step', value: `Layer ${layer} of ${totalLayers}` },
               { label: 'Current step', value: workflowStage },
+              { label: 'Step type', value: nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval' },
+              { label: 'Action needed', value: nextLayerType === 'evaluation' ? 'Complete the evaluation' : 'Approve or reject' },
+              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHES account sign-in' },
             ],
-            link: requestLink,
-            linkLabel: nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval',
+            ...actionBlock(displayNextLayerNumber),
             pdfUrl,
             note: actionNote,
           }),
@@ -1464,7 +1652,7 @@ export async function triggerApprovalNotification(
         // Final approval - notify submitter
         await sendSpEmail(token, {
           to: submittedBy,
-          subject: `Status update: ${formTitle} approved`,
+          subject: `Status update: ${formTitle} approved${refSuffix}`,
           body: emailBody({
             title: `${formTitle} has been approved`,
             subtitle: 'All required workflow steps have been completed. No further action is needed from you at this time.',
@@ -1474,6 +1662,7 @@ export async function triggerApprovalNotification(
             statusBg: '#ECFDF5',
             statusBorder: '#A7F3D0',
             details: [
+              referenceDetail,
               { label: 'Form', value: formTitle },
               { label: 'Submission ID', value: submissionId },
               { label: 'Final status', value: 'Approved' },
@@ -1488,7 +1677,7 @@ export async function triggerApprovalNotification(
       // Notify submitter of rejection
       await sendSpEmail(token, {
         to: submittedBy,
-        subject: `Status update: ${formTitle} not approved`,
+        subject: `Status update: ${formTitle} not approved${refSuffix}`,
         body: emailBody({
           title: `${formTitle} was not approved`,
           subtitle: 'The workflow has been closed at the current step. Open the request record to review the outcome details and any recorded reason.',
@@ -1498,6 +1687,7 @@ export async function triggerApprovalNotification(
           statusBg: '#FEF2F2',
           statusBorder: '#FECACA',
           details: [
+            referenceDetail,
             { label: 'Form', value: formTitle },
             { label: 'Submission ID', value: submissionId },
             { label: 'Final status', value: 'Not approved' },

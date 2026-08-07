@@ -17,6 +17,9 @@ import {
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
+import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
+import { ensureReferenceColumns } from "./_utils/provisioning.js";
 import {
   buildWorkflowActionEmail,
   getApplicationBaseUrl,
@@ -828,6 +831,7 @@ function isCoreSubmissionField(fieldName: string): boolean {
     fieldName === "FormVersion" ||
     fieldName === "PublishKey" ||
     fieldName === "FormID" ||
+    fieldName === REFERENCE_NO_FIELD ||
     fieldName === "RawJSON" ||
     fieldName === "PDPAConsent" ||
     fieldName === "PDPANoticeVersion" ||
@@ -1199,7 +1203,35 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
     await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
 
-    const resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+    let resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+
+    // ── Reference number ──────────────────────────────────────────────────
+    // Unlike the HR deployment, nothing here republishes a form, so a form
+    // switched to reference numbering may reach this point with no column to
+    // write to. Provision it on the spot rather than dropping the reference —
+    // and if even that fails, save the submission without one instead of
+    // turning a numbering problem into a failed report.
+    let referenceNo = "";
+    const referenceConfig = parseReferenceNumberConfig(formConfig.ReferenceConfig);
+    if (referenceConfig.enabled) {
+      if (!resolveColumnKey(REFERENCE_NO_FIELD)) {
+        try {
+          await ensureReferenceColumns(token, listTitle);
+          resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+        } catch (ensureError) {
+          logWarn("api:submit-form", "Could not provision the ReferenceNo column", {
+            listTitle,
+            errorMessage: errorMessage(ensureError),
+          });
+        }
+      }
+      if (resolveColumnKey(REFERENCE_NO_FIELD)) {
+        referenceNo = await allocateReferenceNumber({ formTitle: listTitle, config: referenceConfig });
+        submissionBody[REFERENCE_NO_FIELD] = referenceNo;
+      } else {
+        logWarn("api:submit-form", "Reference numbers are on but no ReferenceNo column is available", { listTitle });
+      }
+    }
 
     // Image column fields (urlFieldPatches) are excluded from the Graph create
     // payload — they have never been writable via Graph PATCH on Image columns.
@@ -1317,9 +1349,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = valueToText(formConfig.Slug);
+        const isPublicLayer = firstLayer.authMode === "public" && Boolean(firstLayer.publicToken);
         const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
           ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
+        const submittedAt = new Date().toISOString();
         try {
           await scheduleOrDeliverWorkflowEmail(
             token,
@@ -1332,6 +1366,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               recipient: recipients,
               layerType: firstLayer.type,
               reviewLink,
+              authMode: isPublicLayer ? "public" : "365",
+              referenceNo,
+              submittedAt,
             }),
             {
               listTitle,
@@ -1345,6 +1382,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               totalLayers: parsedLayerConfig?.layers?.length ?? 1,
               reviewLink,
               submittedBy: valueToText(submissionBody.SubmittedBy) || "Public respondent",
+              authMode: isPublicLayer ? "public" : "365",
+              submittedAt,
             },
           );
         } catch (emailError) {
@@ -1358,7 +1397,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    return res.status(200).json({ success: true, id: parentId, childItemIds });
+    return res.status(200).json({ success: true, id: parentId, childItemIds, referenceNo });
   } catch (err) {
     if (!cleanupHandled && tokenForCleanup && uploadedFilesForCleanup.length > 0) {
       await cleanupUploadedFiles(tokenForCleanup, uploadedFilesForCleanup);

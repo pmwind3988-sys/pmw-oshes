@@ -3,7 +3,7 @@ import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { ProportionBar, SeverityPill } from "../../components/portal/PortalPills";
-import { bottlenecks, severeRecords, stuckRecords } from "../../utils/portalRecords";
+import { bottlenecks, recordKey, severeRecords, stuckRecords } from "../../utils/portalRecords";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
 import { nudgeApprover } from "../../utils/portalActions";
@@ -88,10 +88,10 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
         >
           {severe.map((record) => (
             <Box
-              key={record.reference}
+              key={recordKey(record)}
               component="button"
               type="button"
-              onClick={() => openDrawer(record.reference)}
+              onClick={() => openDrawer(recordKey(record))}
               sx={{
                 textAlign: "left",
                 border: editorialHairline,
@@ -148,12 +148,12 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
             </Box>
             <Box component="tbody">
               {stuck.map((record) => (
-                <Box component="tr" key={record.reference} sx={{ "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}>
+                <Box component="tr" key={recordKey(record)} sx={{ "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}>
                   <Box component="td">
                     <Box
                       component="button"
                       type="button"
-                      onClick={() => openDrawer(record.reference)}
+                      onClick={() => openDrawer(recordKey(record))}
                       sx={{ border: "none", background: "none", p: 0, font: "inherit", fontWeight: 700, color: editorial.pmwBlueDark, cursor: "pointer", textAlign: "left" }}
                     >
                       {record.reference}
@@ -246,7 +246,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
               <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
                 {queue.map((record) => (
                   <Stack
-                    key={record.reference}
+                    key={recordKey(record)}
                     direction="row"
                     spacing={1.5}
                     sx={{ alignItems: "center", justifyContent: "space-between", py: 1.25 }}
@@ -257,7 +257,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                         {record.reference} · {record.formName} · {record.layerLabel} · waiting {record.ageOnLayerLabel}
                       </Typography>
                     </Box>
-                    <Button variant="contained" size="small" onClick={() => openDrawer(record.reference)} sx={{ flex: "none", minHeight: 36 }}>
+                    <Button variant="contained" size="small" onClick={() => openDrawer(recordKey(record))} sx={{ flex: "none", minHeight: 36 }}>
                       Review
                     </Button>
                   </Stack>

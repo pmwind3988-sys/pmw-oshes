@@ -54,13 +54,13 @@ async function getOptionalSpDigest(token: string): Promise<string | null> {
   }
 }
 
-function mergeHeaders(token: string, digest: string | null): Record<string, string> {
+function mergeHeaders(token: string, digest: string | null, ifMatch = "*"): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json;odata=nometadata",
     "Content-Type": "application/json;odata=verbose",
     "X-HTTP-Method": "MERGE",
-    "IF-MATCH": "*",
+    "IF-MATCH": ifMatch,
   };
   if (digest) headers["X-RequestDigest"] = digest;
   return headers;
@@ -220,6 +220,86 @@ export async function patchHyperlinkViaSPRest(
     const text = await res.text();
     throw new Error(`SP REST FieldUrlValue update ${res.status}: ${text.slice(0, 300)}`);
   }
+}
+
+export interface SpRestItemWithEtag {
+  fields: Record<string, unknown>;
+  /** Opaque version tag to hand back as `IF-MATCH` on the next write. */
+  etag: string;
+}
+
+/**
+ * Reads one item together with the ETag SharePoint will check on write.
+ *
+ * The ETag is taken from the response *header* rather than the body, because
+ * `odata=nometadata` — used everywhere else in this file — strips the
+ * `odata.etag` property out of the payload.
+ */
+export async function readListItemWithEtag(
+  token: string,
+  listName: string,
+  itemId: string,
+  select?: string[],
+): Promise<SpRestItemWithEtag | null> {
+  const query = select && select.length > 0 ? `?$select=${select.map(encodeURIComponent).join(",")}` : "";
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items(${itemId})${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  if (res.status === 404) return null;
+  const fields = await readJsonOrThrow<Record<string, unknown>>(res, `SP REST read item ${listName}(${itemId})`);
+  return { fields, etag: res.headers.get("etag") || "*" };
+}
+
+/**
+ * Conditional update. Returns false when the item changed underneath us
+ * (HTTP 412), which is the caller's signal to re-read and retry rather than an
+ * error — that race is the normal case under concurrent submissions.
+ */
+export async function mergeListItemIfMatch(
+  token: string,
+  listName: string,
+  itemId: string,
+  fields: Record<string, unknown>,
+  etag: string,
+): Promise<boolean> {
+  const digest = await getOptionalSpDigest(token);
+  const entityType = await getListEntityType(token, listName);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/items(${itemId})`, {
+    method: "POST",
+    headers: mergeHeaders(token, digest, etag),
+    body: JSON.stringify({ __metadata: { type: entityType }, ...fields }),
+  });
+  if (res.status === 412) return false;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`SP REST conditional update ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return true;
+}
+
+/** Queries items by an OData filter, oldest item first. */
+export async function queryListItemsViaSPRest(
+  token: string,
+  listName: string,
+  options: { filter?: string; select?: string[]; top?: number } = {},
+): Promise<Record<string, unknown>[]> {
+  const params = new URLSearchParams({ $orderby: "Id asc", $top: String(options.top ?? 5) });
+  if (options.filter) params.set("$filter", options.filter);
+  if (options.select?.length) params.set("$select", options.select.join(","));
+  const data = await spGet<{ value?: Record<string, unknown>[] }>(
+    token,
+    `${spListEndpoint(listName)}/items?${params.toString()}`,
+    `SP REST query ${listName}`,
+  );
+  return data.value ?? [];
+}
+
+/** OData-safe equality clause for a text column. */
+export function spRestTextEquals(columnName: string, value: string): string {
+  return `${columnName} eq '${escapeODataString(value)}'`;
 }
 
 export async function updateListItemViaSPRest(

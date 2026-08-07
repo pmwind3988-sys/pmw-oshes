@@ -64,11 +64,62 @@ function pad(value: number, size: number): string {
   return String(value).padStart(size, "0");
 }
 
-/** "INC-2607-0142" — code, year/month of filing, then the SharePoint item id. */
+/**
+ * The reference shown to people and searched on.
+ *
+ * A form with reference numbering turned on has already issued its own ID at
+ * submit time, and that is the one on the reporter's screen, in the approval
+ * email and on the printed PDF — so it wins. Everything else keeps the derived
+ * "INC-2607-0142" (code, year/month of filing, SharePoint item id), which is
+ * all a form without numbering has ever had.
+ *
+ * This is a label, not an identity: see `recordKey` for the value the portal
+ * uses to tell two records apart.
+ */
 export function buildReference(code: string, submission: Submission): string {
+  const issued = (submission.referenceNo ?? "").trim();
+  if (issued) return issued;
   const filed = parseDate(submission.submittedAt) ?? parseDate(submission.modifiedAt);
   const stamp = filed ? `${pad(filed.getFullYear() % 100, 2)}${pad(filed.getMonth() + 1, 2)}` : "0000";
   return `${code}-${stamp}-${pad(Number(submission.id) || 0, 4)}`;
+}
+
+/**
+ * The value that identifies a record inside the portal — drawer targets, React
+ * keys, lookups.
+ *
+ * Deliberately *not* the reference. Two forms that both issue references and
+ * share a prefix would produce the same `040826-0001` on the same day, and the
+ * derived references collide too whenever two forms share a catalogue code.
+ * Either way the drawer would open the wrong record. List title plus item id is
+ * unique by construction, because that is what SharePoint guarantees.
+ */
+export function recordKey(record: { listTitle: string; itemId: string }): string {
+  return `${record.listTitle}::${record.itemId}`;
+}
+
+/** Strips separators so punctuation in a pasted reference does not matter. */
+function compact(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Free-text match for the records list.
+ *
+ * References get separator-insensitive matching on top of the plain substring
+ * search, because people retype them from memory ("0408260001"), read them off
+ * a printed PDF, or paste them out of an email subject — and all three should
+ * find the same row.
+ */
+export function recordMatchesQuery(
+  record: Pick<PortalRecord, "reference" | "subject" | "formName">,
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  if (`${record.reference} ${record.subject} ${record.formName}`.toLowerCase().includes(needle)) return true;
+  const compactNeedle = compact(needle);
+  return compactNeedle.length > 0 && compact(record.reference).includes(compactNeedle);
 }
 
 function resolveStatus(submission: Submission, overdue: boolean, hasWorkflow: boolean): PortalStatus {

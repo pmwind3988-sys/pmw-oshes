@@ -8,6 +8,7 @@ import {
   scheduleOrDeliverWorkflowEmail,
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
+import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -34,7 +35,7 @@ const SYSTEM_FIELDS = new Set([
   "FormVersion", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
-  "SelectedBranch",
+  "SelectedBranch", REFERENCE_NO_FIELD,
 ]);
 
 function isWorkflowField(key: string): boolean {
@@ -369,7 +370,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
       }));
 
     // Include submission metadata always
-    for (const key of ["Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
+    for (const key of [REFERENCE_NO_FIELD, "Title", "SubmittedBy", "SubmittedAt", "FormVersion", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
       if (allFields[key] !== undefined) visibleFields[key] = allFields[key];
     }
 
@@ -605,9 +606,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
+        const isPublicNextLayer = notificationNextLayer.authMode === "public" && Boolean(publicToken);
         const reviewLink = notificationNextLayer.authMode === "public" && publicToken
           ? `${appBaseUrl}/eval/${encodeURIComponent(publicToken)}?item=${safeResponseItemId}`
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${safeResponseItemId}/${nextLayerNumber}`;
+        const submittedAt = String(responseItem.fields.Created || "");
         try {
           await scheduleOrDeliverWorkflowEmail(
             graphToken,
@@ -620,6 +623,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               recipient: recipients,
               layerType: notificationNextLayer.type === "evaluation" ? "evaluation" : "approval",
               reviewLink,
+              authMode: isPublicNextLayer ? "public" : "365",
+              submittedAt,
+              referenceNo: String(responseItem.fields[REFERENCE_NO_FIELD] || ""),
             }),
             {
               listTitle: responseListName,
@@ -635,6 +641,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               totalLayers: activeLayers.length,
               reviewLink,
               submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
+              authMode: isPublicNextLayer ? "public" : "365",
+              submittedAt,
             },
           );
         } catch (emailError) {

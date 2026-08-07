@@ -1385,7 +1385,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
             {displayTitle}
           </Typography>
           <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
-            {item?.listTitle} · Reference {item?.submissionId}
+            {item?.listTitle} · Reference {item?.referenceNo || item?.submissionId}
           </Typography>
         </Box>
         <IconButton
@@ -1427,8 +1427,15 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                  <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label={isAdmin ? "SharePoint item" : "Reference"} value={isAdmin ? item.id : item.submissionId} />
+                  <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label={isAdmin ? "SharePoint item" : "Reference"} value={isAdmin ? item.id : (item.referenceNo || item.submissionId)} />
                 </Grid>
+                {/* Admins see the SharePoint item ID in the tile above, so the
+                    issued reference gets its own tile rather than replacing it. */}
+                {isAdmin && item.referenceNo && (
+                  <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                    <InfoTile icon={<FileIcon sx={{ fontSize: 18 }} />} label="Reference no." value={item.referenceNo} />
+                  </Grid>
+                )}
                 {selectedCompany && (
                   <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <InfoTile icon={<ApprovalIcon sx={{ fontSize: 18 }} />} label="Company" value={selectedCompany} />

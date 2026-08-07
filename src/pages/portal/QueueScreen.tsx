@@ -2,6 +2,7 @@ import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { SeverityPill } from "../../components/portal/PortalPills";
+import { recordKey } from "../../utils/portalRecords";
 
 /**
  * "To evaluate" for an evaluator, "My approvals" for an approver — the same
@@ -35,7 +36,7 @@ export default function QueueScreen() {
         <Stack spacing={1.7}>
           {queue.map((record) => (
             <Stack
-              key={record.reference}
+              key={recordKey(record)}
               direction={{ xs: "column", sm: "row" }}
               spacing={1.7}
               sx={{
@@ -62,7 +63,7 @@ export default function QueueScreen() {
                   {record.layerLabel} · {record.slaNote}
                 </Typography>
               </Box>
-              <Button variant="contained" onClick={() => openDrawer(record.reference)} sx={{ flex: "none", minHeight: 44 }}>
+              <Button variant="contained" onClick={() => openDrawer(recordKey(record))} sx={{ flex: "none", minHeight: 44 }}>
                 Open and sign
               </Button>
             </Stack>

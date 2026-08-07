@@ -41,6 +41,8 @@ export interface Submission {
   formVersion: string;
   /** Published profile (PublishKey) the submission was sent under. */
   publishKey?: string;
+  /** `[PREFIX-]DDMMYY-NNNN` issued at submit time, when the form has them on. */
+  referenceNo?: string;
   /** Raw L{n}_Status of the layer currently awaiting action, for lifecycle derivation. */
   currentLayerStatus?: string;
   title: string;

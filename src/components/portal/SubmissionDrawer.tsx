@@ -20,6 +20,7 @@ import { cancelSubmission, nudgeApprover, returnForInformation, signLayer } from
 import { downloadRecordPdf } from "../../utils/portalPdf";
 import type { PortalRecord } from "../../types";
 import ReassignDialog from "./ReassignDialog";
+import { recordKey } from "../../utils/portalRecords";
 
 function FieldGrid({ record }: { record: PortalRecord }) {
   const fields = [
@@ -148,7 +149,7 @@ export default function SubmissionDrawer() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
-  const record = records.find((item) => item.reference === drawerRef) ?? null;
+  const record = records.find((item) => recordKey(item) === drawerRef) ?? null;
   const open = Boolean(record);
 
   const email = normalizeEmail(userEmail);

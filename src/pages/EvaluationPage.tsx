@@ -37,6 +37,7 @@ import { WorkspaceNotice } from "../components/builder/WorkspaceLayout";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
 import { formatDisplayDateTime } from "../utils/displayDateTime";
+import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -852,6 +853,9 @@ export default function EvaluationPage() {
               </div>
             </div>
             <div className="eval-meta-grid" style={{ fontSize: 13, color: COLORS.textSecond, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
+              {!!responseData[REFERENCE_NO_FIELD] && (
+                <div>Reference no.: <strong style={{ color: COLORS.textPrimary }}>{String(responseData[REFERENCE_NO_FIELD])}</strong></div>
+              )}
               <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
               {selectedCompany && <div>Company: {selectedCompany}</div>}
               <div>Submitted: {formatDateTime(responseData.SubmittedAt)}</div>

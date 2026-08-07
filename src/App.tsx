@@ -40,6 +40,7 @@ import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
+import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
 
 
 
@@ -271,6 +272,7 @@ const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadPublicReportPage = () => import("./pages/PublicReportPage");
+const loadShareLinkPage = () => import("./pages/ShareLinkPage");
 const PortalContainer = lazy(() => import("./components/portal/PortalContainer"));
 
 function isPublicRoutePath(pathname: string): boolean {
@@ -278,6 +280,9 @@ function isPublicRoutePath(pathname: string): boolean {
     pathname === "/privacy" ||
     pathname === "/report" ||
     pathname === "/track" ||
+    // Public review links are forwarded to people without an account, so the
+    // page that hands the link on must open without one too.
+    pathname === "/share-link" ||
     pathname.startsWith("/form/") ||
     pathname.startsWith("/eval/")
   );
@@ -557,6 +562,8 @@ function mapSubmission(
       key === "PDPANoticeVersion" ||
       key === "PDPAConsentAt" ||
       key === "RetentionUntil" ||
+      // Surfaced as the record's own identifier, not as one answer among many.
+      key === REFERENCE_NO_FIELD ||
       key === "AuthorId";
 
     if (isDashboardInternalField && !DETAIL_PASSTHROUGH_FIELDS.has(key)) {
@@ -572,6 +579,7 @@ function mapSubmission(
     formId,
     formVersion,
     publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    referenceNo: raw[REFERENCE_NO_FIELD] ? String(raw[REFERENCE_NO_FIELD]) : undefined,
     currentLayerStatus:
       currentLayer > 0 && layerStatusValues[currentLayer - 1]
         ? String(layerStatusValues[currentLayer - 1])
@@ -1182,10 +1190,18 @@ export default function App() {
   const filteredSubmissions = submissions.filter((item) => {
     if (search) {
       const searchLower = search.toLowerCase();
+      // The reference is also matched with separators stripped: people retype it
+      // from memory ("0408260001") or paste it out of an email subject, and both
+      // should find the same row as "040826-0001".
+      const compact = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const compactSearch = compact(searchLower);
+      const referenceNo = item.referenceNo ?? "";
       if (
         !item.title.toLowerCase().includes(searchLower) &&
         !item.formId.toLowerCase().includes(searchLower) &&
-        !item.submissionId.toLowerCase().includes(searchLower)
+        !item.submissionId.toLowerCase().includes(searchLower) &&
+        !referenceNo.toLowerCase().includes(searchLower) &&
+        !(compactSearch.length > 0 && compact(referenceNo).includes(compactSearch))
       ) {
         return false;
       }
@@ -1485,6 +1501,16 @@ export default function App() {
             element={
               <ErrorBoundary>
                 {adminDashboardInner}
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/share-link"
+            element={
+              <ErrorBoundary>
+                <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
+                  <LazyRoute load={loadShareLinkPage} fallback={<LoadingScreen status="Loading link..." />} />
+                </Box>
               </ErrorBoundary>
             }
           />

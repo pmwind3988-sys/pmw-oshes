@@ -12,7 +12,7 @@ import { Survey } from "survey-react-ui";
 import { LayeredDarkPanelless, LayeredLightPanelless } from "survey-core/themes";
 import "survey-core/survey-core.min.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnResolvers } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -35,6 +35,7 @@ import { findLocationField } from "../utils/formFieldHints";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { OSHES_LISTS } from "../config/oshes";
+import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -55,7 +56,39 @@ const COMPANY_CHOICE_REQUIRED_ERROR = "Please choose a company.";
 
 // Columns the pmw-hrform builder adds to response lists but which may be absent on
 // a list provisioned by an older builder. A submission must not fail because of one.
-const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer", "PublishKey"]);
+// Columns a submission tolerates being absent. ReferenceNo is here because a
+// list provisioned before reference numbers existed has no such column, and a
+// respondent should not be blocked on a schema gap.
+const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLayer", "PublishKey", REFERENCE_NO_FIELD]);
+
+/**
+ * Claims this submission's reference from the server.
+ *
+ * Signed-in submissions write their own list item, so without this call two
+ * people submitting at once would compute the same "next" number.
+ * `/api/next-reference` is the only thing that hands numbers out; guests never
+ * come through here because `api/submit-form.ts` allocates on their behalf.
+ *
+ * Failure is propagated rather than swallowed: the reference is the ID the
+ * record is filed, searched and chased under, so a submission saved without one
+ * is worse than a submission the respondent is asked to retry.
+ */
+async function claimReferenceNumber(listTitle: string): Promise<string> {
+  const res = await fetch("/api/next-reference", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+    },
+    body: JSON.stringify({ listTitle }),
+  });
+  const data = await res.json().catch(() => ({})) as { enabled?: boolean; referenceNo?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Could not assign a reference number (${res.status}).`);
+  }
+  return data.enabled && typeof data.referenceNo === "string" ? data.referenceNo : "";
+}
 
 function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
   return (
@@ -600,11 +633,24 @@ function CompanySelector({
   );
 }
 
-const SuccessScreen = ({ formTitle, onReset, t }: { formTitle: string; onReset: () => void; t: typeof LIGHT }) => (
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
+    {referenceNo && (
+      // The reference is what the reporter has to quote when chasing this up,
+      // so it is given room to be read and copied rather than tucked into the
+      // sentence above.
+      <div style={{ maxWidth: 420, margin: "18px auto 22px", padding: "14px 18px", background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8 }}>
+        <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: t.textSecond, marginBottom: 6 }}>Reference number</div>
+        {/* Tabular numerals rather than a mono face: DESIGN.md keeps one family
+            throughout and distinguishes by weight, so the ID reads as fixed-width
+            without importing a second typeface. */}
+        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums", color: t.textPrimary, userSelect: "all", wordBreak: "break-all" }}>{referenceNo}</div>
+        <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your report.</div>
+      </div>
+    )}
     <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
   </div>
 );
@@ -657,6 +703,8 @@ export default function DynamicFormPage() {
   const [enrichedSurveyJson, setEnrichedSurveyJson] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  /** Reference allocated to the submission just made, for the success screen. */
+  const [submittedReference, setSubmittedReference] = useState("");
   // Kept alongside the status so a failed submit can say *why* — swallowing this
   // is what reduced a specific, fixable config error to "could not be completed".
   const [submitError, setSubmitError] = useState("");
@@ -1355,6 +1403,18 @@ export default function DynamicFormPage() {
       if (token) {
         submittedByEmail = String(body.SubmittedBy || userEmail || accounts[0]?.username || "authenticated-user");
         await ensurePdpaColumns(token, cfg.Title as string);
+
+        // Claimed before the item is written so the number and the row appear
+        // together. Guests skip this — api/submit-form.ts allocates for them,
+        // keeping one allocator regardless of how the row gets created.
+        if (parseReferenceNumberConfig(cfg.ReferenceConfig).enabled) {
+          await ensureReferenceNoColumn(token, cfg.Title as string);
+          const referenceNo = await claimReferenceNumber(cfg.Title as string);
+          if (referenceNo) {
+            body[REFERENCE_NO_FIELD] = referenceNo;
+            setSubmittedReference(referenceNo);
+          }
+        }
         if (hasManualBranches) {
           const maxBranchLayers = Math.max(
             1,
@@ -1661,8 +1721,9 @@ export default function DynamicFormPage() {
             retentionUntil: body.RetentionUntil,
           }),
         });
-        const resData = await res.json().catch(() => ({})) as { id?: string; error?: string };
+        const resData = await res.json().catch(() => ({})) as { id?: string; referenceNo?: string; error?: string };
         if (!res.ok) { throw new Error(resData.error || `Submit failed: ${res.status}`); }
+        if (resData.referenceNo) setSubmittedReference(resData.referenceNo);
 
         // If API returned parent item ID and we have matrixData, try server-side child list write
         // (API creates child items using system credential; we verify via RowIds response field)
@@ -1721,6 +1782,7 @@ export default function DynamicFormPage() {
   }, [instance]);
   const handleReset = useCallback(() => {
     setSubmitStatus(null);
+    setSubmittedReference("");
     setSubmitError("");
     setPdpaAccepted(false);
     setPdpaConsentError("");
@@ -1859,7 +1921,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} onReset={handleReset} t={t} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (

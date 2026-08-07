@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bottlenecks, queueFor, severeRecords, severityTone, stuckRecords, toPortalRecord } from "./portalRecords";
+import { bottlenecks, queueFor, recordKey, recordMatchesQuery, severeRecords, severityTone, stuckRecords, toPortalRecord } from "./portalRecords";
 import { describeWorkflow, resolveFormVisibility } from "./formWorkflow";
 import type { ApprovalLayerConfig, CatalogueEntry, ListMetaEntry, Submission } from "../types";
 
@@ -80,6 +80,54 @@ describe("toPortalRecord", () => {
   it("builds a reference from the code, filing month and item id", () => {
     const record = toPortalRecord(submission(), entry(), {}, {}, NOW);
     expect(record.reference).toBe("INC-2607-0142");
+  });
+
+  it("prefers the reference issued at submit time over the derived one", () => {
+    const record = toPortalRecord(submission({ referenceNo: "OSH-040826-0007" }), entry(), {}, {}, NOW);
+    expect(record.reference).toBe("OSH-040826-0007");
+  });
+
+  it("falls back to the derived reference when the issued one is blank", () => {
+    const record = toPortalRecord(submission({ referenceNo: "   " }), entry(), {}, {}, NOW);
+    expect(record.reference).toBe("INC-2607-0142");
+  });
+
+  it("identifies records by list and item, so a shared reference cannot collide", () => {
+    // Two forms issuing unprefixed references both produce 040826-0001 on the
+    // same day. The drawer must still open the record that was clicked.
+    const a = toPortalRecord(submission({ referenceNo: "040826-0001" }), entry(), {}, {}, NOW);
+    const b = toPortalRecord(
+      submission({ id: "7", listTitle: "Hazard Report", referenceNo: "040826-0001" }),
+      entry({ listTitle: "Hazard Report", code: "HAZ" }),
+      {},
+      {},
+      NOW,
+    );
+    expect(a.reference).toBe(b.reference);
+    expect(recordKey(a)).not.toBe(recordKey(b));
+  });
+});
+
+describe("recordMatchesQuery", () => {
+  const row = { reference: "OSH-040826-0007", subject: "Fall from height", formName: "Incident Report" };
+
+  it("matches an empty query", () => {
+    expect(recordMatchesQuery(row, "   ")).toBe(true);
+  });
+
+  it("matches the reference, subject and form name", () => {
+    expect(recordMatchesQuery(row, "040826-0007")).toBe(true);
+    expect(recordMatchesQuery(row, "fall from")).toBe(true);
+    expect(recordMatchesQuery(row, "incident")).toBe(true);
+  });
+
+  it("ignores separators in a reference so a retyped or pasted ID still matches", () => {
+    expect(recordMatchesQuery(row, "OSH0408260007")).toBe(true);
+    expect(recordMatchesQuery(row, "osh 040826 0007")).toBe(true);
+  });
+
+  it("does not match a different reference", () => {
+    expect(recordMatchesQuery(row, "040826-0008")).toBe(false);
   });
 
   it("measures age on the current layer only, not since filing", () => {
