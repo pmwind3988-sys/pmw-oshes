@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { normalizeEmail } from "../../utils/portalPeople";
 import { cancelSubmission, nudgeApprover, returnForInformation, signLayer } from "../../utils/portalActions";
@@ -272,9 +273,12 @@ export default function SubmissionDrawer() {
           <Box>
             <Stack direction="row" spacing={2} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: editorial.muted, fontWeight: 800 }}>
-                  {record.reference} · {record.formName}
-                </Typography>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                  <ReferenceTag value={record.reference} size="md" />
+                  <Typography sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: editorial.muted, fontWeight: 800 }}>
+                    {record.formName}
+                  </Typography>
+                </Stack>
                 <Typography component="h2" sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>
                   {record.subject}
                 </Typography>

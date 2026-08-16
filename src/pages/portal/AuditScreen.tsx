@@ -1,5 +1,6 @@
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { exportAuditCsv } from "../../utils/portalExport";
 
@@ -69,7 +70,7 @@ export default function AuditScreen() {
                   sx={{ "& td": { px: 2, py: 1.1, borderBottom: editorialHairline, verticalAlign: "top" } }}
                 >
                   <Box component="td" sx={{ whiteSpace: "nowrap", color: editorial.muted }}>{entry.whenLabel}</Box>
-                  <Box component="td" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{entry.reference}</Box>
+                  <Box component="td"><ReferenceTag value={entry.reference} size="md" /></Box>
                   <Box component="td">{entry.who}</Box>
                   <Box component="td" sx={{ color: editorial.muted }}>{entry.event}</Box>
                 </Box>

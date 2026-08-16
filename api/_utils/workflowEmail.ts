@@ -474,6 +474,11 @@ export interface WorkflowEmailTemplateParams {
   statusLabel: string;
   title: string;
   subtitle: string;
+  /**
+   * Shown as a badge under the subtitle. Blank omits the badge entirely, so a
+   * form that issues no reference is not given an empty box.
+   */
+  referenceNo?: string;
   progress?: { current: number; total: number };
   details: WorkflowEmailDetail[];
   instructions?: string[];
@@ -502,6 +507,19 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
               <td class="stack" style="padding:10px 0;font-size:14px;line-height:20px;color:#111827;font-weight:600;vertical-align:top;word-break:break-word">${escapeHtml(String(detail.value))}</td>
             </tr>`)
     .join("");
+
+  // The reference is the handle people quote back, so it gets its own badge
+  // above the details rather than sitting as one grey row among nine. Tables and
+  // inline styles, like the rest of the shell, because Outlook drops the
+  // alternatives.
+  const referenceHtml = (params.referenceNo ?? "").trim()
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;background:#EDF7FE;border:1px solid #D7ECFA;border-radius:8px">
+              <tr><td style="padding:9px 14px">
+                <div style="font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.08em">Reference no.</div>
+                <div style="margin-top:2px;font-size:20px;line-height:26px;font-weight:800;color:#005A9E;letter-spacing:0.02em">${escapeHtml(params.referenceNo!.trim())}</div>
+              </td></tr>
+            </table>`
+    : "";
 
   const progressHtml = params.progress && params.progress.total > 1 && params.progress.total <= 12
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px"><tr>${
@@ -588,6 +606,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
             </table>
             <h1 class="title" style="margin:0 0 8px;font-size:23px;line-height:30px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
             <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
+            ${referenceHtml}
             ${progressHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
               ${detailRows}
@@ -626,13 +645,13 @@ export function buildWorkflowActionEmail(
     : isPublicReviewLink(params.reviewLink);
   const submissionId = `#${params.responseItemId}`;
 
-  // Blank details are dropped by renderWorkflowEmail, so this row simply
-  // disappears on forms that do not issue references.
+  // The reference gets the badge under the subtitle and the subject suffix, so
+  // it is deliberately *not* repeated as a detail row. Both disappear on forms
+  // that do not issue references.
   const referenceNo = (params.referenceNo ?? "").trim();
   const referenceSuffix = referenceNo ? ` [${referenceNo}]` : "";
 
   const details: WorkflowEmailDetail[] = [
-    { label: "Reference no.", value: referenceNo },
     { label: "Form", value: params.formTitle },
     { label: "Submission ID", value: submissionId },
     { label: "Submitted by", value: params.submittedBy },
@@ -667,10 +686,14 @@ export function buildWorkflowActionEmail(
       ? `Action required: share the ${actionNoun} link for ${params.formTitle}${referenceSuffix}`
       : `Action required: ${params.formTitle} needs your ${actionNoun}${referenceSuffix}`,
     body: renderWorkflowEmail({
+      // The preheader is the line the inbox shows next to the subject, so it
+      // leads with the reference where there is one and only falls back to the
+      // item id where there is not.
       preheader: isPublic
-        ? `${params.formTitle} ${submissionId} needs its ${actionNoun} link passed on.`
-        : `${params.formTitle} ${submissionId} is waiting for your ${actionNoun}.`,
+        ? `${params.formTitle} ${referenceNo || submissionId} needs its ${actionNoun} link passed on.`
+        : `${params.formTitle} ${referenceNo || submissionId} is waiting for your ${actionNoun}.`,
       statusLabel: "Action required",
+      referenceNo,
       title: isPublic
         ? `${params.formTitle} needs an ${actionNoun}`
         : `${params.formTitle} needs your ${actionNoun}`,

@@ -39,6 +39,7 @@ import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult, EvaluationLayerConfig } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
+import ReferenceTag from "../ReferenceTag";
 import { getActiveLayers } from "../builder/approvalDashboardLayerProgress";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
@@ -1384,9 +1385,12 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
           <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: 0, textWrap: "balance" }}>
             {displayTitle}
           </Typography>
-          <Typography variant="body2" sx={{ color: editorial.muted, mt: 0.5, fontWeight: 700 }}>
-            {item?.listTitle} · Reference {item?.referenceNo || item?.submissionId}
-          </Typography>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", mt: 0.75 }}>
+            <ReferenceTag value={item?.referenceNo || item?.submissionId || ""} size="md" />
+            <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700 }}>
+              {item?.listTitle}
+            </Typography>
+          </Stack>
         </Box>
         <IconButton
           aria-label="Close submission details"

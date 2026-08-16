@@ -138,6 +138,25 @@ const COLORS = {
   shadow: editorialShadow,
 };
 
+/**
+ * The reference number, styled to match `src/components/ReferenceTag.tsx`. This
+ * page renders with plain inline styles rather than MUI, so the treatment is
+ * repeated here instead of imported — keep the two in step.
+ */
+const referenceTag: React.CSSProperties = {
+  display: "inline-block",
+  padding: "3px 10px",
+  borderRadius: 8,
+  background: editorial.blueWash,
+  border: `1px solid ${editorial.pmwBlueSoft}`,
+  color: editorial.pmwBlueDark,
+  fontSize: 15,
+  fontWeight: 800,
+  letterSpacing: "0.02em",
+  fontVariantNumeric: "tabular-nums",
+  userSelect: "all",
+};
+
 const sectionCard: React.CSSProperties = {
   background: COLORS.cardBg,
   border: `1px solid ${COLORS.border}`,
@@ -852,10 +871,15 @@ export default function EvaluationPage() {
                 </div>
               </div>
             </div>
+            {!!responseData[REFERENCE_NO_FIELD] && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+                <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800, color: COLORS.textSecond }}>
+                  Reference no.
+                </span>
+                <span style={referenceTag}>{String(responseData[REFERENCE_NO_FIELD])}</span>
+              </div>
+            )}
             <div className="eval-meta-grid" style={{ fontSize: 13, color: COLORS.textSecond, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
-              {!!responseData[REFERENCE_NO_FIELD] && (
-                <div>Reference no.: <strong style={{ color: COLORS.textPrimary }}>{String(responseData[REFERENCE_NO_FIELD])}</strong></div>
-              )}
               <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
               {selectedCompany && <div>Company: {selectedCompany}</div>}
               <div>Submitted: {formatDateTime(responseData.SubmittedAt)}</div>

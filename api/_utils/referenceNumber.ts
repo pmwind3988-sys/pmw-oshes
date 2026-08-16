@@ -1,12 +1,17 @@
 /**
  * referenceNumber.ts — the human-facing reference a submission is known by.
  *
- * Format is `[PREFIX-]DDMMYY-NNNN`, where DDMMYY is the *Malaysian* calendar day
- * and NNNN counts submissions of that one form on that day, restarting at 1
- * after midnight MYT. The day is fixed to UTC+8 rather than read from the
- * machine clock because the two things that allocate a reference — a browser in
- * an unknown timezone and a Vercel function running in UTC — would otherwise
+ * Format is `ACRONYM-DDMMYY-NNNN`: the form's acronym, the *Malaysian* calendar
+ * day, and a counter over submissions of that one form on that day, restarting
+ * at 1 after midnight MYT. `PTW-070826-0001` is the first Permit To Work filed
+ * on 7 August 2026. The day is fixed to UTC+8 rather than read from the machine
+ * clock because the two things that allocate a reference — a browser in an
+ * unknown timezone and a Vercel function running in UTC — would otherwise
  * disagree about which day it is for eight hours out of every twenty-four.
+ *
+ * The acronym is never optional. A reference is treated as the item's primary
+ * ID, and `070826-0001` on its own says nothing about *what* was filed, so a
+ * form that has no acronym configured gets one derived from its title.
  *
  * This file only *formats*. Handing out a sequence number is a stateful,
  * concurrent operation and lives server-side in `api/_utils/referenceCounter.ts`.
@@ -26,10 +31,15 @@ const MALAYSIA_UTC_OFFSET_MINUTES = 8 * 60;
 const MIN_PAD = 3;
 const MAX_PAD = 8;
 const MAX_PREFIX_LENGTH = 12;
+const MAX_ACRONYM_LENGTH = 4;
+const FALLBACK_ACRONYM = "FRM";
 
 export interface ReferenceNumberConfig {
   enabled: boolean;
-  /** Optional literal prefix, e.g. "OSH" renders as `OSH-040826-0001`. */
+  /**
+   * Acronym override. Blank means "work it out from the form", which is the
+   * usual case — see `resolveReferencePrefix`.
+   */
   prefix: string;
   /** Digits the daily counter is padded to. */
   pad: number;
@@ -48,6 +58,63 @@ export const DEFAULT_REFERENCE_CONFIG: ReferenceNumberConfig = {
 export function normalizeReferencePrefix(value: unknown): string {
   if (typeof value !== "string") return "";
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, MAX_PREFIX_LENGTH);
+}
+
+/**
+ * The acronym a form is known by, worked out from its title: "Permit To Work"
+ * becomes "PTW", "Hazard" becomes "HAZ".
+ *
+ * `src/utils/portalCatalogue.ts` derives its catalogue code from this same
+ * function, so the acronym in a reference and the code the portal labels the
+ * same form with cannot drift apart.
+ */
+export function deriveFormAcronym(formTitle: string): string {
+  const words = String(formTitle ?? "")
+    .replace(/responses?$/i, "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  if (words.length === 0) return FALLBACK_ACRONYM;
+  const acronym =
+    words.length === 1
+      ? words[0].slice(0, 3)
+      : words.slice(0, MAX_ACRONYM_LENGTH).map((word) => word.charAt(0)).join("");
+  return acronym.toUpperCase();
+}
+
+/**
+ * The acronym a reference is actually issued under.
+ *
+ * An author's explicit prefix wins, then the catalogue code the portal already
+ * labels the form with, then the title-derived acronym. The result is never
+ * empty, so every reference carries an acronym whether or not anyone configured
+ * one.
+ */
+export function resolveReferencePrefix(
+  config: Pick<ReferenceNumberConfig, "prefix">,
+  formTitle: string,
+  catalogueCode?: string | null,
+): string {
+  return (
+    normalizeReferencePrefix(config.prefix)
+    || normalizeReferencePrefix(catalogueCode).slice(0, MAX_ACRONYM_LENGTH)
+    || deriveFormAcronym(formTitle)
+  );
+}
+
+/**
+ * Pulls the catalogue code out of a Master Form row's stored LayerConfig blob.
+ *
+ * Returns "" for absent or unparseable config — a missing code is normal, and
+ * `resolveReferencePrefix` has a further fallback behind it.
+ */
+export function catalogueCodeFromLayerConfig(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "";
+  try {
+    const parsed = JSON.parse(raw) as { code?: unknown } | null;
+    return typeof parsed?.code === "string" ? parsed.code : "";
+  } catch {
+    return "";
+  }
 }
 
 function clampPad(value: unknown): number {
@@ -104,7 +171,8 @@ export function malaysiaDateKey(date: Date = new Date()): string {
 }
 
 /**
- * Builds the display form.
+ * Builds the display form. `formTitle` is required rather than optional so a
+ * call site cannot quietly drop the acronym.
  *
  * A sequence wider than `pad` is rendered in full rather than truncated — the
  * 10,000th submission of a day is `...-10000`, never a silent collision with
@@ -114,15 +182,20 @@ export function formatReferenceNumber(
   dateKey: string,
   sequence: number,
   config: Pick<ReferenceNumberConfig, "prefix" | "pad">,
+  formTitle: string,
+  catalogueCode?: string | null,
 ): string {
   const padded = String(Math.max(Math.trunc(sequence), 0)).padStart(clampPad(config.pad), "0");
-  const prefix = normalizeReferencePrefix(config.prefix);
-  return prefix ? `${prefix}-${dateKey}-${padded}` : `${dateKey}-${padded}`;
+  return `${resolveReferencePrefix(config, formTitle, catalogueCode)}-${dateKey}-${padded}`;
 }
 
 /** Preview shown in the builder so authors see the shape before publishing. */
-export function previewReferenceNumber(config: ReferenceNumberConfig, date: Date = new Date()): string {
-  return formatReferenceNumber(malaysiaDateKey(date), 1, config);
+export function previewReferenceNumber(
+  config: ReferenceNumberConfig,
+  formTitle: string,
+  date: Date = new Date(),
+): string {
+  return formatReferenceNumber(malaysiaDateKey(date), 1, config, formTitle);
 }
 
 /** Key identifying one form's counter for one Malaysian day. */

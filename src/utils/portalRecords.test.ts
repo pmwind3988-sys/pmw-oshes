@@ -77,9 +77,16 @@ describe("severityTone", () => {
 });
 
 describe("toPortalRecord", () => {
-  it("builds a reference from the code, filing month and item id", () => {
+  it("builds a reference from the code, the Malaysian filing day and the item id", () => {
     const record = toPortalRecord(submission(), entry(), {}, {}, NOW);
-    expect(record.reference).toBe("INC-2607-0142");
+    expect(record.reference).toBe("INC-300726-0142");
+  });
+
+  it("reads the filing day in Malaysia, not in the reader's timezone", () => {
+    // 17:00 UTC on the 30th is already 01:00 on the 31st in Malaysia, so the
+    // record must not appear to move a day when opened from another timezone.
+    const record = toPortalRecord(submission({ submittedAt: "2026-07-30T17:00:00.000Z" }), entry(), {}, {}, NOW);
+    expect(record.reference).toBe("INC-310726-0142");
   });
 
   it("prefers the reference issued at submit time over the derived one", () => {
@@ -89,16 +96,17 @@ describe("toPortalRecord", () => {
 
   it("falls back to the derived reference when the issued one is blank", () => {
     const record = toPortalRecord(submission({ referenceNo: "   " }), entry(), {}, {}, NOW);
-    expect(record.reference).toBe("INC-2607-0142");
+    expect(record.reference).toBe("INC-300726-0142");
   });
 
   it("identifies records by list and item, so a shared reference cannot collide", () => {
-    // Two forms issuing unprefixed references both produce 040826-0001 on the
-    // same day. The drawer must still open the record that was clicked.
-    const a = toPortalRecord(submission({ referenceNo: "040826-0001" }), entry(), {}, {}, NOW);
+    // "Incident Report" and "Injury Record" both derive the acronym IR, so both
+    // issue IR-040826-0001 on the same day. The drawer must still open the
+    // record that was clicked.
+    const a = toPortalRecord(submission({ referenceNo: "IR-040826-0001" }), entry(), {}, {}, NOW);
     const b = toPortalRecord(
-      submission({ id: "7", listTitle: "Hazard Report", referenceNo: "040826-0001" }),
-      entry({ listTitle: "Hazard Report", code: "HAZ" }),
+      submission({ id: "7", listTitle: "Injury Record", referenceNo: "IR-040826-0001" }),
+      entry({ listTitle: "Injury Record", code: "IR" }),
       {},
       {},
       NOW,

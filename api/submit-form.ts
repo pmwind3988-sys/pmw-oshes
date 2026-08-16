@@ -18,7 +18,11 @@ import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
 import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
-import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
+import {
+  catalogueCodeFromLayerConfig,
+  parseReferenceNumberConfig,
+  REFERENCE_NO_FIELD,
+} from "./_utils/referenceNumber.js";
 import { ensureReferenceColumns } from "./_utils/provisioning.js";
 import {
   buildWorkflowActionEmail,
@@ -1226,7 +1230,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         }
       }
       if (resolveColumnKey(REFERENCE_NO_FIELD)) {
-        referenceNo = await allocateReferenceNumber({ formTitle: listTitle, config: referenceConfig });
+        referenceNo = await allocateReferenceNumber({
+          formTitle: listTitle,
+          config: referenceConfig,
+          catalogueCode: catalogueCodeFromLayerConfig(formConfig.LayerConfig),
+        });
         submissionBody[REFERENCE_NO_FIELD] = referenceNo;
       } else {
         logWarn("api:submit-form", "Reference numbers are on but no ReferenceNo column is available", { listTitle });

@@ -16,7 +16,7 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryMasterFormByTitle } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import { allocateReferenceNumber, ReferenceAllocationError } from "./_utils/referenceCounter.js";
-import { parseReferenceNumberConfig } from "./_utils/referenceNumber.js";
+import { catalogueCodeFromLayerConfig, parseReferenceNumberConfig } from "./_utils/referenceNumber.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -51,7 +51,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const config = parseReferenceNumberConfig(formConfig.ReferenceConfig);
     if (!config.enabled) return res.status(200).json({ enabled: false });
 
-    const referenceNo = await allocateReferenceNumber({ formTitle: listTitle, config });
+    const referenceNo = await allocateReferenceNumber({
+      formTitle: listTitle,
+      config,
+      catalogueCode: catalogueCodeFromLayerConfig(formConfig.LayerConfig),
+    });
     return res.status(200).json({ enabled: true, referenceNo });
   } catch (err) {
     if (err instanceof ReferenceAllocationError) {

@@ -10,6 +10,7 @@ import type {
 import { describeWorkflow, resolveFormVisibility, workflowLayers } from "./formWorkflow";
 import { displayName, layerAssigneeEmail, layerRoleLabel, type PeopleDirectory } from "./portalPeople";
 import { parseDate } from "./portalTime";
+import { deriveFormAcronym } from "./referenceNumber";
 
 const DAY_MS = 86_400_000;
 
@@ -20,18 +21,7 @@ const DAY_MS = 86_400_000;
 export function deriveCode(listTitle: string, config: LayerConfig | null | undefined): string {
   const configured = config?.code?.trim().toUpperCase();
   if (configured) return configured.slice(0, 4);
-
-  const words = listTitle
-    .replace(/responses?$/i, "")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
-  if (words.length === 0) return "FRM";
-  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
-  return words
-    .slice(0, 4)
-    .map((word) => word.charAt(0))
-    .join("")
-    .toUpperCase();
+  return deriveFormAcronym(listTitle);
 }
 
 /** SLA for a specific layer: the layer's own, then the form's, then the global fallback. */

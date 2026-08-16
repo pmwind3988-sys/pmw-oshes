@@ -1,5 +1,6 @@
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { SeverityPill } from "../../components/portal/PortalPills";
 import { recordKey } from "../../utils/portalRecords";
@@ -50,8 +51,9 @@ export default function QueueScreen() {
             >
               <Box sx={{ minWidth: 0 }}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, flexWrap: "wrap" }}>
+                  <ReferenceTag value={record.reference} />
                   <Typography sx={{ fontSize: 11, color: editorial.muted, fontWeight: 700 }}>
-                    {record.reference} · {record.formName}
+                    {record.formName}
                   </Typography>
                   <SeverityPill label={record.severity} tone={record.tone} />
                 </Stack>

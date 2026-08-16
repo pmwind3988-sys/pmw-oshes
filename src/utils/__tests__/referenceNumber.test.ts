@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  catalogueCodeFromLayerConfig,
   DEFAULT_REFERENCE_CONFIG,
+  deriveFormAcronym,
   formatReferenceNumber,
   malaysiaDateKey,
   normalizeReferencePrefix,
   parseReferenceNumberConfig,
   previewReferenceNumber,
   referenceCounterKey,
+  resolveReferencePrefix,
   serializeReferenceNumberConfig,
 } from "../referenceNumber";
 
@@ -40,23 +43,90 @@ describe("malaysiaDateKey", () => {
   });
 });
 
-describe("formatReferenceNumber", () => {
-  it("pads the sequence to the configured width", () => {
-    expect(formatReferenceNumber("040826", 1, { prefix: "", pad: 4 })).toBe("040826-0001");
-    expect(formatReferenceNumber("040826", 12, { prefix: "", pad: 4 })).toBe("040826-0012");
+describe("deriveFormAcronym", () => {
+  it("takes the initials of a multi-word title", () => {
+    expect(deriveFormAcronym("Permit To Work")).toBe("PTW");
+    expect(deriveFormAcronym("Incident Report")).toBe("IR");
   });
 
-  it("prepends a prefix when one is configured", () => {
-    expect(formatReferenceNumber("040826", 3, { prefix: "OSH", pad: 4 })).toBe("OSH-040826-0003");
+  it("takes the first three letters of a single-word title", () => {
+    expect(deriveFormAcronym("Hazard")).toBe("HAZ");
+  });
+
+  it("ignores a trailing Responses suffix, so a list and its form agree", () => {
+    expect(deriveFormAcronym("Permit To Work Responses")).toBe("PTW");
+  });
+
+  it("stops at four initials and skips punctuation", () => {
+    expect(deriveFormAcronym("Job  Safety-Analysis / Worksheet Addendum")).toBe("JSAW");
+  });
+
+  it("falls back when a title carries no letters or digits", () => {
+    expect(deriveFormAcronym("///")).toBe("FRM");
+    expect(deriveFormAcronym("")).toBe("FRM");
+  });
+});
+
+describe("resolveReferencePrefix", () => {
+  it("prefers an explicitly configured prefix", () => {
+    expect(resolveReferencePrefix({ prefix: "OSH" }, "Permit To Work", "PTW")).toBe("OSH");
+  });
+
+  it("falls back to the catalogue code the portal already labels the form with", () => {
+    expect(resolveReferencePrefix({ prefix: "" }, "Incident Report", "INC")).toBe("INC");
+  });
+
+  it("falls back to the title acronym when nothing is configured", () => {
+    expect(resolveReferencePrefix({ prefix: "" }, "Permit To Work")).toBe("PTW");
+    expect(resolveReferencePrefix({ prefix: "" }, "Permit To Work", "  ")).toBe("PTW");
+  });
+
+  it("never resolves to an empty acronym", () => {
+    expect(resolveReferencePrefix({ prefix: "" }, "", null)).toBe("FRM");
+  });
+});
+
+describe("formatReferenceNumber", () => {
+  it("always carries the form acronym, day and daily count", () => {
+    expect(formatReferenceNumber("070826", 1, { prefix: "", pad: 4 }, "Permit To Work")).toBe("PTW-070826-0001");
+    expect(formatReferenceNumber("070826", 12, { prefix: "", pad: 4 }, "Permit To Work")).toBe("PTW-070826-0012");
+  });
+
+  it("uses a configured prefix over the derived acronym", () => {
+    expect(formatReferenceNumber("040826", 3, { prefix: "OSH", pad: 4 }, "Incident Report")).toBe("OSH-040826-0003");
+  });
+
+  it("uses the catalogue code when the config sets no prefix", () => {
+    expect(formatReferenceNumber("040826", 3, { prefix: "", pad: 4 }, "Incident Report", "INC")).toBe(
+      "INC-040826-0003",
+    );
   });
 
   it("renders a sequence wider than the padding in full rather than truncating", () => {
-    expect(formatReferenceNumber("040826", 10000, { prefix: "", pad: 4 })).toBe("040826-10000");
+    expect(formatReferenceNumber("040826", 10000, { prefix: "OSH", pad: 4 }, "Incident Report")).toBe(
+      "OSH-040826-10000",
+    );
   });
 
   it("clamps the padding to a sane range", () => {
-    expect(formatReferenceNumber("040826", 1, { prefix: "", pad: 0 })).toBe("040826-001");
-    expect(formatReferenceNumber("040826", 1, { prefix: "", pad: 99 })).toBe("040826-00000001");
+    expect(formatReferenceNumber("040826", 1, { prefix: "OSH", pad: 0 }, "Incident Report")).toBe("OSH-040826-001");
+    expect(formatReferenceNumber("040826", 1, { prefix: "OSH", pad: 99 }, "Incident Report")).toBe(
+      "OSH-040826-00000001",
+    );
+  });
+});
+
+describe("catalogueCodeFromLayerConfig", () => {
+  it("reads the code out of a stored config", () => {
+    expect(catalogueCodeFromLayerConfig('{"version":"1.0","code":"PTW","layers":[]}')).toBe("PTW");
+  });
+
+  it("returns an empty string for absent, blank, malformed or codeless config", () => {
+    expect(catalogueCodeFromLayerConfig(undefined)).toBe("");
+    expect(catalogueCodeFromLayerConfig("   ")).toBe("");
+    expect(catalogueCodeFromLayerConfig("{not json")).toBe("");
+    expect(catalogueCodeFromLayerConfig('{"layers":[]}')).toBe("");
+    expect(catalogueCodeFromLayerConfig('{"code":42}')).toBe("");
   });
 });
 
@@ -104,8 +174,22 @@ describe("parseReferenceNumberConfig", () => {
 describe("previewReferenceNumber", () => {
   it("shows the first reference of the day", () => {
     expect(
-      previewReferenceNumber({ enabled: true, prefix: "OSH", pad: 4 }, new Date("2026-08-04T02:00:00.000Z")),
+      previewReferenceNumber(
+        { enabled: true, prefix: "OSH", pad: 4 },
+        "Incident Report",
+        new Date("2026-08-04T02:00:00.000Z"),
+      ),
     ).toBe("OSH-040826-0001");
+  });
+
+  it("shows the acronym the form will actually be numbered under when none is typed", () => {
+    expect(
+      previewReferenceNumber(
+        { enabled: true, prefix: "", pad: 4 },
+        "Permit To Work",
+        new Date("2026-08-06T18:00:00.000Z"),
+      ),
+    ).toBe("PTW-070826-0001");
   });
 });
 

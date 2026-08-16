@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { editorial } from "../../theme/editorial";
+import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { reassignLayer } from "../../utils/portalActions";
 import { displayName, normalizeEmail } from "../../utils/portalPeople";
@@ -95,7 +96,9 @@ export default function ReassignDialog({ record, onClose }: { record: PortalReco
 
   return (
     <Dialog open onClose={saving ? undefined : onClose} fullWidth maxWidth="sm" transitionDuration={120}>
-      <DialogTitle sx={{ fontWeight: 800 }}>Reassign {record.reference}</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+        Reassign <ReferenceTag value={record.reference} size="md" />
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
           {record.layerLabel} moves to a different approver. The original approver is told why, and the age on this layer

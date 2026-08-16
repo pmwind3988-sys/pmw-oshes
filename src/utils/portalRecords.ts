@@ -13,6 +13,7 @@ import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDire
 import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
 import { formatDisplayDayMonthTime } from "./displayDateTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
+import { malaysiaDateKey } from "./referenceNumber";
 
 function normalizeFieldKey(key: string): string {
   return key.replace(/_x[0-9a-f]{4}_/gi, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -69,9 +70,15 @@ function pad(value: number, size: number): string {
  *
  * A form with reference numbering turned on has already issued its own ID at
  * submit time, and that is the one on the reporter's screen, in the approval
- * email and on the printed PDF — so it wins. Everything else keeps the derived
- * "INC-2607-0142" (code, year/month of filing, SharePoint item id), which is
- * all a form without numbering has ever had.
+ * email and on the printed PDF — so it wins.
+ *
+ * A form without numbering gets the same `CODE-DDMMYY-NNNN` shape derived from
+ * what it does have: its catalogue code, the Malaysian day it was filed on, and
+ * its SharePoint item id. The day is read in Malaysia time, not the reader's, so
+ * a record does not appear to change date when opened from another timezone.
+ * The trailing number is an item id rather than a count of that day, so these
+ * are not contiguous — but they are unique, and they read the same way as an
+ * issued reference instead of forcing people to learn two formats.
  *
  * This is a label, not an identity: see `recordKey` for the value the portal
  * uses to tell two records apart.
@@ -80,8 +87,7 @@ export function buildReference(code: string, submission: Submission): string {
   const issued = (submission.referenceNo ?? "").trim();
   if (issued) return issued;
   const filed = parseDate(submission.submittedAt) ?? parseDate(submission.modifiedAt);
-  const stamp = filed ? `${pad(filed.getFullYear() % 100, 2)}${pad(filed.getMonth() + 1, 2)}` : "0000";
-  return `${code}-${stamp}-${pad(Number(submission.id) || 0, 4)}`;
+  return `${code}-${filed ? malaysiaDateKey(filed) : "000000"}-${pad(Number(submission.id) || 0, 4)}`;
 }
 
 /**

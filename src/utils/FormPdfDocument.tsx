@@ -93,6 +93,21 @@ const S = StyleSheet.create({
   docRef: { fontSize: 6.5, color: C.muted, textAlign: "right", lineHeight: 1.2 },
   // Info grid
   infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 10 },
+  // The reference gets a band of its own above the grid rather than an 8pt cell
+  // inside it. A printed copy is read back over the phone and filed by hand, so
+  // the one thing someone needs to find on the page must be findable at arm's
+  // length.
+  referenceBand: {
+    alignSelf: "flex-start",
+    backgroundColor: C.blueBg,
+    borderWidth: 0.5,
+    borderColor: C.blueText,
+    paddingVertical: 3.5,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  referenceLabel: { fontSize: 6, color: C.blueText, textTransform: "uppercase", letterSpacing: 0.6 },
+  referenceValue: { fontSize: 13, color: C.blueText, fontWeight: "bold", letterSpacing: 0.4, marginTop: 1 },
   infoCell: { width: "50%", marginBottom: 4, paddingRight: 8 },
   infoLabel: { fontSize: 6, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
   infoValue: { fontSize: 8, color: C.text, marginTop: 1, lineHeight: 1.25 },
@@ -635,13 +650,16 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           <Text style={{ color: badge.text }}>{badge.label}</Text>
         </View>}
 
+        {/* ═══ REFERENCE ═══ */}
+        {referenceNo && (
+          <View style={S.referenceBand}>
+            <Text style={S.referenceLabel}>Reference No.</Text>
+            <Text style={S.referenceValue}>{referenceNo}</Text>
+          </View>
+        )}
+
         {/* ═══ INFO GRID ═══ */}
         <View style={S.infoGrid}>
-          {/* First cell: on a printed copy the reference is what someone reads
-              back over the phone, so it leads rather than trails the grid. */}
-          {referenceNo && (
-            <View style={S.infoCell}><Text style={S.infoLabel}>Reference No.</Text><Text style={S.infoValue}>{referenceNo}</Text></View>
-          )}
           <View style={S.infoCell}><Text style={S.infoLabel}>Submitted By</Text><Text style={S.infoValue}>{meta.submittedBy || "—"}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Date Submitted</Text><Text style={S.infoValue}>{fmtDate(meta.submittedAt)}</Text></View>
           <View style={S.infoCell}><Text style={S.infoLabel}>Form</Text><Text style={S.infoValue}>{meta.formTitle}</Text></View>

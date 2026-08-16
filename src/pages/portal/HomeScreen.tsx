@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { SeverityPill, StatusPill } from "../../components/portal/PortalPills";
 import { recordKey, severeRecords, stuckRecords } from "../../utils/portalRecords";
@@ -70,9 +71,12 @@ function RecordLine({
         <Typography className="home-line-title" sx={{ fontSize: 13.5, fontWeight: 700 }} noWrap>
           {record.subject}
         </Typography>
-        <Typography sx={{ fontSize: 11, color: editorial.muted }} noWrap>
-          {record.reference} · {record.formName} · {record.hasWorkflow ? record.layerLabel : "no approval step"}
-        </Typography>
+        <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, mt: 0.2 }}>
+          <ReferenceTag value={record.reference} sx={{ flex: "none" }} />
+          <Typography sx={{ fontSize: 11, color: editorial.muted, minWidth: 0 }} noWrap>
+            {record.formName} · {record.hasWorkflow ? record.layerLabel : "no approval step"}
+          </Typography>
+        </Stack>
       </Box>
       <Box sx={{ flex: "none" }}>{right}</Box>
     </Stack>
@@ -434,9 +438,12 @@ export default function HomeScreen() {
                     <Typography sx={{ fontSize: 13 }} noWrap>
                       {entry.event}
                     </Typography>
-                    <Typography sx={{ fontSize: 11, color: editorial.muted }} noWrap>
-                      {entry.whenLabel} · {entry.reference} · {entry.who}
-                    </Typography>
+                    <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, mt: 0.2 }}>
+                      <ReferenceTag value={entry.reference} sx={{ flex: "none" }} />
+                      <Typography sx={{ fontSize: 11, color: editorial.muted, minWidth: 0 }} noWrap>
+                        {entry.whenLabel} · {entry.who}
+                      </Typography>
+                    </Stack>
                   </Box>
                 ))}
               </Stack>

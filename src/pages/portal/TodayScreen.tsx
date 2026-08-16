@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { ProportionBar, SeverityPill } from "../../components/portal/PortalPills";
 import { bottlenecks, recordKey, severeRecords, stuckRecords } from "../../utils/portalRecords";
@@ -105,13 +106,16 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
               }}
             >
               <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                <SeverityPill label={record.severity} tone={record.tone} />
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
+                  <ReferenceTag value={record.reference} />
+                  <SeverityPill label={record.severity} tone={record.tone} />
+                </Stack>
                 <Typography sx={{ fontSize: 11, color: editorial.muted, whiteSpace: "nowrap" }}>{record.filedLabel}</Typography>
               </Stack>
               <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
               <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.5 }}>{record.location || "Location not given"}</Typography>
               <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 1.25, pt: 1, borderTop: editorialHairline }}>
-                {record.reference} · {record.layerLabel}
+                {record.layerLabel}
               </Typography>
             </Box>
           ))}

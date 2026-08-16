@@ -116,6 +116,8 @@ async function createCounterItem(token: string, formTitle: string, titleKey: str
 export interface AllocateReferenceParams {
   formTitle: string;
   config: Pick<ReferenceNumberConfig, "prefix" | "pad">;
+  /** The form's catalogue code, if it has one; used as the acronym when the config sets no prefix. */
+  catalogueCode?: string | null;
   /** Injectable for tests; defaults to now. */
   now?: Date;
 }
@@ -171,7 +173,7 @@ export async function allocateReferenceNumber(params: AllocateReferenceParams): 
       { LastDateKey: dateKey, LastNumber: next },
       current.etag,
     );
-    if (written) return formatReferenceNumber(dateKey, next, config);
+    if (written) return formatReferenceNumber(dateKey, next, config, formTitle, params.catalogueCode);
 
     logWarn("api:reference-counter", "Reference counter contended; retrying", { formTitle, attempt });
     await sleep(backoffDelay(attempt));

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Box, Button, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
 import { exportRecordsCsv } from "../../utils/portalExport";
@@ -223,9 +224,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
                     "&:hover": { backgroundColor: editorial.blueWash },
                   }}
                 >
-                  <Box component="td" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                    {record.reference}
-                  </Box>
+                  <Box component="td"><ReferenceTag value={record.reference} size="md" /></Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>
                     {!compact && <Typography sx={{ fontSize: 12, color: editorial.muted }}>{record.subject}</Typography>}
