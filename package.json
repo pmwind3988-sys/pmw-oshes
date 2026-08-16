@@ -30,9 +30,7 @@
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.14.2",
-    "survey-core": "^2.5.22",
-    "survey-react-ui": "^2.5.22"
+    "react-router-dom": "^7.14.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

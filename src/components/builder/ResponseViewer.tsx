@@ -2,14 +2,14 @@
  * ResponseViewer.tsx — Admin view for all form submissions
  * Route: /admin/responses/:formTitle
  */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { FlatLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../../native/NativeForm";
+import { parseForm } from "../../native/schema";
+import { useNativeForm } from "../../native/useNativeForm";
+import "../../native/native-form.css";
 
 import DOMPurify from "dompurify";
 import { Alert, Box, Button, Link, MenuItem, Stack, TextField, Typography } from "@mui/material";
@@ -21,7 +21,7 @@ import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
-import { rowsToHtml, getDynamicMatrixFields } from "../../utils/DynamicMatrix";
+import { rowsToHtml, getDynamicMatrixFields } from "../../utils/matrixData";
 import { getSelectedCompany } from "../../utils/companySelection";
 import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { editorial, editorialHairline } from "../../theme/editorial";
@@ -265,38 +265,35 @@ export default function ResponseViewer() {
       ? submissions
       : submissions.filter((s) => s.Status.toLowerCase().includes(statusFilter.toLowerCase()));
 
-  const modelRef = useRef<Model | null>(null);
-  // Dispose model on unmount
-  useEffect(() => {
-    return () => modelRef.current?.dispose();
-  }, []);
-
-  // Render preview survey with data
-  const previewSurvey = useMemo(() => {
+  // The published document this response was answered against.
+  const previewForm = useMemo(() => {
     if (!surveyJson) return null;
     try {
-      const m = new Model(surveyJson as object);
-      m.applyTheme(FlatLightPanelless);
-      m.mode = "display";
-      // If there's a selected submission, load its data
-      if (selectedSubmission?.RawJSON) {
-        try {
-          const data = JSON.parse(selectedSubmission.RawJSON);
-          m.data = data;
-        } catch {
-          // Ignore parse errors
-        }
-      }
-      if (selectedResponseData) {
-        m.data = selectedResponseData;
-      }
-      modelRef.current?.dispose();
-      modelRef.current = m;
-      return m;
+      return parseForm(surveyJson);
     } catch {
       return null;
     }
-  }, [surveyJson, selectedSubmission?.RawJSON, selectedResponseData]);
+  }, [surveyJson]);
+
+  /**
+   * The answers to show in it. The response list's own columns win over
+   * `RawJSON`, which is the snapshot taken at submission time and can lag
+   * anything an approver corrected since.
+   */
+  const previewAnswers = useMemo<Record<string, unknown>>(() => {
+    if (selectedResponseData) return selectedResponseData as Record<string, unknown>;
+    if (selectedSubmission?.RawJSON) {
+      try {
+        return JSON.parse(selectedSubmission.RawJSON) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }, [selectedSubmission?.RawJSON, selectedResponseData]);
+
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const previewRuntime = useNativeForm(previewForm ?? placeholderForm, previewAnswers, { readOnly: true });
 
   const selectedCompany = getSelectedCompany(selectedResponseData, surveyJson);
 
@@ -480,10 +477,8 @@ export default function ResponseViewer() {
               </Box>
 
               <Box sx={{ p: 2, maxHeight: 500, overflow: "auto" }}>
-                {previewSurvey ? (
-                  <div className="response-survey-preview">
-                    <Survey model={previewSurvey} />
-                  </div>
+                {previewForm ? (
+                  <NativeFormView runtime={previewRuntime} />
                 ) : (
                   <Typography sx={{ fontSize: 13, color: editorial.muted }}>Loading form preview...</Typography>
                 )}

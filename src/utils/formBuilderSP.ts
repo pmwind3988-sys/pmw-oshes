@@ -29,6 +29,12 @@ export interface SpColumnSpec {
   ml?: boolean;
   rt?: boolean;
   choices?: string[];
+  /**
+   * The question has "Other" enabled, so the column must accept a value outside
+   * its choice list. Without FillInChoice SharePoint rejects the typed answer and
+   * the whole submission fails on a question the respondent answered legally.
+   */
+  fillIn?: boolean;
   label?: string;
 }
 
@@ -171,6 +177,21 @@ export interface SharePointColumnResolvers {
   isMultiValueColumn: (fieldName: string) => boolean;
 }
 
+/**
+ * Just the name→key half of {@link getSharePointColumnResolvers}.
+ *
+ * Callers that only translate authored column names — the approval directory
+ * readers — take this rather than destructuring the pair, which keeps them
+ * source-identical to their pmw-hrform counterparts.
+ */
+export async function getSharePointColumnKeyResolver(
+  token: string,
+  listTitle: string,
+): Promise<(fieldName: string) => string | null> {
+  const { resolveColumnKey } = await getSharePointColumnResolvers(token, listTitle);
+  return resolveColumnKey;
+}
+
 export async function getSharePointColumnResolvers(
   token: string,
   listTitle: string,
@@ -202,6 +223,10 @@ function buildColumnBody(spec: SpColumnSpec): Record<string, unknown> {
   }
   if ((spec.k === 6 || spec.k === 15) && spec.choices && spec.choices.length > 0) {
     body.Choices = { results: spec.choices };
+    // A question with "Other" enabled submits a value the respondent typed. Without
+    // FillInChoice the column treats it as invalid; with it, the answer is stored and
+    // shown like any other.
+    if (spec.fillIn) body.FillInChoice = true;
   }
   return body;
 }

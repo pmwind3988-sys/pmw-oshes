@@ -21,7 +21,14 @@ import {
   startFreshReauthentication,
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
-import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta } from "./utils/spConfig";
+import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, resolveFormBuilderAccess } from "./utils/spConfig";
+import {
+  EMPTY_SUBMISSION_FILTERS,
+  hasActiveFilters,
+  sortSubmissions,
+  submissionMatchesFilters,
+  type SubmissionFilterState,
+} from "./utils/submissionFilters";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
 import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
@@ -41,6 +48,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
+import { builderUrl } from "./config/oshes";
 
 
 
@@ -273,6 +281,8 @@ const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadPublicReportPage = () => import("./pages/PublicReportPage");
 const loadShareLinkPage = () => import("./pages/ShareLinkPage");
+const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
+const loadNativeFormPreviewPage = () => import("./pages/NativeFormPreviewPage");
 const PortalContainer = lazy(() => import("./components/portal/PortalContainer"));
 
 function isPublicRoutePath(pathname: string): boolean {
@@ -284,7 +294,10 @@ function isPublicRoutePath(pathname: string): boolean {
     // page that hands the link on must open without one too.
     pathname === "/share-link" ||
     pathname.startsWith("/form/") ||
-    pathname.startsWith("/eval/")
+    pathname.startsWith("/eval/") ||
+    // Read-only render of a published form. /native/demo needs no tenant at
+    // all, which is what makes it useful for checking the engine itself.
+    pathname.startsWith("/native/")
   );
 }
 
@@ -335,16 +348,6 @@ function isInternalAccount(account: AccountInfo | null): boolean {
 function isUnauthorizedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /\b401\b/.test(message) || message.toLowerCase().includes("unauthorized");
-}
-
-function normalizeStatus(status: string | null): string {
-  if (!status) return "pending";
-  const normalized = status.toLowerCase().replace(/[\s_-]/g, "");
-  if (normalized === "fullyapproved" || normalized === "completed") return "fullyapproved";
-  if (normalized === "approved") return "approved";
-  if (normalized.includes("reject")) return "rejected";
-  if (normalized.includes("progress") || normalized.includes("review")) return "inprogress";
-  return "pending";
 }
 
 function buildConfiguredListFallback(allowedTitles: Set<string>): DiscoveredList[] {
@@ -625,6 +628,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const userEmail = activeAccount?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canUseFormBuilder, setCanUseFormBuilder] = useState(false);
   /** Read-only OSHES group. Members see everything and can act on nothing. */
   const [isAuditor, setIsAuditor] = useState(false);
   const [authProfileStatus, setAuthProfileStatus] = useState<AuthProfileStatus>("unknown");
@@ -642,11 +646,8 @@ export default function App() {
   const [authErrorStep, setAuthErrorStep] = useState<AuthLoadStep | null>(null);
 
   // Filters
-  const [search, setSearch] = useState("");
-  const [listFilter, setListFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
   const [sortBy, setSortBy] = useState("newest");
-  const [submitterFilter, setSubmitterFilter] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -899,6 +900,9 @@ export default function App() {
 
         setIsAdmin(adminResult);
         setIsAuditor(auditorResult);
+        void resolveFormBuilderAccess(spClient, adminResult).then((allowed) => {
+          if (!cancelled) setCanUseFormBuilder(allowed);
+        });
         setLoadedConfig(config);
         setLoadProgress(50);
 
@@ -1186,53 +1190,10 @@ export default function App() {
     setPageState("loading");
   };
 
-  // Filter + sort logic
-  const filteredSubmissions = submissions.filter((item) => {
-    if (search) {
-      const searchLower = search.toLowerCase();
-      // The reference is also matched with separators stripped: people retype it
-      // from memory ("0408260001") or paste it out of an email subject, and both
-      // should find the same row as "040826-0001".
-      const compact = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const compactSearch = compact(searchLower);
-      const referenceNo = item.referenceNo ?? "";
-      if (
-        !item.title.toLowerCase().includes(searchLower) &&
-        !item.formId.toLowerCase().includes(searchLower) &&
-        !item.submissionId.toLowerCase().includes(searchLower) &&
-        !referenceNo.toLowerCase().includes(searchLower) &&
-        !(compactSearch.length > 0 && compact(referenceNo).includes(compactSearch))
-      ) {
-        return false;
-      }
-    }
-    if (listFilter && item.listTitle !== listFilter) return false;
-    if (statusFilter !== "all" && normalizeStatus(item.formStatus) !== statusFilter.toLowerCase()) return false;
-    if (submitterFilter) {
-      const submitterLower = submitterFilter.toLowerCase();
-      const submitterCandidates = [
-        item.submittedByEmail,
-        item.submitterName ?? "",
-        item.createdByName ?? "",
-        item.createdByEmail ?? "",
-      ];
-      if (!submitterCandidates.some((candidate) => candidate.toLowerCase().includes(submitterLower))) return false;
-    }
-    return true;
-  });
-
-  const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
-    switch (sortBy) {
-      case "oldest":
-        return (a.submittedAt || "").localeCompare(b.submittedAt || "");
-      case "status":
-        return normalizeStatus(a.formStatus).localeCompare(normalizeStatus(b.formStatus));
-      case "list":
-        return a.listTitle.localeCompare(b.listTitle);
-      default: // newest
-        return (b.submittedAt || "").localeCompare(a.submittedAt || "");
-    }
-  });
+  // Filter + sort. Both live in submissionFilters so the dashboard, the approval
+  // workspace and the response viewer narrow a list the same way.
+  const filteredSubmissions = submissions.filter((item) => submissionMatchesFilters(item, filters));
+  const sortedSubmissions = sortSubmissions(filteredSubmissions, sortBy);
 
   const listMetaMap = { ...loadedConfig?.listMetaMap };
   for (const list of visibleLists) {
@@ -1241,7 +1202,7 @@ export default function App() {
     }
   }
 
-  const hasFilters = !!(search || listFilter || statusFilter !== "all" || submitterFilter);
+  const hasFilters = hasActiveFilters(filters);
 
   // One client instance for the portal, so its effects do not re-run every render.
   const portalSpClient = useMemo(
@@ -1379,12 +1340,30 @@ export default function App() {
     </ErrorBoundary>
   );
 
+  /**
+   * Hands off to the shared builder in pmw-hrform, in a new tab.
+   *
+   * `noopener` matters here: the builder is a different origin holding the same
+   * tenant's session, and an opener reference would let it reach back into this
+   * window. Silently does nothing when VITE_BUILDER_URL is unset — the same
+   * condition that hides the header link, so no control here promises a page
+   * that cannot exist.
+   */
+  const openBuilder = (formTitle?: string) => {
+    const url = builderUrl(formTitle);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   // ---- Legacy full dashboard, kept for admin power tools ----
   const adminDashboardInner = (
     <ErrorBoundary>
       <DashboardProvider
         userEmail={userEmail}
         isAdmin={isAdmin}
+        // Owning the builder is not enough here: it lives in another app, so an
+        // unconfigured VITE_BUILDER_URL means there is nowhere to send anyone.
+        // Folding that in keeps every builder affordance from rendering dead.
+        canUseFormBuilder={canUseFormBuilder && builderUrl() !== null}
         submissions={submissions}
         visibleLists={visibleLists}
         listMetaMap={listMetaMap}
@@ -1392,19 +1371,18 @@ export default function App() {
         hasFilters={hasFilters}
         detailItem={detailItem}
         setDetailItem={setDetailItem}
-        search={search}
-        setSearch={setSearch}
-        listFilter={listFilter}
-        setListFilter={setListFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
+        filters={filters}
+        setFilters={setFilters}
         sortBy={sortBy}
         setSortBy={setSortBy}
-        submitterFilter={submitterFilter}
-        setSubmitterFilter={setSubmitterFilter}
         sortedSubmissions={sortedSubmissions}
         onSignOut={handleSignOut}
         onSwitchAccount={handleSwitchAccount}
+        // The builder is not a route in this app — it lives in pmw-hrform, so
+        // both of these leave for it rather than navigating. Gated the same way
+        // the header link is: unconfigured means no builder, so nothing opens.
+        onOpenBuilder={() => openBuilder()}
+        onEditForm={(listTitle: string) => openBuilder(listTitle)}
         onHardDeleteSubmission={handleHardDeleteSubmission}
       >
         <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
@@ -1493,6 +1471,27 @@ export default function App() {
             element={
               <AdminGuard isAdmin={isAdmin}>
                 {adminDashboardInner}
+              </AdminGuard>
+            }
+          />
+          {/* The same published form /form/:formId draws, read-only. Needs no
+              tenant on /native/demo, which is the quick way to eyeball the
+              engine itself after a change. */}
+          <Route
+            path="/native/:formId"
+            element={
+              <ErrorBoundary>
+                <LazyRoute load={loadNativeFormPreviewPage} fallback={<LoadingScreen status="Loading form..." />} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/admin/routing"
+            element={
+              <AdminGuard isAdmin={isAdmin}>
+                <ErrorBoundary>
+                  <LazyRoute load={loadAdminRoutingPage} fallback={<LoadingScreen status="Loading approval routing..." />} />
+                </ErrorBoundary>
               </AdminGuard>
             }
           />

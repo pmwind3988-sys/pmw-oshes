@@ -197,15 +197,44 @@ function responseValueForElement(
   };
 }
 
-function addFieldToSection(
-  sections: Map<string, FormSubmissionSection>,
+/**
+ * One level's worth of "where do the next fields go".
+ *
+ * Sections used to be keyed by title, so every field claiming a title joined
+ * the one section that carried it no matter where on the form it was asked.
+ * That reads correctly only when the panels come last: a question sitting
+ * between two panels was pulled back up into whichever section had opened
+ * first. A submission is a record of what was asked, so it is laid out in the
+ * order it was asked, and a run of fields that resumes after a panel opens a
+ * section of its own.
+ */
+interface SectionRun {
+  /** Where fields at this level are landing, until a panel interrupts them. */
+  current: FormSubmissionSection | null;
+  /** Whether this level has already printed its heading. */
+  titled: boolean;
+}
+
+function openSection(
+  sections: FormSubmissionSection[],
+  run: SectionRun,
   sectionTitle: string,
-  field: FormSubmissionField,
-): void {
-  const sectionId = sectionTitle || "Submitted answers";
-  const current = sections.get(sectionId) ?? { id: sectionId, title: sectionId, fields: [] };
-  current.fields.push(field);
-  sections.set(sectionId, current);
+): FormSubmissionSection {
+  const title = sectionTitle || "Submitted answers";
+  const section: FormSubmissionSection = {
+    // Two runs of the same panel can both be on the page, so the position is
+    // what makes the id unique — callers use it as a React key.
+    id: `${sections.length}:${title}`,
+    // Only the first run under a heading carries it. A run resuming after a
+    // nested panel is the rest of the section above it, and repeating the
+    // heading would read as a second section rather than as a continuation.
+    title: run.titled ? "" : title,
+    fields: [],
+  };
+  sections.push(section);
+  run.current = section;
+  run.titled = true;
+  return section;
 }
 
 function shouldSkipAdditionalKey(key: string): boolean {
@@ -217,7 +246,7 @@ export function buildFormSubmissionSections(
   responseData: Record<string, unknown>,
   options: BuildFormSubmissionSectionsOptions = {},
 ): FormSubmissionSection[] {
-  const sections = new Map<string, FormSubmissionSection>();
+  const sections: FormSubmissionSection[] = [];
   const usedKeys = new Set<string>();
   const fallbackSectionTitle = options.fallbackSectionTitle ?? "Submitted answers";
   const includeAdditionalFields = options.includeAdditionalFields ?? true;
@@ -227,74 +256,84 @@ export function buildFormSubmissionSections(
   const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
   const pages = isRecord(root) && Array.isArray(root.pages) ? root.pages.filter(isRecord) : [];
 
-  const visitElement = (element: SurveyElement, currentSectionTitle: string) => {
-    const type = textValue(element.type).toLowerCase();
-    const key = textValue(element.name);
-    const children = getChildElements(element);
+  const visitElements = (elements: SurveyElement[], currentSectionTitle: string, run: SectionRun) => {
+    for (const element of elements) {
+      const type = textValue(element.type).toLowerCase();
+      const key = textValue(element.name);
+      const children = getChildElements(element);
 
-    if (type === "panel" || type === "paneldynamic") {
-      const nextSectionTitle = elementLabel(element, currentSectionTitle || fallbackSectionTitle);
-      for (const child of children) visitElement(child, nextSectionTitle);
-      return;
+      if (type === "panel" || type === "paneldynamic") {
+        const nextSectionTitle = elementLabel(element, currentSectionTitle || fallbackSectionTitle);
+        visitElements(children, nextSectionTitle, { current: null, titled: false });
+        // Whatever follows the panel was asked after it, so it opens a section
+        // of its own instead of joining the one this level had open.
+        run.current = null;
+        continue;
+      }
+
+      if (children.length > 0 && (type === "columns" || !key)) {
+        // A column set or an unnamed wrapper is a layout device, not a heading:
+        // its fields belong to the run their parent already has open.
+        visitElements(children, currentSectionTitle, run);
+        continue;
+      }
+
+      if (!key || LAYOUT_TYPES.has(type) || isManagedCompanyQuestion(element)) continue;
+
+      const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
+      if (!hasDisplayValue(value)) continue;
+      if (options.shouldIncludeField && !options.shouldIncludeField(key, value, element)) continue;
+
+      usedKeys.add(key);
+      for (const matchedKey of matchedResponseKeys) usedKeys.add(matchedKey);
+      usedKeys.add(`${key}_Response`);
+      usedKeys.add(`${key}_Html`);
+      usedKeys.add(`${key}_Json`);
+      usedKeys.add(`${key}_RowIds`);
+      usedKeys.add(`${key}_childRows`);
+
+      const rows = MATRIX_TYPES.has(type) ? matrixRows(key, responseData, responseKeyLookup) : [];
+      const target = run.current ?? openSection(sections, run, currentSectionTitle || fallbackSectionTitle);
+      target.fields.push({
+        key,
+        label: elementLabel(element, formatFallbackLabel(key)),
+        type,
+        inputType: textValue(element.inputType) || undefined,
+        choices: Array.isArray(element.choices) ? element.choices : undefined,
+        rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
+        rateMin: numberValue(element.rateMin),
+        rateMax: numberValue(element.rateMax),
+        minRateDescription: textValue(element.minRateDescription) || undefined,
+        maxRateDescription: textValue(element.maxRateDescription) || undefined,
+        min: numberValue(element.min),
+        max: numberValue(element.max),
+        prefix: textValue(element.prefix) || undefined,
+        suffix: textValue(element.suffix) || undefined,
+        rows: numberValue(element.rows),
+        labelTrue: textValue(element.labelTrue) || undefined,
+        labelFalse: textValue(element.labelFalse) || undefined,
+        value,
+        kind: MATRIX_TYPES.has(type) && rows.length > 0 ? "matrix" : "field",
+        matrixColumns: MATRIX_TYPES.has(type) ? matrixColumns(element) : undefined,
+        matrixRows: rows.length > 0 ? rows : undefined,
+      });
     }
-
-    if (children.length > 0 && (type === "columns" || !key)) {
-      for (const child of children) visitElement(child, currentSectionTitle);
-      return;
-    }
-
-    if (!key || LAYOUT_TYPES.has(type) || isManagedCompanyQuestion(element)) return;
-
-    const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
-    if (!hasDisplayValue(value)) return;
-    if (options.shouldIncludeField && !options.shouldIncludeField(key, value, element)) return;
-
-    usedKeys.add(key);
-    for (const matchedKey of matchedResponseKeys) usedKeys.add(matchedKey);
-    usedKeys.add(`${key}_Response`);
-    usedKeys.add(`${key}_Html`);
-    usedKeys.add(`${key}_Json`);
-    usedKeys.add(`${key}_RowIds`);
-    usedKeys.add(`${key}_childRows`);
-
-    const rows = MATRIX_TYPES.has(type) ? matrixRows(key, responseData, responseKeyLookup) : [];
-    addFieldToSection(sections, currentSectionTitle || fallbackSectionTitle, {
-      key,
-      label: elementLabel(element, formatFallbackLabel(key)),
-      type,
-      inputType: textValue(element.inputType) || undefined,
-      choices: Array.isArray(element.choices) ? element.choices : undefined,
-      rateValues: Array.isArray(element.rateValues) ? element.rateValues : undefined,
-      rateMin: numberValue(element.rateMin),
-      rateMax: numberValue(element.rateMax),
-      minRateDescription: textValue(element.minRateDescription) || undefined,
-      maxRateDescription: textValue(element.maxRateDescription) || undefined,
-      min: numberValue(element.min),
-      max: numberValue(element.max),
-      prefix: textValue(element.prefix) || undefined,
-      suffix: textValue(element.suffix) || undefined,
-      rows: numberValue(element.rows),
-      labelTrue: textValue(element.labelTrue) || undefined,
-      labelFalse: textValue(element.labelFalse) || undefined,
-      value,
-      kind: MATRIX_TYPES.has(type) && rows.length > 0 ? "matrix" : "field",
-      matrixColumns: MATRIX_TYPES.has(type) ? matrixColumns(element) : undefined,
-      matrixRows: rows.length > 0 ? rows : undefined,
-    });
   };
 
   pages.forEach((page, pageIndex) => {
     const defaultTitle = pageIndex === 0 ? fallbackSectionTitle : `Page ${pageIndex + 1}`;
     const title = pageTitle(page, defaultTitle);
     const elements = Array.isArray(page.elements) ? page.elements.filter(isRecord) : [];
-    for (const element of elements) visitElement(element, title);
+    visitElements(elements, title, { current: null, titled: false });
   });
 
   if (includeAdditionalFields) {
+    const extra: SectionRun = { current: null, titled: false };
     for (const [key, value] of Object.entries(responseData)) {
       if (usedKeys.has(key) || shouldSkipAdditionalKey(key) || !hasDisplayValue(value)) continue;
       if (options.shouldIncludeField && !options.shouldIncludeField(key, value)) continue;
-      addFieldToSection(sections, "Additional data", {
+      const target = extra.current ?? openSection(sections, extra, "Additional data");
+      target.fields.push({
         key,
         label: formatFallbackLabel(key),
         type: "",
@@ -304,5 +343,7 @@ export function buildFormSubmissionSections(
     }
   }
 
-  return [...sections.values()].filter((section) => section.fields.length > 0);
+  // A section is opened by the field that goes into it, so none of them can be
+  // empty and there is nothing to filter out.
+  return sections;
 }

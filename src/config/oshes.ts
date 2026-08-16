@@ -18,6 +18,16 @@ export const OSHES_APP = {
   adminGroup: env("VITE_OSHES_ADMIN_GROUP", ""),
   /** Read-only group. Members see every record and the audit trail, and never render an action. */
   auditorGroup: env("VITE_OSHES_AUDITOR_GROUP", ""),
+  /**
+   * SharePoint group allowed to author forms in the shared builder.
+   *
+   * Separate from `adminGroup` because the two grants are genuinely different:
+   * administering this deployment is a read/act permission on OSHES records,
+   * while authoring writes schema that both products render. Left blank, admins
+   * are treated as authors — which is the smaller deployment's usual shape and
+   * is no wider than the builder's own group check on the far side.
+   */
+  formBuilderGroup: env("VITE_OSHES_FORM_BUILDER_GROUP", ""),
 } as const;
 
 if (!OSHES_APP.adminGroup) {
@@ -45,13 +55,18 @@ export const PORTAL_SLA_DEFAULT_DAYS = Number(env("VITE_OSHES_SLA_DEFAULT_DAYS",
  * hand-off is a silent SSO with no second sign-in.
  *
  * Returns null when unconfigured, and the link is not rendered at all.
+ *
+ * @param formTitle Opens that form for editing rather than the form library.
  */
-export function builderUrl(): string | null {
+export function builderUrl(formTitle?: string): string | null {
   const base = (import.meta.env.VITE_BUILDER_URL || "").trim().replace(/\/$/, "");
   if (!base) return null;
+  const path = formTitle
+    ? `/admin/builder/${encodeURIComponent(formTitle)}`
+    : "/admin/builder";
   // ?site=oshes is what puts the builder in OSHES mode. Without it the operator
   // would land on HR's forms, which is the one outcome worth engineering against.
-  return `${base}/admin/builder?site=oshes`;
+  return `${base}${path}?site=oshes`;
 }
 
 /**

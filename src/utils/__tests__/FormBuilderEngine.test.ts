@@ -16,6 +16,8 @@ import {
   validateFields,
   duplicateField,
   reorderFields,
+  schemaNameFromLabel,
+  isSchemaNameDerivedFrom,
   QUESTION_TYPES,
 } from '../FormBuilderEngine';
 import type { FormBuilderField, QuestionTypeDefinition, SurveyJson } from '../../types';
@@ -65,6 +67,62 @@ describe('generateFieldId', () => {
   it('handles empty string prefix', () => {
     const id = generateFieldId('');
     expect(id.startsWith('_')).toBe(true);
+  });
+});
+
+// ── schemaNameFromLabel / isSchemaNameDerivedFrom ────────────────────────────────
+
+describe('schemaNameFromLabel', () => {
+  it('camel-cases a multi-word label', () => {
+    expect(schemaNameFromLabel('Employee Full Name')).toBe('employeeFullName');
+  });
+
+  it('drops punctuation instead of gluing the words either side together', () => {
+    expect(schemaNameFromLabel('Date of birth (DD/MM)')).toBe('dateOfBirthDdMm');
+  });
+
+  it('collapses runs of whitespace and trims the ends', () => {
+    expect(schemaNameFromLabel('  Annual   leave  ')).toBe('annualLeave');
+  });
+
+  it('keeps digits', () => {
+    expect(schemaNameFromLabel('Option 1')).toBe('option1');
+  });
+
+  it('returns an empty string for a label with nothing usable in it', () => {
+    expect(schemaNameFromLabel('!!! ???')).toBe('');
+  });
+
+  it('matches the name createQuestion assigns, so a fresh field reads as derived', () => {
+    const td: QuestionTypeDefinition = {
+      type: 'text',
+      label: 'Short Text',
+      icon: 'T',
+      group: 'Basic',
+      description: 'Single line text',
+      spColumnKind: 2,
+      defaultProps: {},
+    };
+    const field = createQuestion(td);
+    expect(isSchemaNameDerivedFrom(field.name, field.title as string)).toBe(true);
+  });
+});
+
+describe('isSchemaNameDerivedFrom', () => {
+  it('treats an empty name as still free to be filled in', () => {
+    expect(isSchemaNameDerivedFrom('', 'Anything')).toBe(true);
+  });
+
+  it('recognises a name generated from the label', () => {
+    expect(isSchemaNameDerivedFrom('employeeName', 'Employee Name')).toBe(true);
+  });
+
+  it('accepts a legacy bare choice where the label is also the stored value', () => {
+    expect(isSchemaNameDerivedFrom('Yes', 'Yes')).toBe(true);
+  });
+
+  it('reports a hand-edited name as no longer derived', () => {
+    expect(isSchemaNameDerivedFrom('emp_name_v2', 'Employee Name')).toBe(false);
   });
 });
 
@@ -312,6 +370,82 @@ describe('buildQuestionTree', () => {
     expect(tree[0].type).toBe('dynamicmatrix');
     expect(tree[0].columns).toEqual(field.columns);
     expect(tree[0].tableConfigColumns).toEqual(field.columns);
+  });
+
+  it('rehydrates SurveyJS datetime text input as the builder Date & Time type', () => {
+    const json = makeSurveyJson([
+      {
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            inputType: 'datetime-local',
+            name: 'appointmentAt',
+            title: 'Appointment At',
+          },
+        ],
+      },
+    ]);
+
+    const tree = buildQuestionTree(json);
+
+    expect(tree[0].type).toBe('datetime');
+    expect(tree[0].inputType).toBe('datetime');
+  });
+
+  it('rehydrates SurveyJS date text input as the builder Date type', () => {
+    const json = makeSurveyJson([
+      {
+        name: 'page1',
+        elements: [
+          {
+            type: 'text',
+            inputType: 'date',
+            name: 'travelDate',
+            title: 'Travel Date',
+          },
+        ],
+      },
+    ]);
+
+    const tree = buildQuestionTree(json);
+
+    expect(tree[0].type).toBe('date');
+    expect(tree[0].inputType).toBe('date');
+  });
+
+  it('rehydrates a saved datetime defaultValueExpression as default to current time', () => {
+    const savedJson = buildSurveyJson([
+      makeField({
+        type: 'datetime',
+        inputType: 'datetime',
+        name: 'appointmentAt',
+        title: 'Appointment At',
+        defaultValue: '__now__',
+      }),
+    ]);
+
+    const tree = buildQuestionTree(savedJson);
+
+    expect(tree[0].type).toBe('datetime');
+    expect(tree[0].defaultValue).toBe('__now__');
+  });
+
+  it('rehydrates a saved date defaultValueExpression as default to today', () => {
+    const savedJson = buildSurveyJson([
+      makeField({
+        type: 'date',
+        inputType: 'date',
+        name: 'travelDate',
+        title: 'Travel Date',
+        defaultValue: '__today__',
+      }),
+    ]);
+
+    const tree = buildQuestionTree(savedJson);
+
+    expect(tree[0].type).toBe('date');
+    expect(tree[0].defaultValue).toBe('__today__');
   });
 });
 

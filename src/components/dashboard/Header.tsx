@@ -18,6 +18,7 @@ import {
   PrivacyTip as PrivacyIcon,
   Wallpaper as WallpaperIcon,
   OpenInNew as OpenInNewIcon,
+  AccountTree as AccountTreeIcon,
 } from "@mui/icons-material";
 import type { MouseEvent } from "react";
 import { useState } from "react";
@@ -32,13 +33,26 @@ import { builderUrl } from "../../config/oshes";
 interface HeaderProps {
   userEmail: string;
   isAdmin: boolean;
+  /**
+   * Whether this account owns the shared form builder. Being an OSHES admin and
+   * being allowed to author forms are separate grants — the builder writes to a
+   * site this app only reads — so the link is gated on the second, not the first.
+   */
+  canUseFormBuilder?: boolean;
   onLogout: () => void;
   onSwitch: () => void;
+  /**
+   * Accepted for parity with pmw-hrform, where the builder is a route inside the
+   * app. Here it lives in pmw-hrform, so the menu opens `builderUrl()` instead
+   * and this is not called.
+   */
+  onOpenBuilder?: () => void;
 }
 
 export default function Header({
   userEmail,
   isAdmin,
+  canUseFormBuilder = false,
   onLogout,
   onSwitch,
 }: HeaderProps) {
@@ -312,9 +326,15 @@ export default function Header({
                     <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
                     <Typography variant="body2">Dashboard Background</Typography>
                   </MenuItem>
+                  <MenuItem onClick={() => navigateFromMenu("/admin/routing", handleProfileClose)} sx={menuItemSx}>
+                    <AccountTreeIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                    <Typography variant="body2">Approval routing</Typography>
+                  </MenuItem>
                   {/* Leaves this app: the builder is shared with pmw-hrform and
-                      writes to the OSHES site. Same tenant, so SSO is silent. */}
-                  {builder && (
+                      writes to the OSHES site. Same tenant, so SSO is silent.
+                      Offered only to accounts that actually own it, so the rest
+                      are not sent to a page that will refuse them. */}
+                  {builder && canUseFormBuilder && (
                     <MenuItem
                       component="a"
                       href={builder}

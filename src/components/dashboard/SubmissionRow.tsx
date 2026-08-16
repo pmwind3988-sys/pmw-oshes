@@ -21,6 +21,7 @@ import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
 import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 import {
   formatDashboardDate,
   formatDashboardTime,
@@ -49,13 +50,9 @@ export default function SubmissionRow({
   listMetaMap,
 }: SubmissionRowProps) {
   const theme = useTheme();
-  // The row grid below is built from fixed minimums (≈1060px including gaps and
-  // padding), so it cannot be narrowed — below that it pushes the whole document
-  // wider than the viewport, which is what made tablets scroll sideways and let
-  // the page be zoomed out into empty space. Cards carry the same fields down to
-  // any width, so they own everything under lg. Keep this breakpoint in step
-  // with ListHeader, or the column titles appear over stacked cards.
-  const isStacked = useMediaQuery(theme.breakpoints.down("lg"));
+  // The six-column table needs ~1080px of hard minimum width, so anything
+  // narrower than md gets the stacked card instead of overflowing the page.
+  const isCompact = useMediaQuery(theme.breakpoints.down("md"));
   const meta = listMetaMap[item.listTitle] ?? {
     icon: "📋",
     color: editorial.ink,
@@ -116,7 +113,7 @@ export default function SubmissionRow({
     },
   } as const;
 
-  if (isStacked) {
+  if (isCompact) {
     return (
       <Box
         role="button"
@@ -235,10 +232,8 @@ export default function SubmissionRow({
       onKeyDown={handleKeyDown}
       sx={{
         display: "grid",
-        gridTemplateColumns: isAdmin
-          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 88px"
-          : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
-        gap: 2,
+        gridTemplateColumns: isAdmin ? SUBMISSION_GRID_COLUMNS.admin : SUBMISSION_GRID_COLUMNS.member,
+        gap: SUBMISSION_GRID_GAP,
         px: 2.5,
         py: 2,
         backgroundColor: "rgba(255, 255, 255, 0.92)",
@@ -260,13 +255,13 @@ export default function SubmissionRow({
       }}
     >
       {/* Submission */}
-      <Box>
+      <Box sx={{ minWidth: 0 }}>
         <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink, mb: 0.5, textWrap: "balance" }}>
           {displayTitle}
         </Typography>
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center", minWidth: 0 }}>
           <Chip icon={<NumbersIcon />} label={`Ref ${item.referenceNo || item.submissionId}`} size="small" sx={identityChipSx} />
-          <Typography variant="caption" sx={{ color: editorial.muted }}>
+          <Typography variant="caption" sx={{ color: editorial.muted, minWidth: 0 }}>
             Form {formReference}
           </Typography>
         </Box>
@@ -278,7 +273,7 @@ export default function SubmissionRow({
           variant="body2"
           sx={{
             color: editorial.muted,
-            maxWidth: 180,
+            minWidth: 0,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -307,7 +302,7 @@ export default function SubmissionRow({
       </Box>
 
       {/* Submitted */}
-      <Box>
+      <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 800 }}>
           {submittedAt}
         </Typography>
@@ -319,7 +314,7 @@ export default function SubmissionRow({
       </Box>
 
       {/* Status */}
-      <Box>
+      <Box sx={{ minWidth: 0 }}>
         <StatusBadge status={item.formStatus} />
         {layerLabel && (
           <Chip icon={<LayersIcon />} label={layerLabel} size="small" sx={{ ...layerChipSx, mt: 0.75 }} />

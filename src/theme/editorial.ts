@@ -10,6 +10,13 @@ export const editorial = {
   blueSoft: "#F6FAFD",
   purpleWash: "#F4F3FB",
   paper: "#F8FAFC",
+  /**
+   * A neutral wash one step heavier than `paper`, for a settled-but-not-quiet
+   * state. The portal's "Approved" pill uses it against "Recorded" on `paper`:
+   * both are finished, but only one was actually signed, so they must not read
+   * as the same event.
+   */
+  neutralWash: "#F1F3F6",
   appSurface: "#F6F9FC",
   paperSoft: "#F9FBFD",
   panel: "#FFFFFF",

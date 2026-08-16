@@ -5,13 +5,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { FlatLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../../native/NativeForm";
+import { parseForm, type NativeForm } from "../../native/schema";
+import { useNativeForm } from "../../native/useNativeForm";
+import "../../native/native-form.css";
 
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
-import { registerSignaturePad, SignatureCapture } from "../../utils/SignaturePad";
+import { SignatureCapture } from "../../utils/signatureCapture";
 import { createSpClient } from "../../utils/sharepointClient";
 import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
@@ -86,7 +86,6 @@ import {
 import { buildLayerReviewLink, describeMissingReviewLink } from "../../utils/layerReviewLink";
 import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-registerSignaturePad();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SUBMISSIONS_PER_PAGE = 12;
 
@@ -547,8 +546,12 @@ export default function ApprovalDashboard() {
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [currentLayerConfig, setCurrentLayerConfig] = useState<LayerConfigItem | null>(null);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
-  const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
-  const [evalValid, setEvalValid] = useState(true);
+  const [evalForm, setEvalForm] = useState<NativeForm | null>(null);
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const evalRuntime = useNativeForm(evalForm ?? placeholderForm);
+  // Ready once every required question has an answer. A layer with no questions
+  // leaves evalForm null, which the button reads as "nothing to fill in".
+  const evalValid = evalForm === null || evalRuntime.answered >= evalRuntime.required;
   const [actionSuccess, setActionSuccess] = useState<{
     type: "approved" | "rejected" | "confirmed";
     message: string;
@@ -938,8 +941,7 @@ export default function ApprovalDashboard() {
     setCurrentLayerType(null);
     setCurrentLayerConfig(null);
     setApprovalSignature(null);
-    setEvalSurveyModel(null);
-    setEvalValid(true);
+    setEvalForm(null);
     setCompletedLayers({});
     setSelectedActiveLayers([]);
     setSelectedLayerAccess(null);
@@ -962,7 +964,7 @@ export default function ApprovalDashboard() {
             setNeedsBranchSelection(true);
             setAvailableBranches(lcBranches);
             setCurrentLayerType(null);
-            setEvalSurveyModel(null);
+            setEvalForm(null);
           } else {
             setNeedsBranchSelection(false);
             setAvailableBranches([]);
@@ -1127,27 +1129,21 @@ export default function ApprovalDashboard() {
         if (pendingBranch) {
           setCurrentLayerType(null);
           setCurrentLayerConfig(null);
-          setEvalSurveyModel(null);
+          setEvalForm(null);
           return;
         }
 
         if (currentResolution.currentLayer?.type === "evaluation") {
           setCurrentLayerType("evaluation");
           const evalElements = (currentResolution.currentLayer as EvaluationLayerConfig).surveyElements || [];
-          if (evalElements.length > 0) {
-            const m = new Model(buildEvaluationSurveyJson(evalElements) as object);
-            m.applyTheme(FlatLightPanelless);
-            const checkValid = () => { setEvalValid(!m.hasErrors()); };
-            m.onValueChanged.add(checkValid);
-            setTimeout(checkValid, 0);
-            setEvalSurveyModel((prev) => { prev?.dispose(); return m; });
-          } else {
-            setEvalSurveyModel(null);
-            setEvalValid(false);
-          }
+          setEvalForm(
+            evalElements.length > 0
+              ? parseForm(buildEvaluationSurveyJson(evalElements))
+              : null,
+          );
         } else {
           setCurrentLayerType("approval");
-          setEvalSurveyModel(null);
+          setEvalForm(null);
         }
       }
     } catch (e) {
@@ -1163,10 +1159,7 @@ export default function ApprovalDashboard() {
       return;
     }
     // Validate required fields before submitting
-    if (evalSurveyModel) {
-      const valid = evalSurveyModel.validate();
-      if (!valid) { setEvalValid(false); return; }
-    }
+    if (evalForm && !evalRuntime.validateAll().ok) return;
 
     setActionLoading(true);
     try {
@@ -1188,7 +1181,7 @@ export default function ApprovalDashboard() {
       const nextLayerNum = nextLayerConfig?.layerNumber ?? currLayerNum + 1;
       const isFinal = !nextLayerConfig && currLayerNum >= totalLayers;
 
-      const fields = evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {};
+      const fields = evalForm ? foldOtherAnswers(evalRuntime.collect()) : {};
 
       await submitEvaluationData(token, listName, respId, currLayerNum, {
         confirmerEmail: accounts[0]?.username || "SYSTEM",
@@ -1781,7 +1774,7 @@ export default function ApprovalDashboard() {
         setSelectedItem(null);
         setSurveyJson(null);
         setResponseData(null);
-        setEvalSurveyModel(null);
+        setEvalForm(null);
         setCompletedLayers({});
       }
       setDeleteTarget(null);
@@ -2726,16 +2719,14 @@ export default function ApprovalDashboard() {
                       </Box>
                     )}
 
-                    {/* Evaluation form: editable SurveyJS for evaluation layers */}
+                    {/* Evaluation form: editable, drawn by the native engine */}
                     {currentLayerType === "evaluation" &&
                       getItemStatus(selectedItem) === "pending" &&
                       !isCurrentLayerTerminal(selectedItem, completedLayers) &&
-                      evalSurveyModel && (
+                      evalForm && (
                         <Box sx={{ px: 2, pb: 2, pt: 2, borderTop: editorialHairline }}>
                           <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1.5 }}>Evaluation form</Typography>
-                          <div className="approval-survey-preview">
-                            <Survey model={evalSurveyModel} />
-                          </div>
+                          <NativeFormView runtime={evalRuntime} />
                         </Box>
                       )}
 
@@ -2760,12 +2751,12 @@ export default function ApprovalDashboard() {
                           fullWidth
                           startIcon={<DescriptionIcon />}
                           onClick={handleEvaluationSubmit}
-                          disabled={actionLoading || (!!evalSurveyModel && !evalValid)}
+                          disabled={actionLoading || (!!evalForm && !evalValid)}
                           sx={{ minHeight: 44 }}
                         >
                           {actionLoading
                             ? "Submitting..."
-                            : evalSurveyModel && !evalValid
+                            : evalForm && !evalValid
                               ? "Fill required fields"
                               : "Submit evaluation"}
                         </Button>

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { __test__ } from '../submit-form.ts';
 
 const SIGNATURE_DATA_URI = 'data:image/png;base64,aGVsbG8=';
-const SIGNATURE_URL = 'https://tenant.sharepoint.com/sites/YOUR-SITE/Signature%20Images/signature.png';
+const SIGNATURE_URL = 'https://pmwgroupcom.sharepoint.com/sites/PMWHRDocs/Signature%20Images/signature.png';
 
 describe('public form signature submission', () => {
   it('ensures signature image storage with the system app before uploading public signatures', async () => {
@@ -98,6 +98,36 @@ describe('public form signature submission', () => {
     expect(uploadDataUri).toHaveBeenCalledTimes(1);
     const uploadCalls = uploadDataUri.mock.calls as unknown[][];
     expect(uploadCalls[0]?.[4]).toBe('signature');
+  });
+
+  it('stores public form datetimes as Malaysia local wall-clock values for SharePoint', async () => {
+    const schema = __test__.collectSubmissionSchema({
+      pages: [
+        {
+          elements: [
+            { type: 'text', inputType: 'datetime-local', name: 'starttime' },
+            { type: 'text', inputType: 'datetime-local', name: 'endtime' },
+          ],
+        },
+      ],
+    });
+
+    const result = await __test__.buildSubmissionFields(
+      'token',
+      'Overtime Request',
+      {
+        starttime: '2026-06-22T10:00',
+        endtime: '2026-06-22T18:00',
+      },
+      {
+        CurrentVersion: '1.0',
+        FormID: 'FORM-OT',
+      },
+      schema,
+    );
+
+    expect(result.fields.starttime).toBe('2026-06-22T02:00:00.000Z');
+    expect(result.fields.endtime).toBe('2026-06-22T10:00:00.000Z');
   });
 
   it('patches signature URL fields through SharePoint REST FieldUrlValue', async () => {

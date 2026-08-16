@@ -85,6 +85,7 @@ async function enrichSurveyJson(
         | {
             list?: string;
             valueColumn?: string;
+            labelColumn?: string;
             filterColumn?: string;
             filterValue?: string;
           }
@@ -97,7 +98,8 @@ async function enrichSurveyJson(
             fls.list,
             fls.valueColumn,
             fls.filterColumn,
-            fls.filterValue
+            fls.filterValue,
+            fls.labelColumn
           )
             .then((choices) => {
               if (choices.length > 0) {
@@ -137,6 +139,7 @@ async function enrichSurveyJson(
             | {
                 list?: string;
                 valueColumn?: string;
+                labelColumn?: string;
                 filterColumn?: string;
                 filterValue?: string;
               }
@@ -149,7 +152,8 @@ async function enrichSurveyJson(
                 colFls.list,
                 colFls.valueColumn,
                 colFls.filterColumn,
-                colFls.filterValue
+                colFls.filterValue,
+                colFls.labelColumn
               )
                 .then((choices) => {
                   if (choices.length > 0) { col.choices = choices; choicesFetched++; }

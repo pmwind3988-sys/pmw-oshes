@@ -1,0 +1,1625 @@
+/* ---------------------------------------------------------------------------
+   Native form engine — the whole visual system, in one place.
+
+   The SurveyJS renderer this replaces is styled by overriding `sd-*` classes
+   from an inline `<style>` string, so a padding value lives in one file, the
+   colour it sits next to lives in another, and neither is reachable from the
+   field components. Everything here is a token or a class, declared once.
+
+   Three rules the sheet keeps, because they are what "neat" actually is:
+     1. One type scale. Labels are 12.5px, controls 13.5px, help 11.5px —
+        nothing else. A form is a list of the same thing repeated, so any
+        second size reads as an accident.
+     2. One radius, one hairline, one shadow. Depth is not information here.
+     3. Rhythm comes from the field block, not from the control. Every field
+        occupies the same vertical slot whether it holds an input, a chip row
+        or a table, so the left column of labels stays on a fixed cadence.
+--------------------------------------------------------------------------- */
+
+.nf {
+  /* Ink */
+  --nf-ink: #101828;
+  --nf-ink-soft: #5f6b7a;
+  --nf-ink-faint: #8b96a5;
+
+  /* Surfaces */
+  --nf-canvas: #f4f7fb;
+  --nf-panel: #ffffff;
+  --nf-sunken: #f7f9fc;
+
+  /* Lines */
+  --nf-line: #e4e9f0;
+  --nf-line-strong: #cbd5e1;
+
+  /* Brand — the PMW blue and purple the rest of the app already uses. */
+  --nf-brand: #0078d4;
+  --nf-brand-deep: #005a9e;
+  --nf-brand-wash: #eaf4fc;
+  /* Text and glyphs that sit *on* `--nf-brand-wash`. Separate from
+     `--nf-brand-deep` because the wash inverts in dark mode and the deep blue
+     does not: on the dark wash it drops to roughly 1.4:1 and the section
+     numbers disappear. This is the only token the two themes disagree about in
+     direction rather than in shade. */
+  --nf-brand-ink: #005a9e;
+  --nf-accent: #6264a7;
+
+  /* Status */
+  --nf-danger: #c62828;
+  --nf-danger-wash: #fdeded;
+  --nf-good: #107c10;
+  --nf-good-wash: #e8f4e8;
+  --nf-warn: #b15c00;
+  --nf-warn-wash: #fff6e5;
+
+  /* Geometry */
+  --nf-radius: 10px;
+  --nf-radius-sm: 8px;
+  --nf-radius-pill: 999px;
+  --nf-control-h: 40px;
+  --nf-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 14px rgba(16, 24, 40, 0.05);
+  --nf-ring: 0 0 0 3px rgba(0, 120, 212, 0.14);
+
+  /* Type */
+  --nf-fs-label: 12.5px;
+  --nf-fs-control: 13.5px;
+  --nf-fs-help: 11.5px;
+  --nf-fs-body: 13px;
+
+  color: var(--nf-ink);
+  font-size: var(--nf-fs-body);
+  line-height: 1.5;
+
+  /* Every layout rule below is a `@container` query against this box rather than
+     a `@media` query against the viewport, because the form is not always the
+     page. The builder's device preview renders it inside a 340/500/1180px modal,
+     and viewport rules there describe the author's monitor — a "mobile preview"
+     on a wide screen would lay itself out as a desktop. Sized by its own
+     container, the preview is accurate wherever it is embedded, and the
+     standalone route is unaffected since there `.nf` *is* the page width. */
+  container-type: inline-size;
+  container-name: nf;
+}
+
+.nf[data-theme="dark"] {
+  --nf-ink: #f1f5f9;
+  --nf-ink-soft: #b6c1cf;
+  --nf-ink-faint: #8794a5;
+  --nf-canvas: #0e1621;
+  --nf-panel: #16202c;
+  --nf-sunken: #111b26;
+  --nf-line: #2a3646;
+  --nf-line-strong: #3b4a5c;
+  --nf-brand-wash: #10293c;
+  --nf-brand-ink: #8ecbf7;
+  --nf-danger-wash: #331314;
+  --nf-good-wash: #102814;
+  --nf-warn-wash: #2e2003;
+  --nf-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.nf *,
+.nf *::before,
+.nf *::after {
+  box-sizing: border-box;
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────────── */
+
+.nf-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+}
+
+/* The rail only becomes a column when there is genuinely room for one. Below
+   this it moves inline above the fields, where it still gives the respondent
+   the section list and the count of what is left. */
+@container nf (min-width: 1080px) {
+  .nf-shell[data-rail="on"] {
+    grid-template-columns: minmax(0, 1fr) 268px;
+    gap: 24px;
+  }
+}
+
+.nf-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Section card ───────────────────────────────────────────────────────── */
+
+.nf-section {
+  background: var(--nf-panel);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius);
+  box-shadow: var(--nf-shadow);
+  overflow: hidden;
+}
+
+.nf-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--nf-line);
+  background: var(--nf-sunken);
+}
+
+.nf-section-head[data-clickable="true"] {
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+  text-align: left;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  font: inherit;
+  color: inherit;
+}
+
+/* A counter rather than a bullet: on a long form the number is how someone
+   refers to a section out loud when they call HR about it. */
+.nf-section-index {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+
+.nf-section-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.nf-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--nf-ink);
+}
+
+.nf-section-desc {
+  margin: 3px 0 0;
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-soft);
+  line-height: 1.55;
+}
+
+.nf-section-chev {
+  flex: 0 0 auto;
+  color: var(--nf-ink-faint);
+  transition: transform 0.18s ease;
+}
+
+.nf-section-chev[data-open="false"] {
+  transform: rotate(-90deg);
+}
+
+.nf-section-body {
+  padding: 18px;
+}
+
+.nf-section[data-tone="nested"] {
+  box-shadow: none;
+  border-radius: var(--nf-radius-sm);
+}
+
+.nf-section[data-tone="nested"] .nf-section-head {
+  padding: 10px 14px;
+}
+
+.nf-section[data-tone="nested"] .nf-section-body {
+  padding: 14px;
+}
+
+/* ── Field block ────────────────────────────────────────────────────────── */
+
+/* Rows exist because SurveyJS lays fields out with `startWithNewLine: false`
+   rather than with a column count. Consecutive fields that opt out of a new
+   line share one row and split it evenly, which is the behaviour published
+   forms were authored against. */
+.nf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.nf-row + .nf-row {
+  margin-top: 16px;
+}
+
+.nf-field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.nf-field[data-full="true"] {
+  flex-basis: 100%;
+}
+
+.nf-label {
+  display: block;
+  font-size: var(--nf-fs-label);
+  font-weight: 600;
+  color: var(--nf-ink);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.nf-req {
+  color: var(--nf-danger);
+  margin-left: 2px;
+}
+
+.nf-hint {
+  margin: -2px 0 7px;
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-soft);
+  line-height: 1.55;
+}
+
+.nf-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 6px 0 0;
+  font-size: var(--nf-fs-help);
+  font-weight: 600;
+  color: var(--nf-danger);
+  line-height: 1.45;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
+.nf-input,
+.nf-textarea,
+.nf-select {
+  width: 100%;
+  min-height: var(--nf-control-h);
+  padding: 9px 12px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  color: var(--nf-ink);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  line-height: 1.45;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nf-textarea {
+  resize: vertical;
+  min-height: 92px;
+}
+
+.nf-select {
+  appearance: none;
+  padding-right: 34px;
+  /* Inlined so the caret needs no network request and inherits nothing from a
+     platform stylesheet that differs per OS. */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%238b96a5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.nf-input::placeholder,
+.nf-textarea::placeholder {
+  color: var(--nf-ink-faint);
+}
+
+.nf-input:focus,
+.nf-textarea:focus,
+.nf-select:focus {
+  outline: none;
+  border-color: var(--nf-brand);
+  box-shadow: var(--nf-ring);
+}
+
+.nf-input:disabled,
+.nf-textarea:disabled,
+.nf-select:disabled {
+  background: var(--nf-sunken);
+  color: var(--nf-ink-soft);
+  cursor: not-allowed;
+}
+
+.nf-input[data-invalid="true"],
+.nf-textarea[data-invalid="true"],
+.nf-select[data-invalid="true"] {
+  border-color: var(--nf-danger);
+}
+
+.nf-input[data-invalid="true"]:focus,
+.nf-textarea[data-invalid="true"]:focus,
+.nf-select[data-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.13);
+}
+
+/* Prefix / suffix affixes (currency, units) share the control's border so the
+   pair reads as one field rather than as a control with a label glued on. */
+.nf-affix {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nf-affix:focus-within {
+  border-color: var(--nf-brand);
+  box-shadow: var(--nf-ring);
+}
+
+.nf-affix[data-invalid="true"] {
+  border-color: var(--nf-danger);
+}
+
+.nf-affix > .nf-input {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.nf-affix > .nf-input:focus {
+  box-shadow: none;
+}
+
+.nf-affix-tag {
+  display: grid;
+  place-items: center;
+  padding: 0 11px;
+  background: var(--nf-sunken);
+  color: var(--nf-ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nf-affix-tag[data-side="start"] {
+  border-right: 1px solid var(--nf-line);
+}
+
+.nf-affix-tag[data-side="end"] {
+  border-left: 1px solid var(--nf-line);
+}
+
+/* Read-only computed values are not inputs and should not look like one —
+   nobody should tab into a formula result hoping to type. */
+.nf-readout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: var(--nf-control-h);
+  padding: 9px 12px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--nf-ink);
+}
+
+.nf-readout-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nf-ink-faint);
+}
+
+/* ── Choice: segmented chips (small sets) ───────────────────────────────── */
+
+.nf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nf-chip {
+  min-height: 38px;
+  padding: 8px 15px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.nf-chip:hover:not(:disabled) {
+  border-color: var(--nf-line-strong);
+  background: var(--nf-sunken);
+}
+
+.nf-chip[aria-pressed="true"],
+.nf-chip[data-selected="true"] {
+  border-color: var(--nf-brand);
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+}
+
+.nf-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--nf-ring);
+}
+
+.nf-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Choice: option rows (larger sets, and all multi-select) ────────────── */
+
+.nf-options {
+  display: grid;
+  gap: 8px;
+}
+
+.nf-options[data-cols="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nf-options[data-cols="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nf-options[data-cols="4"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@container nf (max-width: 640px) {
+  .nf-options[data-cols] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.nf-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  font-size: var(--nf-fs-control);
+  line-height: 1.45;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.nf-option:hover {
+  background: var(--nf-sunken);
+}
+
+.nf-option[data-selected="true"] {
+  border-color: var(--nf-brand);
+  background: var(--nf-brand-wash);
+}
+
+.nf-option[data-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nf-option input {
+  margin: 2px 0 0;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  accent-color: var(--nf-brand);
+  cursor: inherit;
+}
+
+.nf-option-text {
+  min-width: 0;
+  color: var(--nf-ink);
+}
+
+/* The free-text box for an "Other" choice, indented under its row so it reads
+   as belonging to that option rather than as the next question. */
+.nf-other {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--nf-brand-wash);
+}
+
+/* ── Boolean ────────────────────────────────────────────────────────────── */
+
+.nf-bool {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  gap: 3px;
+}
+
+.nf-bool button {
+  min-width: 74px;
+  min-height: 32px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nf-bool button[aria-pressed="true"] {
+  background: var(--nf-panel);
+  color: var(--nf-ink);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+
+.nf-bool button:focus-visible {
+  outline: none;
+  box-shadow: var(--nf-ring);
+}
+
+/* ── Rating ─────────────────────────────────────────────────────────────── */
+
+.nf-rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nf-rating button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 40px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+/* A labelled scale is a row of captions, not of digits, so the steps share the
+   width evenly and each becomes a tappable block rather than a 40px square with
+   a word hanging off it. The cap keeps a two-point scale from becoming two
+   half-page buttons. */
+.nf-rating[data-labelled] button {
+  flex: 1 1 96px;
+  max-width: 240px;
+  min-height: 54px;
+  padding: 7px 10px;
+}
+
+.nf-rating-value {
+  color: var(--nf-ink);
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+}
+
+.nf-rating[data-labelled] .nf-rating-value {
+  color: var(--nf-ink-faint);
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+}
+
+.nf-rating-text {
+  color: var(--nf-ink-soft);
+  font-size: var(--nf-fs-help);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.nf-rating button[aria-pressed="true"] {
+  border-color: var(--nf-brand);
+  background: var(--nf-brand);
+  color: #fff;
+}
+
+.nf-rating button[aria-pressed="true"] .nf-rating-value,
+.nf-rating button[aria-pressed="true"] .nf-rating-text {
+  color: inherit;
+}
+
+.nf-rating button:focus-visible {
+  outline: none;
+  box-shadow: var(--nf-ring);
+}
+
+.nf-rating button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nf-scale-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-faint);
+}
+
+/* ── Slider ─────────────────────────────────────────────────────────────── */
+
+.nf-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nf-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--nf-brand);
+}
+
+.nf-slider-value {
+  min-width: 58px;
+  text-align: center;
+  padding: 5px 8px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── File / signature ───────────────────────────────────────────────────── */
+
+.nf-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 96px;
+  padding: 18px;
+  border: 1px dashed var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.nf-drop:hover,
+.nf-drop[data-over="true"] {
+  border-color: var(--nf-brand);
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+}
+
+.nf-drop-note {
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-faint);
+}
+
+.nf-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.nf-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  font-size: 12px;
+}
+
+.nf-file-thumb {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--nf-line);
+}
+
+.nf-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nf-file-size {
+  color: var(--nf-ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Signature ──────────────────────────────────────────────────────────── */
+
+.nf-sign {
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  overflow: hidden;
+}
+
+.nf-sign[data-invalid="true"] {
+  border-color: var(--nf-danger);
+}
+
+/* The field itself is a target, not a canvas: nothing drawn here can be
+   committed by accident, because nothing is drawn here at all. */
+.nf-sign-plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 104px;
+  padding: 12px;
+  border: none;
+  background: var(--nf-sunken);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.nf-sign[data-signed="true"] .nf-sign-plate {
+  /* Ink is dark and the stored PNG is transparent, so the plate holding a
+     signature stays paper-white in both themes or the signature vanishes. */
+  background: #ffffff;
+}
+
+.nf-sign-plate:hover:not(:disabled) {
+  background: var(--nf-brand-wash);
+}
+
+.nf-sign-plate:focus-visible {
+  outline: none;
+  box-shadow: inset var(--nf-ring);
+}
+
+.nf-sign-plate:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.nf-sign-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--nf-brand-ink);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 600;
+}
+
+.nf-sign-ink {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+}
+
+.nf-sign-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--nf-line);
+  background: var(--nf-sunken);
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-faint);
+}
+
+.nf-sign-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* ── Signing window ─────────────────────────────────────────────────────── */
+
+/* Carries `.nf` itself: it is portalled out of the form, so it has to bring the
+   tokens with it, and it must be the fixed element rather than sit inside one
+   — `.nf` is a containment root, which would otherwise anchor it to the form. */
+.nf-sign-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(16, 24, 40, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.nf-sign-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+  padding: 18px;
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: 0 24px 60px rgba(16, 24, 40, 0.28);
+}
+
+.nf-sign-dialog-eyebrow {
+  display: block;
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nf-ink-faint);
+}
+
+.nf-sign-dialog-title {
+  margin: 2px 0 0;
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  color: var(--nf-ink);
+  text-wrap: balance;
+}
+
+/* Always white, in both themes: a signature is ink on paper, and the PNG this
+   produces is composited onto a white page in the PDF. */
+.nf-sign-paper {
+  position: relative;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.nf-sign-canvas {
+  display: block;
+  width: 100%;
+  height: 200px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* The line to sign on, the way a paper form gives you one. */
+.nf-sign-rule {
+  position: absolute;
+  right: 24px;
+  bottom: 44px;
+  left: 24px;
+  border-bottom: 1px dashed #cbd5e1;
+  pointer-events: none;
+}
+
+.nf-sign-note {
+  margin: 0;
+  font-size: var(--nf-fs-help);
+  color: var(--nf-ink-faint);
+}
+
+.nf-sign-dialog-foot {
+  display: flex;
+  gap: 8px;
+}
+
+.nf-sign-dialog-gap {
+  flex: 1;
+}
+
+@container nf (max-width: 420px) {
+  .nf-sign-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* The window is its own `nf` container — it is portalled out of the form and
+   sized to the viewport — so this stays a container query like every other
+   layout rule in the sheet, and still describes the screen it is drawn on. */
+@container nf (max-width: 480px) {
+  .nf-sign-canvas {
+    height: 160px;
+  }
+
+  .nf-sign-dialog-foot {
+    flex-wrap: wrap;
+  }
+}
+
+/* ── Table / matrix ─────────────────────────────────────────────────────── */
+
+.nf-table-wrap {
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  overflow: hidden;
+}
+
+.nf-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nf-fs-control);
+}
+
+.nf-table th {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--nf-line);
+  background: var(--nf-sunken);
+  text-align: left;
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--nf-ink-soft);
+  white-space: nowrap;
+}
+
+.nf-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--nf-line);
+  vertical-align: middle;
+}
+
+.nf-table tr:last-child td {
+  border-bottom: none;
+}
+
+.nf-table .nf-input,
+.nf-table .nf-select {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.nf-table .nf-input:focus,
+.nf-table .nf-select:focus {
+  border-color: var(--nf-brand);
+  background: var(--nf-panel);
+}
+
+.nf-table-index {
+  width: 34px;
+  color: var(--nf-ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.nf-table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--nf-line);
+  background: var(--nf-sunken);
+}
+
+.nf-rowbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: 6px;
+  background: var(--nf-panel);
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nf-rowbtn:hover:not(:disabled) {
+  border-color: var(--nf-brand);
+  color: var(--nf-brand-ink);
+}
+
+.nf-rowbtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nf-rowbtn[data-tone="danger"]:hover:not(:disabled) {
+  border-color: var(--nf-danger);
+  color: var(--nf-danger);
+}
+
+/* ── Ranking ────────────────────────────────────────────────────────────── */
+
+.nf-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nf-rank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  font-size: var(--nf-fs-control);
+}
+
+.nf-rank-pos {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-rank-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.nf-rank-moves {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── Repeater ───────────────────────────────────────────────────────────── */
+
+.nf-repeat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nf-repeat-item {
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  overflow: hidden;
+}
+
+.nf-repeat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--nf-line);
+  background: var(--nf-panel);
+  font-size: var(--nf-fs-help);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--nf-ink-soft);
+}
+
+.nf-repeat-body {
+  padding: 14px;
+  background: var(--nf-panel);
+}
+
+/* ── Static content ─────────────────────────────────────────────────────── */
+
+.nf-html {
+  font-size: var(--nf-fs-body);
+  color: var(--nf-ink);
+  line-height: 1.6;
+}
+
+.nf-html p {
+  margin: 0 0 8px;
+}
+
+.nf-html p:last-child {
+  margin-bottom: 0;
+}
+
+.nf-html img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--nf-radius-sm);
+}
+
+.nf-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
+  font-size: var(--nf-fs-body);
+  line-height: 1.55;
+}
+
+.nf-note[data-tone="info"] {
+  border-color: rgba(0, 120, 212, 0.3);
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+}
+
+.nf-note[data-tone="warning"] {
+  border-color: rgba(177, 92, 0, 0.3);
+  background: var(--nf-warn-wash);
+  color: var(--nf-warn);
+}
+
+.nf-note[data-tone="error"] {
+  border-color: rgba(198, 40, 40, 0.3);
+  background: var(--nf-danger-wash);
+  color: var(--nf-danger);
+}
+
+.nf-note[data-tone="success"] {
+  border-color: rgba(16, 124, 16, 0.3);
+  background: var(--nf-good-wash);
+  color: var(--nf-good);
+}
+
+.nf-note-title {
+  font-weight: 700;
+}
+
+/* ── Rail ───────────────────────────────────────────────────────────────── */
+
+.nf-rail {
+  min-width: 0;
+}
+
+@container nf (min-width: 1080px) {
+  .nf-rail {
+    position: sticky;
+    top: 20px;
+  }
+}
+
+
+.nf-rail-card {
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  overflow: hidden;
+}
+
+.nf-rail-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--nf-line);
+}
+
+.nf-rail-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nf-ink-faint);
+}
+
+.nf-rail-count {
+  margin-top: 4px;
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.nf-rail-count span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--nf-ink-faint);
+}
+
+.nf-meter {
+  height: 5px;
+  margin-top: 9px;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-line);
+  overflow: hidden;
+}
+
+/* Scaled, not widened. The meter moves on every answered field — on a long form
+   that is a layout pass per keystroke in a sticky element beside a scrolling
+   column. `scaleX` is composited, so it costs a frame instead. The fill needs no
+   radius of its own: the track clips it, which also means the scale cannot
+   squash a rounded cap out of shape. */
+.nf-meter-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--nf-brand);
+  transform-origin: left center;
+  transition: transform 0.25s ease;
+}
+
+.nf-meter-fill[data-complete="true"] {
+  background: var(--nf-good);
+}
+
+.nf-rail-list {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.nf-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nf-ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nf-rail-item:hover {
+  background: var(--nf-sunken);
+  color: var(--nf-ink);
+}
+
+.nf-rail-item[data-state="done"] {
+  color: var(--nf-ink);
+}
+
+.nf-rail-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nf-line-strong);
+}
+
+.nf-rail-dot[data-state="done"] {
+  border-color: var(--nf-good);
+  background: var(--nf-good);
+}
+
+.nf-rail-dot[data-state="error"] {
+  border-color: var(--nf-danger);
+  background: var(--nf-danger);
+}
+
+.nf-rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nf-rail-foot {
+  padding: 12px;
+  border-top: 1px solid var(--nf-line);
+  background: var(--nf-sunken);
+}
+
+/* Stacked, the rail is no longer a rail. Left in source order it lands three
+   thousand pixels below the form, where a progress meter tells the respondent
+   nothing they have not just lived through — so it moves to the top and keeps
+   only the count. The section list would be a second navigation competing with
+   scrolling, and the submit button is already in the sticky action bar. */
+@container nf (max-width: 1079px) {
+  .nf-rail {
+    order: -1;
+  }
+
+  .nf-rail-list,
+  .nf-rail-foot {
+    display: none;
+  }
+
+  .nf-rail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    padding: 11px 14px;
+    border-bottom: none;
+  }
+
+  .nf-rail-count {
+    margin-top: 0;
+    font-size: 15px;
+  }
+
+  .nf-meter {
+    flex-basis: 100%;
+    margin-top: 5px;
+  }
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--nf-radius-sm);
+  font-family: inherit;
+  font-size: var(--nf-fs-control);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.nf-btn[data-variant="primary"] {
+  background: var(--nf-brand);
+  color: #fff;
+}
+
+.nf-btn[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--nf-brand-deep);
+}
+
+.nf-btn[data-variant="ghost"] {
+  border-color: var(--nf-line-strong);
+  background: var(--nf-panel);
+  color: var(--nf-ink-soft);
+}
+
+.nf-btn[data-variant="ghost"]:hover:not(:disabled) {
+  border-color: var(--nf-ink-faint);
+  color: var(--nf-ink);
+}
+
+.nf-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--nf-ring);
+}
+
+.nf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.nf-btn[data-block="true"] {
+  width: 100%;
+}
+
+/* ── Consent + submit block ─────────────────────────────────────────────── */
+
+.nf-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 15px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--nf-ink-soft);
+  cursor: pointer;
+}
+
+.nf-consent[data-invalid="true"] {
+  border-color: var(--nf-danger);
+}
+
+.nf-consent input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--nf-brand);
+}
+
+.nf-consent strong {
+  color: var(--nf-ink);
+}
+
+.nf-consent a {
+  color: var(--nf-brand-ink);
+  font-weight: 700;
+}
+
+/* On a phone the rail's submit button is off-screen at the top, so the action
+   moves to a bar pinned above the gesture area. `env()` resolves to 0 in a
+   normal browser window, so this costs nothing on desktop. */
+.nf-actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  gap: 10px;
+  margin: 4px -20px -40px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--nf-line);
+  background: color-mix(in srgb, var(--nf-panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+@container nf (min-width: 1080px) {
+  .nf-shell[data-rail="on"] .nf-actionbar {
+    display: none;
+  }
+}
+
+/* ── Page navigation (multi-page forms) ─────────────────────────────────── */
+
+.nf-pagenav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.nf-pagenav-status {
+  font-size: var(--nf-fs-help);
+  font-weight: 600;
+  color: var(--nf-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+}
+
+.nf-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: transparent;
+  color: var(--nf-ink-faint);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nf-step[data-state="current"] {
+  background: var(--nf-brand-wash);
+  color: var(--nf-brand-ink);
+}
+
+.nf-step[data-state="done"] {
+  color: var(--nf-ink);
+}
+
+.nf-step-num {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-step[data-state="done"] .nf-step-num {
+  border-color: var(--nf-good);
+  background: var(--nf-good);
+  color: #fff;
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
+
+.nf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nf-divider {
+  border: none;
+  border-top: 1px solid var(--nf-line);
+  margin: 0;
+}
+
+/* Tightened up when the form itself is narrow — a container question, since a
+   500px-wide preview needs the same tighter padding as a 500px-wide phone. */
+@container nf (max-width: 767px) {
+  .nf-shell {
+    padding: 16px 14px 32px;
+  }
+
+  .nf-section-body {
+    padding: 14px;
+  }
+
+  .nf-actionbar {
+    margin: 4px -14px -32px;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* This one stays a viewport query, because it is about the device and not the
+   layout: mobile browsers zoom the page in when a focused control's text is
+   under 16px, and never zoom back out. Keyed to the container it would also
+   fire inside a narrow preview on a desktop, inflating the type in the one
+   place an author is trying to judge it. */
+@media (max-width: 767px) {
+  .nf input,
+  .nf select,
+  .nf textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nf *,
+  .nf *::before,
+  .nf *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

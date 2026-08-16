@@ -1,3 +1,5 @@
+import type { ListChoiceOption } from "./listChoiceOptions";
+
 export interface SurveyChoiceLoaders {
   getSharePointChoices: (listTitle: string, fieldName: string) => Promise<string[]>;
   getFilteredListChoices: (
@@ -5,7 +7,8 @@ export interface SurveyChoiceLoaders {
     valueColumn: string,
     filterColumn?: string,
     filterValue?: string,
-  ) => Promise<string[]>;
+    labelColumn?: string,
+  ) => Promise<ListChoiceOption[]>;
 }
 
 interface ChoiceSource {
@@ -16,6 +19,8 @@ interface ChoiceSource {
 interface FilteredListSource {
   list?: string;
   valueColumn?: string;
+  /** Column shown to the person; the answer still stores `valueColumn`. */
+  labelColumn?: string;
   filterColumn?: string;
   filterValue?: string;
 }
@@ -28,7 +33,7 @@ function cloneSurveyJson<T extends Record<string, unknown>>(surveyJson: T): T {
   return JSON.parse(JSON.stringify(surveyJson)) as T;
 }
 
-function assignChoices(element: Record<string, unknown>, choices: string[]): void {
+function assignChoices(element: Record<string, unknown>, choices: ListChoiceOption[]): void {
   if (choices.length > 0) element.choices = choices;
 }
 
@@ -41,7 +46,7 @@ export async function enrichSurveyJsonChoices<T extends Record<string, unknown>>
 
   const enqueue = (
     element: Record<string, unknown>,
-    loadChoices: Promise<string[]>,
+    loadChoices: Promise<ListChoiceOption[]>,
   ): void => {
     pending.push(
       loadChoices
@@ -70,6 +75,7 @@ export async function enrichSurveyJsonChoices<T extends Record<string, unknown>>
             filteredSource.valueColumn,
             filteredSource.filterColumn,
             filteredSource.filterValue,
+            filteredSource.labelColumn,
           ),
         );
       }
@@ -92,6 +98,7 @@ export async function enrichSurveyJsonChoices<T extends Record<string, unknown>>
                 columnFilteredSource.valueColumn,
                 columnFilteredSource.filterColumn,
                 columnFilteredSource.filterValue,
+                columnFilteredSource.labelColumn,
               ),
             );
           }

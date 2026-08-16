@@ -2,6 +2,7 @@ export interface PdfFieldFormatContext {
   type?: string;
   inputType?: string;
   choices?: unknown[];
+  rateValues?: unknown[];
   rateMin?: number;
   rateMax?: number;
   minRateDescription?: string;
@@ -20,6 +21,7 @@ export interface PdfMeasureContext {
   valueLabel: string;
   minLabel: string;
   maxLabel: string;
+  selectedLabel?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -120,28 +122,32 @@ export function getPdfMeasureContext(field: PdfFieldFormatContext, value: unknow
   const max = isRating ? field.rateMax ?? 5 : field.max ?? 100;
   const clamped = Math.min(max, Math.max(min, numericValue));
   const percent = max > min ? ((clamped - min) / (max - min)) * 100 : 100;
+  const choiceOptions = field.rateValues?.length ? field.rateValues : field.choices;
+  const selectedLabel = choiceOptions?.map((choice) => choiceLabel(choice, numericValue)).find(Boolean);
 
   return {
     value: numericValue,
     min,
     max,
     percent,
-    valueLabel: isRating ? `${numericValue} of ${max}` : valueWithAffixes(numericValue, field),
+    valueLabel: isRating ? `${numericValue} of ${max}${selectedLabel ? ` - ${selectedLabel}` : ""}` : valueWithAffixes(numericValue, field),
     minLabel: field.minRateDescription || valueWithAffixes(min, field),
     maxLabel: field.maxRateDescription || valueWithAffixes(max, field),
+    ...(selectedLabel ? { selectedLabel } : {}),
   };
 }
 
 export function formatPdfFieldValue(value: unknown, field: PdfFieldFormatContext = {}): string {
-  if (value === null || value === undefined || value === "") return "-";
+  if (value === null || value === undefined || value === "") return "";
   const normalized = normalizeMaybeJson(value);
 
   if (typeof normalized === "boolean") return normalized ? "Yes" : "No";
   if (Array.isArray(normalized)) {
     return normalized.map((entry) => formatPdfFieldValue(entry, field)).join(", ");
   }
-  if (field.choices?.length) {
-    const label = field.choices.map((choice) => choiceLabel(choice, normalized)).find(Boolean);
+  const choiceOptions = field.type === "rating" && field.rateValues?.length ? field.rateValues : field.choices;
+  if (choiceOptions?.length) {
+    const label = choiceOptions.map((choice) => choiceLabel(choice, normalized)).find(Boolean);
     if (label) return label;
   }
 

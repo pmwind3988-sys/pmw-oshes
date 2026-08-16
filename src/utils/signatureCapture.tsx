@@ -1,17 +1,20 @@
 /**
- * SignaturePad.tsx — Custom SurveyJS signature widget with modal-based workflow.
+ * signatureCapture.tsx — drawing a signature, with no SurveyJS behind it.
  *
- * Replaces SurveyJS's native inline signaturepad renderer with a click-to-sign
- * modal that supports lock/unlock and clear after signing.
+ * This lived in `SignaturePad.tsx`, alongside a SurveyJS signature question that
+ * pulled the whole SurveyJS renderer into the approval dashboard and the
+ * evaluation page — for a canvas and two buttons. The question type is gone and
+ * SurveyJS is uninstalled; this is the part that was actually being used.
  *
- * Pattern follows DynamicMatrix.tsx: Serializer.addClass → ElementFactory → ReactQuestionFactory.
+ * `SignatureModal` stays exported: the native engine's own signature field uses
+ * the same dialog, and an approver signing off on a layer uses `SignatureCapture`
+ * below it.
  */
 import { useEffect, useRef, useState } from "react";
-import { ElementFactory, Question, Serializer } from "survey-core";
-import { ReactQuestionFactory } from "survey-react-ui";
 
-// ── Theme (inline, no MUI) ────────────────────────────────────────────
-const C = {
+// -- Theme (inline, no MUI) --------------------------------------------
+/** Local palette, matching the convention in `builder/constants`. */
+export const C = {
   purple: "#5B21B6",
   purpleDark: "#3B0764",
   purplePale: "#EDE9FE",
@@ -28,86 +31,6 @@ const C = {
   greenPale: "#D1FAE5",
 } as const;
 
-const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
-
-function toAbsoluteSignatureUrl(url: string): string {
-  if (!url || url.startsWith("http") || url.startsWith("data:")) return url;
-  if (!url.startsWith("/")) return url;
-  try {
-    return `${new URL(SP_SITE_URL).origin}${url}`;
-  } catch {
-    return url;
-  }
-}
-
-function parseSignatureRecord(value: string): Record<string, unknown> | null {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("{")) return null;
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function signatureValueToSrc(value: unknown): string {
-  if (typeof value === "string") {
-    const parsed = parseSignatureRecord(value);
-    if (parsed) return signatureValueToSrc(parsed);
-    return toAbsoluteSignatureUrl(value);
-  }
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return "";
-  const record = value as Record<string, unknown>;
-  for (const key of ["Url", "url", "serverRelativeUrl", "ServerRelativeUrl"]) {
-    const next = record[key];
-    if (typeof next === "string" && next.trim()) return toAbsoluteSignatureUrl(next.trim());
-  }
-  return "";
-}
-
-// ── Model ──────────────────────────────────────────────────────────────
-
-class SignatureQuestionModel extends Question {
-  getType() {
-    return "signaturepad";
-  }
-  get signatureWidth() {
-    return (this.getPropertyValue("signatureWidth") as number) ?? 400;
-  }
-  set signatureWidth(v: number) {
-    this.setPropertyValue("signatureWidth", v);
-  }
-  get signatureHeight() {
-    return (this.getPropertyValue("signatureHeight") as number) ?? 200;
-  }
-  set signatureHeight(v: number) {
-    this.setPropertyValue("signatureHeight", v);
-  }
-  get penColor() {
-    return (this.getPropertyValue("penColor") as string) ?? "#000000";
-  }
-  set penColor(v: string) {
-    this.setPropertyValue("penColor", v);
-  }
-  get backgroundColor() {
-    return (this.getPropertyValue("backgroundColor") as string) ?? "#FFFFFF";
-  }
-  set backgroundColor(v: string) {
-    this.setPropertyValue("backgroundColor", v);
-  }
-  get exportFormat() {
-    return (this.getPropertyValue("exportFormat") as string) ?? "PNG";
-  }
-  set exportFormat(v: string) {
-    this.setPropertyValue("exportFormat", v);
-  }
-}
-
-// ── Canvas Drawing Helpers ─────────────────────────────────────────────
-
 function getPointerCoordinates(
   e: React.PointerEvent<HTMLElement>,
   canvas: HTMLCanvasElement,
@@ -121,10 +44,9 @@ function getPointerCoordinates(
     y: (e.clientY - rect.top) * scaleY,
   };
 }
-
 // ── Signature Modal ────────────────────────────────────────────────────
 
-function SignatureModal({
+export function SignatureModal({
   width,
   height,
   penColor: initialColor,
@@ -448,244 +370,5 @@ export function SignatureCapture({
         />
       )}
     </div>
-  );
-}
-
-// ── Main Question Component ────────────────────────────────────────────
-
-function SignatureQuestion({ question }: { question: SignatureQuestionModel }) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const value = question.value as unknown;
-  const signatureSrc = signatureValueToSrc(value);
-  const readOnly = question.isReadOnly;
-
-  const hasSignature = !!signatureSrc;
-
-  const handleSave = (dataUrl: string) => {
-    question.value = dataUrl;
-    setModalOpen(false);
-    setLocked(true);
-  };
-
-  const handleClear = () => {
-    question.value = null;
-    setLocked(false);
-    setModalOpen(false);
-  };
-
-  // Empty state — click to sign
-  if (!hasSignature) {
-    if (readOnly) {
-      return (
-        <div
-          style={{
-            width: "100%",
-            minHeight: 72,
-            border: `1px dashed ${C.border}`,
-            borderRadius: 12,
-            background: C.offWhite,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: C.textMuted,
-            fontSize: 12,
-          }}
-        >
-          No signature captured
-        </div>
-      );
-    }
-
-    return (
-      <div>
-        <button
-          onClick={() => setModalOpen(true)}
-          type="button"
-          style={{
-            width: "100%", minHeight: 120,
-            border: `2px dashed ${C.purpleMid}`,
-            borderRadius: 12, background: C.purplePale,
-            cursor: "pointer", display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center",
-            gap: 8, padding: "24px", fontFamily: "'DM Sans', sans-serif",
-            transition: "background-color .2s, border-color .2s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = C.purple;
-            e.currentTarget.style.background = C.white;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = C.purpleMid;
-            e.currentTarget.style.background = C.purplePale;
-          }}
-        >
-          <span style={{ fontSize: 32 }}>✍️</span>
-          <span style={{ fontSize: 13, color: C.purple, fontWeight: 600 }}>
-            Click to sign
-          </span>
-          <span style={{ fontSize: 11, color: C.textMuted }}>
-            A signature box will open for you to draw your signature
-          </span>
-        </button>
-
-        {modalOpen && (
-          <SignatureModal
-            width={question.signatureWidth}
-            height={question.signatureHeight}
-            penColor={question.penColor}
-            backgroundColor={question.backgroundColor}
-            onSave={handleSave}
-            onCancel={() => setModalOpen(false)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Signed state — show image + edit/clear controls
-  return (
-    <div>
-      <div
-        style={{
-          border: `1px solid ${C.purpleMid}`, borderRadius: 12,
-          overflow: "hidden", background: question.backgroundColor,
-          position: "relative",
-        }}
-      >
-        <img
-          src={signatureSrc}
-          alt="Signature"
-          style={{
-            width: "100%", maxHeight: question.signatureHeight,
-            objectFit: "contain", display: "block",
-          }}
-        />
-
-        {!readOnly && (
-          <div
-            style={{
-              position: "absolute", inset: 0,
-              background: "rgba(255,255,255,0.0)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 10, opacity: 0, transition: "opacity .2s, background-color .2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = "1";
-              e.currentTarget.style.background = "rgba(255,255,255,0.85)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = "0";
-              e.currentTarget.style.background = "rgba(255,255,255,0.0)";
-            }}
-          >
-            {locked ? (
-              <button
-                onClick={() => setLocked(false)}
-                type="button"
-                style={{
-                  height: 36, padding: "0 16px", borderRadius: 8,
-                  border: `1px solid ${C.purpleMid}`, background: C.white,
-                  color: C.purple, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                <span>🔓</span> Unlock to Edit
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setModalOpen(true)}
-                  type="button"
-                  style={{
-                    height: 36, padding: "0 16px", borderRadius: 8,
-                    border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
-                    color: C.white, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <span>✏️</span> Edit
-                </button>
-                <button
-                  onClick={handleClear}
-                  type="button"
-                  style={{
-                    height: 36, padding: "0 16px", borderRadius: 8,
-                    border: `1px solid ${C.red}`, background: C.white,
-                    color: C.red, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <span>🗑️</span> Clear
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Locked indicator */}
-      {locked && !readOnly && (
-        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ fontSize: 10, color: C.green }}>🔒</span>
-          <span style={{ fontSize: 10, color: C.textMuted }}>Signature locked — hover to unlock</span>
-        </div>
-      )}
-
-      {modalOpen && (
-        <SignatureModal
-          width={question.signatureWidth}
-          height={question.signatureHeight}
-          penColor={question.penColor}
-          backgroundColor={question.backgroundColor}
-          existingDataUrl={signatureSrc}
-          onSave={handleSave}
-          onCancel={() => setModalOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Registration ───────────────────────────────────────────────────────
-
-let _registered = false;
-
-export function registerSignaturePad(): void {
-  if (_registered) return;
-  _registered = true;
-
-  // Only add the class if SurveyJS doesn't already define it natively.
-  // The native signaturepad is a built-in SurveyJS type — we only need to
-  // override its React renderer.
-  if (!Serializer.findClass("signaturepad")) {
-    Serializer.addClass(
-      "signaturepad",
-      [
-        { name: "signatureWidth:number", default: 400 },
-        { name: "signatureHeight:number", default: 200 },
-        { name: "penColor", default: "#000000" },
-        { name: "backgroundColor", default: "#FFFFFF" },
-        { name: "exportFormat", default: "PNG" },
-      ],
-      () => new SignatureQuestionModel(""),
-      "question",
-    );
-    ElementFactory.Instance.registerElement("signaturepad", (name) => new SignatureQuestionModel(name));
-  }
-
-  interface ReactQuestionFactoryFixed {
-    registerQuestion(
-      questionType: string,
-      questionCreator: (props: { question: SignatureQuestionModel }) => React.JSX.Element,
-    ): void;
-  }
-
-  (ReactQuestionFactory.Instance as unknown as ReactQuestionFactoryFixed).registerQuestion(
-    "signaturepad",
-    (props) => <SignatureQuestion question={props.question} />,
   );
 }

@@ -2,14 +2,14 @@
  * EvaluationPage.tsx — Layer evaluation/approval interface.
  * Route: /eval/:token (public) or /eval/:formSlug/:responseId/:layerNumber (365)
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
-import { Model } from "survey-core";
-import { Survey } from "survey-react-ui";
-import { FlatLightPanelless } from "survey-core/themes";
-import "survey-core/survey-core.min.css";
+import NativeFormView from "../native/NativeForm";
+import { parseForm, type NativeForm } from "../native/schema";
+import { useNativeForm } from "../native/useNativeForm";
+import "../native/native-form.css";
 
 import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import { buildLayerReviewLink, describeMissingReviewLink } from "../utils/layerReviewLink";
@@ -23,8 +23,8 @@ import EvaluationSummary from "../components/builder/EvaluationSummary";
 import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import type { PdfFormData } from "../utils/FormPdfDocument";
-import { rowsToHtml, getDynamicMatrixFields } from "../utils/DynamicMatrix";
-import { registerSignaturePad, SignatureCapture } from "../utils/SignaturePad";
+import { rowsToHtml, getDynamicMatrixFields } from "../utils/matrixData";
+import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import Logo from "../components/Logo";
@@ -41,7 +41,6 @@ import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
-registerSignaturePad();
 
 // ── PDF Helper ─────────────────────────────────────────────────────────────
 async function loadPdfAndGenerate(token: string, listTitle: string, responseItemId: number, formTitle: string, formStatus: string): Promise<void> {
@@ -239,26 +238,31 @@ function isCurrencyQuestion(question: Record<string, unknown>): boolean {
   return inputType === "number" && /\b(cost|amount|price|fee|claim|expense|budget|total|subtotal)\b/i.test(`${name} ${title}`);
 }
 
-function addCurrencyAdornment(host: HTMLElement, question: Record<string, unknown>): void {
-  if (host.querySelector(".eval-currency-prefix")) return;
-  const input = host.querySelector<HTMLInputElement>("input[type='number'], input");
-  const inputWrap = input?.parentElement;
-  if (!input || !inputWrap) return;
-  const symbol = valueToText(question.currencySymbol) || (valueToText(question.currency) === "MYR" || !question.currency ? "RM" : valueToText(question.currency));
-  inputWrap.style.position = "relative";
-  input.style.paddingLeft = "48px";
-  const prefix = document.createElement("span");
-  prefix.className = "eval-currency-prefix";
-  prefix.textContent = symbol;
-  inputWrap.insertBefore(prefix, input);
+function currencySymbolFor(question: Record<string, unknown>): string {
+  const explicit = valueToText(question.currencySymbol);
+  if (explicit) return explicit;
+  const named = valueToText(question.currency);
+  return !named || named === "MYR" ? "RM" : named;
 }
 
-function decorateEvaluationModel(model: Model): void {
-  model.onAfterRenderQuestion.add((_sender, options) => {
-    const question = options.question as unknown as Record<string, unknown> | undefined;
-    const host = options.htmlElement as HTMLElement | undefined;
-    if (!question || !host || !isCurrencyQuestion(question)) return;
-    addCurrencyAdornment(host, question);
+/**
+ * Marks money questions with the symbol they should be typed against.
+ *
+ * The SurveyJS build did this after every render by reaching into the DOM and
+ * inserting a span next to the input. The native engine draws a question's
+ * `prefix` itself, so the same result comes from saying so in the document —
+ * which also means the symbol survives re-renders instead of being re-applied
+ * after each one. The `currencySymbol` case needs no help; it is only the
+ * name-based guess ("claim amount", "total cost") that has to be written down.
+ */
+function withCurrencyPrefixes(elements: Record<string, unknown>[]): Record<string, unknown>[] {
+  return elements.map((element) => {
+    const next = { ...element };
+    if (Array.isArray(next.elements)) {
+      next.elements = withCurrencyPrefixes(next.elements as Record<string, unknown>[]);
+    }
+    if (!next.prefix && isCurrencyQuestion(next)) next.prefix = currencySymbolFor(next);
+    return next;
   });
 }
 
@@ -291,13 +295,40 @@ export default function EvaluationPage() {
   const [previousResults, setPreviousResults] = useState<Record<string, unknown>[]>([]);
   const [formTitle, setFormTitle] = useState("");
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
-  const [evalSurveyModel, setEvalSurveyModel] = useState<Model | null>(null);
-  const [evalValid, setEvalValid] = useState(true);
   const [currentLayerStatus, setCurrentLayerStatus] = useState("");
   const [formStatus, setFormStatus] = useState("");
   const [mediaSrcByField, setMediaSrcByField] = useState<Record<string, string | string[]>>({});
   const [logoUrl, setLogoUrl] = useState("");
   const [publicPreviousLayerSummaries, setPublicPreviousLayerSummaries] = useState<PublicPreviousLayerSummary[]>([]);
+
+  /**
+   * The evaluation questions this layer asks, as a native document.
+   *
+   * Null when the layer is a plain approval (nothing to fill in) or when its
+   * question list is empty, which the confirm button reads as "not ready".
+   */
+  const evalForm = useMemo<NativeForm | null>(() => {
+    if (currentLayer?.type !== "evaluation") return null;
+    const elements = (currentLayer as EvaluationLayerConfig).surveyElements || [];
+    if (elements.length === 0) return null;
+    try {
+      return parseForm(
+        buildEvaluationSurveyJson(withCurrencyPrefixes(elements), currentLayer.title || "Evaluation"),
+      );
+    } catch {
+      return null;
+    }
+  }, [currentLayer]);
+
+  const placeholderForm = useMemo(() => parseForm(null), []);
+  const evalRuntime = useNativeForm(evalForm ?? placeholderForm);
+
+  // A plain approval layer asks nothing, so it is ready as soon as it loads.
+  // An evaluation layer is ready once every required question has an answer —
+  // the button says which of the two it is rather than failing on click.
+  const evalValid = currentLayer?.type !== "evaluation"
+    ? true
+    : evalForm !== null && evalRuntime.answered >= evalRuntime.required;
 
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [rejectionReason, setRejectionReason] = useState("");
@@ -485,13 +516,7 @@ export default function EvaluationPage() {
   // ── Submit action ──
   const handleSubmit = useCallback(async (action: "approve" | "reject" | "confirm") => {
     if (!userEmail) return;
-    if (action === "confirm" && evalSurveyModel) {
-      const valid = evalSurveyModel.validate();
-      if (!valid) {
-        setEvalValid(false);
-        return;
-      }
-    }
+    if (action === "confirm" && evalForm && !evalRuntime.validateAll().ok) return;
     setActionState("submitting");
     try {
       if (isPublic) {
@@ -510,7 +535,7 @@ export default function EvaluationPage() {
             responseItemId: itemId,
             layerNumber: currentLayer.layerNumber,
             action,
-            fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data) : {},
+            fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
             signature: signatureData || undefined,
             rejection: rejectionReason || undefined,
           }),
@@ -564,7 +589,7 @@ export default function EvaluationPage() {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
           confirmerEmail: userEmail,
           confirmerName: accounts[0]?.name ?? undefined,
-          fields: evalSurveyModel ? foldOtherAnswers(evalSurveyModel.data as Record<string, unknown>) : {},
+          fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
           signatureUrl: signatureData,
         });
         await updateLayerStatus(token, listTitle, respId, displayLayerNumber, {
@@ -626,7 +651,7 @@ export default function EvaluationPage() {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
       setActionState("error");
     }
-  }, [token, userEmail, evalSurveyModel, isPublic, routeToken, currentLayer, formTitle, formSlug, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
+  }, [token, userEmail, evalForm, evalRuntime, isPublic, routeToken, currentLayer, formTitle, formSlug, signatureData, rejectionReason, responseId, displayLayerNumber, accounts, totalLayers, layerSequence, responseData]);
 
   /** Load matrix child list data for dynamicmatrix fields and enrich responseData */
   const loadMatrixChildData = async (
@@ -693,35 +718,6 @@ export default function EvaluationPage() {
     }
   };
 
-  useEffect(() => {
-    if (currentLayer?.type !== "evaluation") {
-      setEvalSurveyModel((prev) => { prev?.dispose(); return null; });
-      setEvalValid(true);
-      return;
-    }
-
-    const elements = (currentLayer as EvaluationLayerConfig).surveyElements || [];
-    if (elements.length === 0) {
-      setEvalSurveyModel((prev) => { prev?.dispose(); return null; });
-      setEvalValid(false);
-      return;
-    }
-
-    try {
-      const model = new Model(buildEvaluationSurveyJson(elements, currentLayer.title || "Evaluation"));
-      model.applyTheme(FlatLightPanelless);
-      decorateEvaluationModel(model);
-      const checkValid = () => { setEvalValid(!model.hasErrors()); };
-      model.onValueChanged.add(checkValid);
-      window.setTimeout(checkValid, 0);
-      setEvalSurveyModel((prev) => { prev?.dispose(); return model; });
-      return () => { model.dispose(); };
-    } catch {
-      setEvalSurveyModel((prev) => { prev?.dispose(); return null; });
-      setEvalValid(false);
-    }
-  }, [currentLayer]);
-
   // ── Render ──
   if (authState === "checking" || loading) {
     return <WorkspaceNotice title="Loading..." message="Fetching this submission and its workflow layer." />;
@@ -772,10 +768,6 @@ export default function EvaluationPage() {
         .eval-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .eval-page h1, .eval-page h2, .eval-page h3 { text-wrap: balance; }
         .eval-page p, .eval-page li, .eval-page span { text-wrap: pretty; }
-        .eval-currency-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #5F646D; font-size: 13px; font-weight: 800; pointer-events: none; z-index: 1; font-variant-numeric: tabular-nums; }
-        .eval-survey-wrap .sd-root-modern, .eval-survey-wrap .sd-container-modern { background: transparent !important; max-width: 100% !important; }
-        .eval-survey-wrap .sd-row { display: flex !important; flex-wrap: wrap !important; }
-        .eval-survey-wrap .sd-question { box-shadow: none !important; }
         @media (max-width: 640px) {
           .eval-meta-grid { grid-template-columns: 1fr !important; }
           .eval-header { grid-template-columns: 1fr !important; }
@@ -941,10 +933,8 @@ export default function EvaluationPage() {
             <>
               {isEvaluation && (
                 <div style={{ marginBottom: 16 }}>
-                  {evalSurveyModel ? (
-                    <div className="eval-survey-wrap approval-survey-preview">
-                      <Survey model={evalSurveyModel} />
-                    </div>
+                  {evalForm ? (
+                    <NativeFormView runtime={evalRuntime} />
                   ) : (
                     <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 8, padding: 12 }}>
                       This evaluation layer has no configured fields. Ask a form builder superuser to update the layer configuration.
@@ -994,7 +984,7 @@ export default function EvaluationPage() {
                     variant="contained"
                     size="large"
                     onClick={() => handleSubmit("confirm")}
-                    disabled={actionState === "submitting" || !evalSurveyModel || !evalValid}
+                    disabled={actionState === "submitting" || !evalForm || !evalValid}
                     sx={{ minHeight: 44 }}
                   >
                     {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit evaluation"}

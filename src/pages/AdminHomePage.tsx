@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from "@mui/material";
 import {
   AdminPanelSettingsOutlined as AdminIcon,
   DeleteForeverOutlined as DeleteForeverIcon,
@@ -19,10 +19,15 @@ import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import DetailModal from "../components/dashboard/DetailModal";
+import {
+  collectFieldCatalog,
+  collectFormTypes,
+  collectFormVersions,
+  collectPublishProfiles,
+} from "../utils/submissionFilters";
+import { csvCell, downloadCsv } from "../utils/csv";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow } from "../theme/editorial";
-
-type ExportDatePreset = "all" | "today" | "week" | "month" | "custom";
 
 const EXPORT_BASE_COLUMNS = [
   "Reference",
@@ -38,87 +43,6 @@ const EXPORT_BASE_COLUMNS = [
   "Total Layers",
   "Selected Branch",
 ] as const;
-
-function csvCell(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
-function parseDateValue(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function startOfDay(date: Date): Date {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function endOfDay(date: Date): Date {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function exportDateRange(preset: ExportDatePreset, customFrom: string, customTo: string): { from: Date | null; to: Date | null } {
-  const now = new Date();
-  if (preset === "today") return { from: startOfDay(now), to: endOfDay(now) };
-  if (preset === "week") {
-    const start = startOfDay(now);
-    const day = start.getDay();
-    start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
-    const end = endOfDay(start);
-    end.setDate(start.getDate() + 6);
-    return { from: start, to: end };
-  }
-  if (preset === "month") {
-    return {
-      from: new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0),
-      to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
-    };
-  }
-  if (preset === "custom") {
-    return {
-      from: customFrom ? startOfDay(new Date(customFrom)) : null,
-      to: customTo ? endOfDay(new Date(customTo)) : null,
-    };
-  }
-  return { from: null, to: null };
-}
-
-function submissionMatchesExportFilters(
-  item: Submission,
-  filters: {
-    datePreset: ExportDatePreset;
-    customFrom: string;
-    customTo: string;
-    listTitle: string;
-    category: string;
-    submitter: string;
-    listMetaMap: Record<string, { category: string }>;
-  },
-): boolean {
-  const { from, to } = exportDateRange(filters.datePreset, filters.customFrom, filters.customTo);
-  const submitted = parseDateValue(item.submittedAt);
-  if (from && (!submitted || submitted < from)) return false;
-  if (to && (!submitted || submitted > to)) return false;
-  if (filters.listTitle && item.listTitle !== filters.listTitle) return false;
-  if (filters.category && filters.listMetaMap[item.listTitle]?.category !== filters.category) return false;
-  if (filters.submitter) {
-    const needle = filters.submitter.toLowerCase();
-    const candidates = [
-      item.submittedByEmail,
-      item.submitterName ?? "",
-      item.createdByEmail ?? "",
-      item.createdByName ?? "",
-    ];
-    if (!candidates.some((candidate) => candidate.toLowerCase().includes(needle))) return false;
-  }
-  return true;
-}
 
 function buildSubmissionCsv(rows: Submission[], listMetaMap: Record<string, { category: string }>): string {
   const fieldKeys = Array.from(
@@ -154,20 +78,11 @@ function buildSubmissionCsv(rows: Submission[], listMetaMap: Record<string, { ca
   return lines.join("\r\n");
 }
 
-function downloadCsv(csv: string, fileName: string): void {
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function AdminHomePage() {
   const {
     userEmail,
     isAdmin,
+    canUseFormBuilder,
     submissions,
     visibleLists,
     listMetaMap,
@@ -175,19 +90,15 @@ export default function AdminHomePage() {
     hasFilters,
     detailItem,
     setDetailItem,
-    search,
-    setSearch,
-    listFilter,
-    setListFilter,
-    statusFilter,
-    setStatusFilter,
+    filters,
+    setFilters,
     sortBy,
     setSortBy,
-    submitterFilter,
-    setSubmitterFilter,
     sortedSubmissions,
     onSignOut,
     onSwitchAccount,
+    onOpenBuilder,
+    onEditForm,
     onHardDeleteSubmission,
   } = useDashboard();
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
@@ -195,32 +106,23 @@ export default function AdminHomePage() {
   const [deleteError, setDeleteError] = useState("");
   const [deleteResult, setDeleteResult] = useState<HardDeleteSubmissionResult | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportDatePreset, setExportDatePreset] = useState<ExportDatePreset>("all");
-  const [exportCustomFrom, setExportCustomFrom] = useState("");
-  const [exportCustomTo, setExportCustomTo] = useState("");
-  const [exportListFilter, setExportListFilter] = useState("");
-  const [exportCategoryFilter, setExportCategoryFilter] = useState("");
-  const [exportSubmitterFilter, setExportSubmitterFilter] = useState("");
-  const workspaceLabel = isAdmin ? "OSHES admin workspace" : "OSHES workspace";
-  const canHardDeleteSubmission = isAdmin;
-  const canExportSubmissions = isAdmin;
-  const categoryOptions = Array.from(
-    new Set(visibleLists.map((list) => listMetaMap[list.title]?.category).filter(Boolean)),
-  ).sort((a, b) => a.localeCompare(b));
-  const exportRows = submissions.filter((item) =>
-    submissionMatchesExportFilters(item, {
-      datePreset: exportDatePreset,
-      customFrom: exportCustomFrom,
-      customTo: exportCustomTo,
-      listTitle: exportListFilter,
-      category: exportCategoryFilter,
-      submitter: exportSubmitterFilter,
-      listMetaMap,
-    }),
-  );
+  const [exportScope, setExportScope] = useState<"current" | "all">("current");
+  const workspaceLabel = isAdmin ? "Admin workspace" : "Employee workspace";
+  const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
+  const canExportSubmissions = isAdmin || canUseFormBuilder;
+  const formTypeOptions = collectFormTypes(submissions, visibleLists.map((list) => list.title));
+  const publishProfileOptions = collectPublishProfiles(submissions, filters.formType);
+  const formVersionOptions = collectFormVersions(submissions, filters.formType, filters.publishProfile);
+  const fieldCatalog = collectFieldCatalog(submissions, filters.formType, {
+    publishProfile: filters.publishProfile,
+    formVersion: filters.formVersion,
+  });
+  const exportRows = exportScope === "all" ? submissions : sortedSubmissions;
   const dashboardSubtitle = isAdmin
-    ? "Review submissions, monitor workflows, and manage OSHES operations."
-    : "Submit OSHES forms, track workflow status, and access your submission history.";
+    ? canUseFormBuilder
+      ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
+      : "Review submissions, monitor approval workflows, and manage HR portal operations."
+    : "Submit HR forms, track approval status, and access your submission history.";
 
   const openDeleteDialog = (item: Submission) => {
     setDeleteTarget(item);
@@ -253,23 +155,24 @@ export default function AdminHomePage() {
   const handleExportCsv = () => {
     const csv = buildSubmissionCsv(exportRows, listMetaMap);
     const datePart = new Date().toISOString().slice(0, 10);
-    const scopePart = (exportListFilter || exportCategoryFilter || "all-forms")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    downloadCsv(csv, `pmw-oshes-submissions-${scopePart}-${datePart}.csv`);
+    const scopePart = exportScope === "all" ? "all" : "filtered";
+    downloadCsv(csv, `pmw-hr-submissions-${scopePart}-${datePart}.csv`);
     setExportOpen(false);
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100dvh",
+        minHeight: "100vh",
         background:
           "var(--app-bg, linear-gradient(180deg, #F6FAFD 0%, #F8FAFC 48%, #FFFFFF 100%))",
         color: editorial.ink,
         WebkitFontSmoothing: "antialiased",
         position: "relative",
+        // `clip` rather than `hidden`: it stops a stray wide child from making the
+        // whole document scroll/pinch-zoom sideways without creating a scroll
+        // container, so the sticky Header keeps sticking to the viewport.
+        overflowX: "clip",
         "&::before": {
           content: '""',
           position: "fixed",
@@ -283,8 +186,10 @@ export default function AdminHomePage() {
       <Header
         userEmail={userEmail}
         isAdmin={isAdmin}
+        canUseFormBuilder={canUseFormBuilder}
         onLogout={onSignOut}
         onSwitch={onSwitchAccount}
+        onOpenBuilder={onOpenBuilder}
       />
 
       <Box
@@ -344,7 +249,7 @@ export default function AdminHomePage() {
                 textWrap: "balance",
               }}
             >
-              PMW OSHES Forms
+              PMW Group HR Portal
             </Typography>
             <Typography
               variant="h6"
@@ -427,26 +332,25 @@ export default function AdminHomePage() {
               visibleLists={visibleLists}
               listMetaMap={listMetaMap}
               isAdmin={isAdmin}
+              canUseFormBuilder={canUseFormBuilder}
+              onEditForm={onEditForm}
             />
           </Box>
         )}
 
         <Box sx={{ mb: 4 }}>
           <Toolbar
-            search={search}
-            setSearch={setSearch}
-            listFilter={listFilter}
-            setListFilter={setListFilter}
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
+            filters={filters}
+            setFilters={setFilters}
             sortBy={sortBy}
             setSortBy={setSortBy}
-            submitterFilter={submitterFilter}
-            setSubmitterFilter={setSubmitterFilter}
+            formTypeOptions={formTypeOptions}
+            publishProfileOptions={publishProfileOptions}
+            formVersionOptions={formVersionOptions}
+            fieldCatalog={fieldCatalog}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}
             onOpenExport={() => setExportOpen(true)}
-            visibleLists={visibleLists}
             total={submissions.length}
             filtered={sortedSubmissions.length}
           />
@@ -485,11 +389,7 @@ export default function AdminHomePage() {
         )}
 
         {sortedSubmissions.length > 0 ? (
-          // Above lg these render as a column grid with fixed minimums. It fits at
-          // lg, but browser zoom and long column content can still push past the
-          // page — so the table scrolls inside this box rather than dragging the
-          // whole document wider than the viewport.
-          <Box sx={{ maxWidth: "100%", overflowX: "auto" }}>
+          <>
             <ListHeader isAdmin={isAdmin} />
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {sortedSubmissions.map((item) => (
@@ -505,7 +405,7 @@ export default function AdminHomePage() {
                 />
               ))}
             </Box>
-          </Box>
+          </>
         ) : (
           <EmptyState hasFilters={hasFilters} />
         )}
@@ -554,95 +454,18 @@ export default function AdminHomePage() {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ px: 3, py: 2.5 }}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
-              gap: 2,
-            }}
-          >
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Date range</InputLabel>
-              <Select
-                value={exportDatePreset}
-                label="Date range"
-                onChange={(event) => setExportDatePreset(event.target.value as ExportDatePreset)}
-                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
-              >
-                <MenuItem value="all">All dates</MenuItem>
-                <MenuItem value="today">Today</MenuItem>
-                <MenuItem value="week">This week</MenuItem>
-                <MenuItem value="month">This month</MenuItem>
-                <MenuItem value="custom">Custom date range</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Form</InputLabel>
-              <Select
-                value={exportListFilter}
-                label="Form"
-                onChange={(event) => setExportListFilter(event.target.value)}
-                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
-              >
-                <MenuItem value="">All forms</MenuItem>
-                {visibleLists.map((list) => (
-                  <MenuItem key={list.title} value={list.title}>
-                    {list.title}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {exportDatePreset === "custom" && (
-              <>
-                <TextField
-                  label="From"
-                  type="date"
-                  size="small"
-                  value={exportCustomFrom}
-                  onChange={(event) => setExportCustomFrom(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
-                />
-                <TextField
-                  label="To"
-                  type="date"
-                  size="small"
-                  value={exportCustomTo}
-                  onChange={(event) => setExportCustomTo(event.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
-                />
-              </>
-            )}
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={exportCategoryFilter}
-                label="Category"
-                onChange={(event) => setExportCategoryFilter(event.target.value)}
-                sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
-              >
-                <MenuItem value="">All categories</MenuItem>
-                {categoryOptions.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <TextField
-              label="Submitter"
-              placeholder="Name or email"
-              size="small"
-              value={exportSubmitterFilter}
-              onChange={(event) => setExportSubmitterFilter(event.target.value)}
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", backgroundColor: editorial.paperSoft } }}
-            />
-          </Box>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Scope</InputLabel>
+            <Select
+              value={exportScope}
+              label="Scope"
+              onChange={(event) => setExportScope(event.target.value as "current" | "all")}
+              sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
+            >
+              <MenuItem value="current">Current view (filters applied)</MenuItem>
+              <MenuItem value="all">All submissions</MenuItem>
+            </Select>
+          </FormControl>
 
           <Alert
             severity={exportRows.length > 0 ? "info" : "warning"}
@@ -661,7 +484,7 @@ export default function AdminHomePage() {
               },
             }}
           >
-            {exportRows.length} submission{exportRows.length === 1 ? "" : "s"} match these export filters.
+            {exportRows.length} submission{exportRows.length === 1 ? "" : "s"} will be exported.
           </Alert>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: editorial.paperSoft }}>

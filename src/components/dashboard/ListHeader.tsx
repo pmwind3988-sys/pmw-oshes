@@ -1,5 +1,6 @@
 import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { editorial } from "../../theme/editorial";
+import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 
 interface ListHeaderProps {
   isAdmin: boolean;
@@ -7,21 +8,17 @@ interface ListHeaderProps {
 
 export default function ListHeader({ isAdmin }: ListHeaderProps) {
   const theme = useTheme();
-  // Column titles only make sense over the column grid. SubmissionRow stacks
-  // into cards under lg because the grid's fixed minimums do not fit — the two
-  // breakpoints must stay identical.
-  const isStacked = useMediaQuery(theme.breakpoints.down("lg"));
+  // Rows fall back to the card layout below md, so the column header goes with them.
+  const isCompact = useMediaQuery(theme.breakpoints.down("md"));
 
-  if (isStacked) return null;
+  if (isCompact) return null;
 
   return (
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: isAdmin
-          ? "minmax(240px, 2fr) minmax(180px, 1.35fr) minmax(170px, 1.15fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 88px"
-          : "minmax(260px, 2.2fr) minmax(180px, 1.25fr) minmax(132px, 0.85fr) minmax(150px, 1fr) 40px",
-        gap: 2,
+        gridTemplateColumns: isAdmin ? SUBMISSION_GRID_COLUMNS.admin : SUBMISSION_GRID_COLUMNS.member,
+        gap: SUBMISSION_GRID_GAP,
         px: 2.5,
         py: 1.5,
         backgroundColor: "rgba(255, 255, 255, 0.9)",

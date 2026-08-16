@@ -1,3 +1,16 @@
+/**
+ * Toolbar.tsx — the dashboard's submission filter bar.
+ *
+ * Organised scope-first: the always-visible row carries free-text search and the
+ * form type, because choosing a form is what makes everything else meaningful.
+ * The advanced panel then splits in two — facets every submission has (status,
+ * submitter, submitted-on, sort) and facets belonging to the chosen form type
+ * (its publish profile, and conditions on its own questions).
+ *
+ * Applied conditions are always echoed as removable chips below the bar. With a
+ * stack of field conditions an admin must be able to see and undo any one of
+ * them without reopening the panel.
+ */
 import { useState } from "react";
 import {
   Box,
@@ -11,6 +24,7 @@ import {
   Select,
   Stack,
   TextField,
+  Typography,
 } from "@mui/material";
 import {
   AdminPanelSettings as AdminIcon,
@@ -21,55 +35,70 @@ import {
   RestartAlt as ClearFiltersIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
-import type { DiscoveredList } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
+import {
+  EMPTY_SUBMISSION_FILTERS,
+  applyFormTypeChange,
+  applyFormVersionChange,
+  applyPublishProfileChange,
+  countActiveFilters,
+  describeFieldFilter,
+  type FieldFilter,
+  type FormTypeOption,
+  type FormVersionOption,
+  type SubmissionFilterState,
+} from "../../utils/submissionFilters";
+import type { FilterableField } from "../../utils/formFieldCatalog";
+import { LIFECYCLE_STAGES, lifecycleLabel } from "../../utils/submissionLifecycle";
+import { AddFieldCondition, FieldConditionRow } from "./FieldConditions";
 
 interface ToolbarProps {
-  search: string;
-  setSearch: (v: string) => void;
-  listFilter: string;
-  setListFilter: (v: string) => void;
-  statusFilter: string;
-  setStatusFilter: (v: string) => void;
+  filters: SubmissionFilterState;
+  setFilters: (filters: SubmissionFilterState) => void;
   sortBy: string;
   setSortBy: (v: string) => void;
-  submitterFilter: string;
-  setSubmitterFilter: (v: string) => void;
+  formTypeOptions: FormTypeOption[];
+  publishProfileOptions: string[];
+  /** Versions of the form and profile in scope. */
+  formVersionOptions: FormVersionOption[];
+  /** Questions of the form, profile and version in scope. Empty until a form is chosen. */
+  fieldCatalog: FilterableField[];
   isAdmin: boolean;
   canExportSubmissions: boolean;
   onOpenExport: () => void;
-  visibleLists: DiscoveredList[];
   total: number;
   filtered: number;
 }
 
+const SECTION_LABEL_SX = {
+  fontWeight: 800,
+  fontSize: "0.72rem",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: editorial.softMuted,
+} as const;
+
 export default function Toolbar({
-  search,
-  setSearch,
-  listFilter,
-  setListFilter,
-  statusFilter,
-  setStatusFilter,
+  filters,
+  setFilters,
   sortBy,
   setSortBy,
-  submitterFilter,
-  setSubmitterFilter,
+  formTypeOptions,
+  publishProfileOptions,
+  formVersionOptions,
+  fieldCatalog,
   isAdmin,
   canExportSubmissions,
   onOpenExport,
-  visibleLists,
   total,
   filtered,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const detailedFilterCount = [
-    Boolean(listFilter),
-    statusFilter !== "all",
-    sortBy !== "newest",
-    Boolean(submitterFilter),
-  ].filter(Boolean).length;
-  const hasFilters =
-    search || listFilter || statusFilter !== "all" || sortBy !== "newest" || submitterFilter;
+  const patch = (next: Partial<SubmissionFilterState>) => setFilters({ ...filters, ...next });
+  const detailedFilterCount = countActiveFilters(filters) + (sortBy !== "newest" ? 1 : 0);
+  const hasFilters = detailedFilterCount > 0;
+  const fieldByKey = new Map(fieldCatalog.map((field) => [field.key, field]));
+
   const searchFieldSx = {
     minWidth: 0,
     "& .MuiOutlinedInput-root": {
@@ -92,13 +121,73 @@ export default function Toolbar({
       borderColor: editorial.pmwBlue,
     },
   } as const;
+
   const clearFilters = () => {
-    setSearch("");
-    setListFilter("");
-    setStatusFilter("all");
+    setFilters(EMPTY_SUBMISSION_FILTERS);
     setSortBy("newest");
-    setSubmitterFilter("");
   };
+
+  const updateFieldFilter = (next: FieldFilter) => {
+    patch({ fieldFilters: filters.fieldFilters.map((entry) => (entry.id === next.id ? next : entry)) });
+  };
+  const removeFieldFilter = (id: string) => {
+    patch({ fieldFilters: filters.fieldFilters.filter((entry) => entry.id !== id) });
+  };
+
+  const chips: { key: string; label: string; onDelete: () => void }[] = [];
+  if (filters.search) {
+    chips.push({ key: "search", label: `Search "${filters.search}"`, onDelete: () => patch({ search: "" }) });
+  }
+  if (filters.formType) {
+    chips.push({
+      key: "formType",
+      label: `Form: ${filters.formType}`,
+      // Clearing the form type must also drop what was scoped to it.
+      onDelete: () => setFilters(applyFormTypeChange(filters, "")),
+    });
+  }
+  if (filters.stage !== "all") {
+    chips.push({
+      key: "stage",
+      label: `Status: ${lifecycleLabel(filters.stage as (typeof LIFECYCLE_STAGES)[number])}`,
+      onDelete: () => patch({ stage: "all" }),
+    });
+  }
+  if (filters.publishProfile) {
+    chips.push({
+      key: "profile",
+      label: `Profile: ${filters.publishProfile}`,
+      onDelete: () => setFilters(applyPublishProfileChange(filters, "")),
+    });
+  }
+  if (filters.formVersion) {
+    chips.push({
+      key: "version",
+      label: `Version: ${filters.formVersion}`,
+      onDelete: () => setFilters(applyFormVersionChange(filters, "")),
+    });
+  }
+  if (filters.submitter) {
+    chips.push({
+      key: "submitter",
+      label: `Submitter: ${filters.submitter}`,
+      onDelete: () => patch({ submitter: "" }),
+    });
+  }
+  if (filters.dateFrom || filters.dateTo) {
+    chips.push({
+      key: "dates",
+      label: `Submitted ${filters.dateFrom || "…"} – ${filters.dateTo || "…"}`,
+      onDelete: () => patch({ dateFrom: "", dateTo: "" }),
+    });
+  }
+  for (const fieldFilter of filters.fieldFilters) {
+    chips.push({
+      key: fieldFilter.id,
+      label: describeFieldFilter(fieldFilter, fieldByKey.get(fieldFilter.key)),
+      onDelete: () => removeFieldFilter(fieldFilter.id),
+    });
+  }
 
   return (
     <Box
@@ -113,15 +202,15 @@ export default function Toolbar({
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gridTemplateColumns: { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 260px) auto" },
             gap: { xs: 1, sm: 1.5 },
             alignItems: "center",
           }}
         >
           <TextField
             placeholder="Search reference no, form or ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={filters.search}
+            onChange={(e) => patch({ search: e.target.value })}
             size="small"
             sx={searchFieldSx}
             slotProps={{
@@ -134,6 +223,28 @@ export default function Toolbar({
               },
             }}
           />
+
+          <FormControl size="small" sx={{ minWidth: 0, gridColumn: { xs: "1 / -1", md: "auto" } }}>
+            <InputLabel>Form type</InputLabel>
+            <Select
+              value={filters.formType}
+              label="Form type"
+              onChange={(e) => setFilters(applyFormTypeChange(filters, e.target.value))}
+              sx={selectSx}
+            >
+              <MenuItem value="">All form types</MenuItem>
+              {formTypeOptions.map((option) => (
+                <MenuItem key={option.title} value={option.title}>
+                  {option.title}
+                  {option.count > 0 && (
+                    <Box component="span" sx={{ ml: 0.75, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
+                      ({option.count})
+                    </Box>
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <Button
             variant={advancedOpen ? "contained" : "outlined"}
@@ -192,55 +303,35 @@ export default function Toolbar({
         </Box>
 
         <Collapse in={advancedOpen} timeout={180} unmountOnExit>
-          <Box
-            sx={{
-              pt: 2,
-              borderTop: `1px solid ${editorial.border}`,
-            }}
-          >
+          <Box sx={{ pt: 2, borderTop: `1px solid ${editorial.border}` }}>
+            <Typography sx={SECTION_LABEL_SX}>Any form type</Typography>
             <Box
               sx={{
+                mt: 1,
                 display: "grid",
                 gridTemplateColumns: {
                   xs: "1fr",
-                  sm: isAdmin ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
-                  lg: isAdmin ? "repeat(4, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  lg: isAdmin ? "repeat(4, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))",
                 },
                 gap: 2,
                 alignItems: "center",
               }}
             >
               <FormControl size="small" sx={{ minWidth: 0 }}>
-                <InputLabel>List</InputLabel>
-                <Select
-                  value={listFilter}
-                  label="List"
-                  onChange={(e) => setListFilter(e.target.value)}
-                  sx={selectSx}
-                >
-                  <MenuItem value="">All lists</MenuItem>
-                  {visibleLists.map((list) => (
-                    <MenuItem key={list.title} value={list.title}>
-                      {list.title}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 0 }}>
                 <InputLabel>Status</InputLabel>
                 <Select
-                  value={statusFilter}
+                  value={filters.stage}
                   label="Status"
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => patch({ stage: e.target.value })}
                   sx={selectSx}
                 >
                   <MenuItem value="all">All statuses</MenuItem>
-                  <MenuItem value="pending">Pending</MenuItem>
-                  <MenuItem value="inProgress">In Review</MenuItem>
-                  <MenuItem value="approved">Approved</MenuItem>
-                  <MenuItem value="fullyApproved">Fully Approved</MenuItem>
-                  <MenuItem value="rejected">Rejected</MenuItem>
+                  {LIFECYCLE_STAGES.map((stage) => (
+                    <MenuItem key={stage} value={stage}>
+                      {lifecycleLabel(stage)}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
 
@@ -255,18 +346,131 @@ export default function Toolbar({
                   <MenuItem value="newest">Newest first</MenuItem>
                   <MenuItem value="oldest">Oldest first</MenuItem>
                   <MenuItem value="status">By status</MenuItem>
-                  <MenuItem value="list">By list</MenuItem>
+                  <MenuItem value="list">By form type</MenuItem>
                 </Select>
               </FormControl>
 
               {isAdmin && (
-                <TextField
-                  placeholder="Filter by submitter email..."
-                  value={submitterFilter}
-                  onChange={(e) => setSubmitterFilter(e.target.value)}
-                  size="small"
-                  sx={searchFieldSx}
-                />
+                <>
+                  <TextField
+                    placeholder="Filter by submitter email..."
+                    value={filters.submitter}
+                    onChange={(e) => patch({ submitter: e.target.value })}
+                    size="small"
+                    sx={searchFieldSx}
+                  />
+
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, minWidth: 0 }}>
+                    <TextField
+                      label="Submitted from"
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => patch({ dateFrom: e.target.value })}
+                      size="small"
+                      sx={searchFieldSx}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                    <TextField
+                      label="Submitted to"
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => patch({ dateTo: e.target.value })}
+                      size="small"
+                      sx={searchFieldSx}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Box>
+                </>
+              )}
+            </Box>
+
+            <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px dashed ${editorial.border}` }}>
+              <Typography sx={SECTION_LABEL_SX}>
+                {filters.formType
+                  ? `Only in ${filters.formType}${filters.formVersion ? ` v${filters.formVersion}` : ""}`
+                  : "One form's own fields"}
+              </Typography>
+
+              {!filters.formType ? (
+                <Typography sx={{ mt: 1, fontSize: "0.85rem", color: editorial.muted }}>
+                  Pick a form above to narrow to a profile and version, then filter by the questions that version
+                  asked — dates, titles, times, numbers, ratings, choices.
+                </Typography>
+              ) : (
+                <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                  {/* Profile, then version, then that version's own questions. */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+                      gap: 2,
+                      maxWidth: { sm: 660 },
+                    }}
+                  >
+                    <FormControl size="small" sx={{ minWidth: 0 }}>
+                      <InputLabel>Profile</InputLabel>
+                      <Select
+                        value={filters.publishProfile}
+                        label="Profile"
+                        onChange={(e) => setFilters(applyPublishProfileChange(filters, e.target.value))}
+                        sx={selectSx}
+                      >
+                        <MenuItem value="">All profiles</MenuItem>
+                        {publishProfileOptions.map((profile) => (
+                          <MenuItem key={profile} value={profile}>
+                            {profile}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <FormControl size="small" sx={{ minWidth: 0 }} disabled={!formVersionOptions.length}>
+                      <InputLabel>Version</InputLabel>
+                      <Select
+                        value={filters.formVersion}
+                        label="Version"
+                        onChange={(e) => setFilters(applyFormVersionChange(filters, e.target.value))}
+                        sx={selectSx}
+                      >
+                        <MenuItem value="">
+                          {formVersionOptions.length ? "All versions" : "No versions yet"}
+                        </MenuItem>
+                        {formVersionOptions.map((option) => (
+                          <MenuItem key={option.version} value={option.version}>
+                            v{option.version}
+                            {option.count > 0 && (
+                              <Box component="span" sx={{ ml: 0.75, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
+                                ({option.count})
+                              </Box>
+                            )}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+
+                  {filters.fieldFilters.map((fieldFilter) => (
+                    <FieldConditionRow
+                      key={fieldFilter.id}
+                      filter={fieldFilter}
+                      field={fieldByKey.get(fieldFilter.key)}
+                      onChange={updateFieldFilter}
+                      onRemove={() => removeFieldFilter(fieldFilter.id)}
+                    />
+                  ))}
+
+                  <AddFieldCondition
+                    fields={fieldCatalog}
+                    onAdd={(fieldFilter) => patch({ fieldFilters: [...filters.fieldFilters, fieldFilter] })}
+                  />
+
+                  {!fieldCatalog.length && (
+                    <Typography sx={{ fontSize: "0.8rem", color: editorial.muted }}>
+                      No filterable questions found for this selection yet — its published schema loads with the
+                      submissions.
+                    </Typography>
+                  )}
+                </Stack>
               )}
             </Box>
 
@@ -337,7 +541,7 @@ export default function Toolbar({
         </Collapse>
 
         {hasFilters && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, pt: 1, flexWrap: "wrap" }}>
             <FilterListIcon sx={{ fontSize: 18, color: editorial.muted }} />
             <Chip
               label={`Showing ${filtered} of ${total} submissions`}
@@ -352,6 +556,25 @@ export default function Toolbar({
                 fontVariantNumeric: "tabular-nums",
               }}
             />
+
+            {chips.map((chip) => (
+              <Chip
+                key={chip.key}
+                label={chip.label}
+                size="small"
+                onDelete={chip.onDelete}
+                sx={{
+                  maxWidth: 280,
+                  backgroundColor: editorial.white,
+                  color: editorial.ink,
+                  border: `1px solid ${editorial.border}`,
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  height: 32,
+                }}
+              />
+            ))}
+
             <Button
               size="small"
               variant="text"

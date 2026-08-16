@@ -110,7 +110,9 @@ export function buildPdfLayerResults(
       layerNumber: n,
       type: isEval ? "evaluation" : "approval",
       status,
-      email: (rawResponse[`L${n}_Email`] as string) || "",
+      // On a layer shared by several people, the primary L{n}_Email is not
+      // necessarily who decided — the record should name the person who did.
+      email: (rawResponse[`L${n}_ActedBy`] as string) || (rawResponse[`L${n}_Email`] as string) || "",
       signedAt: (rawResponse[`L${n}_SignedAt`] as string) || undefined,
       rejection: (rawResponse[`L${n}_Rejection`] as string) || undefined,
       signature: (rawResponse[`L${n}_Signature`] as string) || undefined,

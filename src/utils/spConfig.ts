@@ -4,6 +4,7 @@ import { resolveFormVisibility, type FormVisibility } from "./formWorkflow";
 
 const ADMIN_GROUP = OSHES_APP.adminGroup;
 const AUDITOR_GROUP = OSHES_APP.auditorGroup;
+const FORM_BUILDER_GROUP = OSHES_APP.formBuilderGroup;
 
 const EXCLUDE_ALWAYS = [
   "Style Library",
@@ -24,9 +25,27 @@ const EXCLUDE_ALWAYS = [
 export const SP_STATIC = {
   adminGroup: ADMIN_GROUP,
   auditorGroup: AUDITOR_GROUP,
+  /** Blank when no dedicated authoring group is configured; see resolveFormBuilderAccess. */
+  formBuilderGroup: FORM_BUILDER_GROUP,
   statusColumn: null,
   excludeAlways: [...EXCLUDE_ALWAYS],
 } as const;
+
+/**
+ * Whether this account may open the shared form builder.
+ *
+ * With no dedicated group configured the answer is "the admins", rather than
+ * "nobody": a blank group name would otherwise hide the builder from the very
+ * people who deployed it, and the builder re-checks membership on its own site
+ * anyway, so this only decides whether the link is worth showing.
+ */
+export async function resolveFormBuilderAccess(
+  client: Pick<SharePointClient, "isGroupMember">,
+  isAdmin: boolean,
+): Promise<boolean> {
+  if (!FORM_BUILDER_GROUP) return isAdmin;
+  return client.isGroupMember(FORM_BUILDER_GROUP).catch(() => false);
+}
 
 const META_PALETTES = [
   { color: "#1a73e8", pale: "#e8f0fe" },

@@ -14,6 +14,13 @@ import {
   setWorkflowEmailSchedule,
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
+import { parseValidEmailList } from "./_utils/layerRecipients.js";
+
+function scheduledRecipients(recipient: string): string | string[] {
+  const parsed = parseValidEmailList(recipient);
+  if (parsed.length === 0) return recipient;
+  return parsed.length === 1 ? parsed[0] : parsed;
+}
 
 interface ApiRequest {
   method: string;
@@ -84,7 +91,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 responseItemId: item.id,
                 layer: entry.layer,
                 totalLayers: entry.totalLayers,
-                recipient: entry.recipient,
+                // A fan-out layer stores its whole delivery list in one string;
+                // split it back out so Graph gets separate recipients.
+                recipient: scheduledRecipients(entry.recipient),
                 layerType: entry.layerType,
                 reviewLink: entry.reviewLink,
                 authMode: entry.authMode,

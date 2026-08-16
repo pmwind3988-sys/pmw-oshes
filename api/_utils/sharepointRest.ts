@@ -142,6 +142,63 @@ export async function getListFieldsViaSPRest(token: string, listName: string): P
     }));
 }
 
+/** SharePoint's own template numbers: a custom list, and a document library. */
+const SP_BASE_TEMPLATE = { genericList: 100, documentLibrary: 101 } as const;
+
+export type SpListTemplate = keyof typeof SP_BASE_TEMPLATE;
+
+async function listExistsViaSPRest(token: string, listName: string): Promise<boolean> {
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}?$select=Id`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json;odata=nometadata",
+    },
+  });
+  if (res.ok) return true;
+  if (res.status === 404) return false;
+  throw new Error(`SP REST list lookup ${res.status}: ${(await res.text()).slice(0, 300)}`);
+}
+
+/**
+ * Creates a list if it is not already there, using the signed-in admin's own
+ * delegated token.
+ *
+ * **The app-only principal cannot create lists on this tenant** — Graph answers
+ * `POST /sites/{id}/lists` with `403 accessDenied`, the same refusal that already
+ * forced column creation onto this file. `Sites.Selected` lets the application
+ * read and write *items* in a granted site; standing up new structure in it is a
+ * separate right this tenant does not hand to an app.
+ *
+ * So provisioning runs as a person. The delegated token carries
+ * `AllSites.Manage`, and the only callers are admin actions already gated on
+ * OSHES admin membership — someone who may create a list in SharePoint anyway.
+ */
+export async function ensureListViaSPRest(
+  token: string,
+  listName: string,
+  template: SpListTemplate = "genericList",
+): Promise<void> {
+  if (await listExistsViaSPRest(token, listName)) return;
+
+  const digest = await getOptionalSpDigest(token);
+  const res = await fetch(`${requireSpSiteUrl()}/_api/web/lists`, {
+    method: "POST",
+    headers: createHeaders(token, digest),
+    body: JSON.stringify({
+      __metadata: { type: "SP.List" },
+      Title: listName,
+      BaseTemplate: SP_BASE_TEMPLATE[template],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    // Two admins clicking "Set up" at once is a race worth losing quietly: the
+    // list they both wanted now exists, which is all either of them asked for.
+    if (text.toLowerCase().includes("already exists")) return;
+    throw new Error(`SP REST create list ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
 export async function ensureTextFieldViaSPRest(
   token: string,
   listName: string,

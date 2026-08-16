@@ -320,11 +320,17 @@ function getAuthorEmail(item: Record<string, unknown>): string {
   return String(author?.EMail || author?.Email || "");
 }
 
+/**
+ * @param siteUrl Overrides the home site. Only the form builder passes this, to
+ *   check group membership on the site it is about to write to — membership is
+ *   per-site in SharePoint, so an HR-site check would answer the wrong question.
+ */
 export function createSpClient(
   instance: IPublicClientApplication,
-  accounts: AccountInfo[]
+  accounts: AccountInfo[],
+  siteUrl?: string
 ): SharePointClient {
-  const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
+  const SP_SITE_URL = (siteUrl || import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
   async function acquireToken(): Promise<string> {
     return getToken(instance, accounts);
