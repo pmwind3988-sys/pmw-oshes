@@ -319,8 +319,26 @@ async function verifyAdmin(accessToken: string): Promise<string | null> {
   return currentEmail || currentLogin || "admin";
 }
 
+/**
+ * Make sure the settings list has the columns this route writes.
+ *
+ * Deliberately not fatal. On a site provisioned before the appearance work the
+ * list already exists and only ColorTheme/ContrastTheme/FontTheme are new, so a
+ * schema call that fails — most often because the system app may read the list
+ * but not alter it — should not sink a save whose columns may well be there
+ * already. If they genuinely are missing, the write below fails with a Graph
+ * error that names them, which is the more precise complaint anyway.
+ */
 async function ensureSettingsList(token: string): Promise<void> {
-  await ensureAdminPanelSettingsList(token, SETTINGS_LIST);
+  try {
+    await ensureAdminPanelSettingsList(token, SETTINGS_LIST);
+  } catch (error) {
+    logWarn("api:dashboard-background", "Could not ensure the settings list schema — writing anyway", {
+      list: SETTINGS_LIST,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      fix: `If the write below also fails, add text columns ColorTheme, ContrastTheme and FontTheme to the "${SETTINGS_LIST}" list by hand.`,
+    });
+  }
 }
 
 async function readSetting(token: string): Promise<DashboardBackgroundSetting> {
@@ -358,10 +376,31 @@ async function upsertSetting(
 
   const items = await queryListItems(token, SETTINGS_LIST, { top: 50 });
   const existing = items.find((item) => String(item.fields.Title || "") === SETTING_TITLE);
-  if (existing) {
-    await updateListItemFields(token, SETTINGS_LIST, existing.id, fields);
-  } else {
-    await createListItem(token, SETTINGS_LIST, fields);
+
+  try {
+    if (existing) {
+      await updateListItemFields(token, SETTINGS_LIST, existing.id, fields);
+    } else {
+      await createListItem(token, SETTINGS_LIST, fields);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Graph answers 400 for a field the list has no column for. Since the three
+    // theme columns are the only recent additions, that is overwhelmingly what
+    // a 400 here means — and "Graph PATCH fields 400: invalidRequest" on its own
+    // does not say so.
+    const likelyMissingColumns = message.includes("400");
+    logWarn("api:dashboard-background", likelyMissingColumns
+      ? "The settings list is missing the appearance columns"
+      : "Could not write the appearance record", {
+      list: SETTINGS_LIST,
+      itemId: existing ? existing.id : "(new item)",
+      errorMessage: message,
+      fix: likelyMissingColumns
+        ? `Add single-line text columns named ColorTheme, ContrastTheme and FontTheme to the "${SETTINGS_LIST}" list, or grant the system app permission to alter it so they can be created automatically.`
+        : "Check that the system app may write to this list.",
+    });
+    throw error;
   }
 
   return {
@@ -380,10 +419,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = validateApiKey(req.headers);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
 
+  // Which step we reached, so a 500 names the stage that failed. Without it the
+  // only trace of an unhandled error is "Dashboard background request failed",
+  // which is compatible with the app credentials, the site, the list schema and
+  // the write all being the culprit.
+  let stage = "acquiring the system Graph token";
+
   try {
     const token = await getGraphToken();
 
     if (req.method === "GET") {
+      stage = "reading the appearance record";
       const setting = await readSetting(token);
       return res.status(200).json({ setting } as unknown as Record<string, unknown>);
     }
@@ -397,6 +443,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(401).json({ error: "Missing signed-in user token." });
     }
 
+    stage = "verifying admin group membership";
     const updatedBy = await verifyAdmin(bearerToken);
     if (!updatedBy) {
       // Naming the group leaks nothing — VITE_ variables are compiled into the
@@ -415,10 +462,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(400).json({ error: requestedSetting.error });
     }
 
+    stage = "writing the appearance record";
     const savedSetting = await upsertSetting(token, requestedSetting, updatedBy);
     return res.status(200).json({ setting: savedSetting } as unknown as Record<string, unknown>);
   } catch (error) {
-    logError("api:dashboard-background", "Dashboard background request failed", error);
-    return res.status(500).json({ error: "Internal server error. Please try again." });
+    logError("api:dashboard-background", `Appearance request failed while ${stage}`, error);
+    return res.status(500).json({
+      // This route is admin-only, and the person who hit it is the person who
+      // can fix it. Naming the stage costs nothing and turns a dead end into a
+      // starting point; the underlying error stays in the log.
+      error: `The appearance could not be saved — the server failed while ${stage}. Check the function log for details.`,
+    });
   }
 }
