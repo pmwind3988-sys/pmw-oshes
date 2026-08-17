@@ -132,6 +132,7 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     nudged: {},
     markNudged: () => {},
     applyPatch: () => {},
+    removeRecord: () => {},
     appendAudit: () => {},
     updateCatalogue: () => {},
     toast: () => {},

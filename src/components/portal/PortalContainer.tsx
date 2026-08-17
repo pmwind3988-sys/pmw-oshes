@@ -14,7 +14,7 @@ import type {
 import { PortalProvider } from "../../contexts/PortalContext";
 import PortalPage from "../../pages/PortalPage";
 import { buildCatalogue, findCatalogueEntry } from "../../utils/portalCatalogue";
-import { toPortalRecord, queueFor } from "../../utils/portalRecords";
+import { recordKey, toPortalRecord, queueFor } from "../../utils/portalRecords";
 import { allowedScreens, derivePortalAccess, portalHome } from "../../utils/portalRole";
 import { DEFAULT_PORTAL_PREFS, readPortalPrefs, writePortalPrefs, type PortalPrefs } from "../../utils/portalPrefs";
 import { deriveAuditFromRecords, readAuditTrail, sortAudit } from "../../utils/portalAudit";
@@ -61,6 +61,8 @@ export default function PortalContainer({
   onRefresh,
 }: PortalContainerProps) {
   const [patched, setPatched] = useState<Record<string, Submission>>({});
+  /** Keys of records deleted this session — held until the next read from SharePoint. */
+  const [deleted, setDeleted] = useState<Record<string, true>>({});
   const [catalogueOverrides, setCatalogueOverrides] = useState<Record<string, Partial<CatalogueEntry>>>({});
   const [sessionAudit, setSessionAudit] = useState<AuditEntry[]>([]);
   const [storedAudit, setStoredAudit] = useState<AuditEntry[]>([]);
@@ -107,9 +109,15 @@ export default function PortalContainer({
     };
   }, [spClient]);
 
+  // Everything the portal shows is derived from this one set, so a deletion
+  // removed here disappears from the records table, the queue and every
+  // statistic at once — there is no second place holding a stale copy.
   const effectiveSubmissions = useMemo(
-    () => submissions.map((submission) => patched[`${submission.listTitle}::${submission.id}`] ?? submission),
-    [submissions, patched],
+    () =>
+      submissions
+        .filter((submission) => !deleted[`${submission.listTitle}::${submission.id}`])
+        .map((submission) => patched[`${submission.listTitle}::${submission.id}`] ?? submission),
+    [submissions, patched, deleted],
   );
 
   const catalogue = useMemo(() => {
@@ -232,6 +240,13 @@ export default function PortalContainer({
           fields,
         ),
       })),
+    removeRecord: (record: PortalRecord) => {
+      const key = recordKey(record);
+      setDeleted((current) => ({ ...current, [key]: true }));
+      // Nothing is left to show — an open drawer on a deleted record would
+      // otherwise sit there rendering a submission that no longer exists.
+      setDrawerRef((current) => (current === key ? null : current));
+    },
     appendAudit: (entry: AuditEntry) => setSessionAudit((current) => [entry, ...current]),
     updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) =>
       setCatalogueOverrides((current) => ({ ...current, [listTitle]: { ...current[listTitle], ...changes } })),

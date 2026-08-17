@@ -1,4 +1,4 @@
-import type { AuditEntry, PortalRecord, SharePointClient } from "../types";
+import type { AuditEntry, HardDeleteSubmissionResult, PortalRecord, SharePointClient } from "../types";
 import { writeAuditEntry } from "./portalAudit";
 import { claimLayerEmail } from "./layerAssignees";
 import { normalizeEmail } from "./portalPeople";
@@ -23,6 +23,13 @@ export interface PortalActionContext {
 export interface PortalActionResult {
   /** Field patch applied to the SharePoint item, so callers can update state optimistically. */
   fields: Record<string, unknown>;
+  audit: AuditEntry;
+  toast: string;
+}
+
+/** A delete patches nothing — the row it would have patched is gone. */
+export interface PortalDeleteResult {
+  removed: HardDeleteSubmissionResult;
   audit: AuditEntry;
   toast: string;
 }
@@ -296,5 +303,42 @@ export async function cancelSubmission(
     fields,
     audit,
     toast: `${record.reference} marked cancelled. Everyone in the chain has been told.`,
+  };
+}
+
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * Delete a submission and everything filed with it — the answers, every
+ * signature, every photo and uploaded attachment, the generated PDF, the matrix
+ * rows, and the SharePoint item itself.
+ *
+ * This is the one action that leaves nothing behind to read, which is exactly
+ * why it writes the trail entry: the appended row becomes the only remaining
+ * evidence that the reference ever existed, and it names who removed it. Cancel
+ * is the reversible neighbour of this — it keeps the record and marks it — so
+ * anything short of "this must not exist" belongs there instead.
+ */
+export async function deleteSubmission(
+  context: PortalActionContext,
+  record: PortalRecord,
+): Promise<PortalDeleteResult> {
+  const removed = await context.spClient.hardDeleteSubmission(record.submission);
+
+  const swept = `${count(removed.deletedFiles, "file")} and ${count(removed.deletedMatrixRows, "table row")}`;
+  const audit = await writeAuditEntry(context.spClient, {
+    reference: record.reference,
+    who: context.actorName,
+    event: `Deleted permanently — ${record.formName} filed by ${record.submitter || "a public submitter"}, with ${swept}`,
+  });
+
+  return {
+    removed,
+    audit,
+    toast: removed.warnings.length > 0
+      ? `${record.reference} deleted, with ${swept} — some cleanup did not complete. See the trail.`
+      : `${record.reference} deleted, with ${swept}. Only the trail entry remains.`,
   };
 }

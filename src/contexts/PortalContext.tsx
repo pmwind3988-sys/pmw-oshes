@@ -68,6 +68,12 @@ export interface PortalContextValue {
 
   /** Apply a SharePoint field patch to local state so the queue count drops immediately. */
   applyPatch: (record: PortalRecord, fields: Record<string, unknown>) => void;
+  /**
+   * Drop a record that no longer exists in SharePoint. Every count and list is
+   * derived from the same submission set, so removing it there is what makes
+   * the row, the statistics and the open drawer agree without a reload.
+   */
+  removeRecord: (record: PortalRecord) => void;
   appendAudit: (entry: AuditEntry) => void;
   updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) => void;
 

@@ -121,8 +121,28 @@ function normalizeServerRelativeUrl(value: string, siteUrl: string): string | nu
   return null;
 }
 
-function isManagedSubmissionFile(serverRelativeUrl: string, listTitle: string): boolean {
+/** Server-relative path of the configured site, lower-cased, with no trailing slash. */
+function sitePathPrefix(siteUrl: string): string {
+  try {
+    return new URL(siteUrl).pathname.replace(/\/$/, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Whether this file belongs to this submission, on this site.
+ *
+ * Both halves matter. OSHES and HR run the same schema with the same library
+ * names on two different SharePoint sites — `Signature Images` exists on both —
+ * so matching the library name alone would let a link pasted into an OSHES
+ * answer delete a signature belonging to an HR record. The site prefix is what
+ * keeps the sweep inside its own site.
+ */
+function isManagedSubmissionFile(serverRelativeUrl: string, listTitle: string, sitePath: string): boolean {
   const normalized = serverRelativeUrl.replace(/\\/g, "/").toLowerCase();
+  if (sitePath && !normalized.startsWith(`${sitePath}/`)) return false;
+
   const managedLibraries = [
     "form pdfs",
     "signature images",
@@ -132,7 +152,21 @@ function isManagedSubmissionFile(serverRelativeUrl: string, listTitle: string): 
   return managedLibraries.some((library) => normalized.includes(`/${library}/`));
 }
 
-function collectManagedFileUrls(item: Submission, siteUrl: string): string[] {
+/**
+ * Every file this submission owns: the answers' uploads and photos, each
+ * layer's signature, anything an evaluator attached to their own answers, and
+ * the generated PDF.
+ *
+ * The enhanced layers are swept whole rather than by `.signature` alone — an
+ * evaluation layer keeps its answers in `fields`, and one of those answers can
+ * be an uploaded photo. Sweeping wide is safe because `isManagedSubmissionFile`
+ * is what decides: a URL that is not in one of this app's own libraries is
+ * never followed, so a link typed into a text answer cannot be deleted by it.
+ *
+ * Exported for tests only — the delete path calls it through
+ * `hardDeleteSubmission`.
+ */
+export function collectManagedFileUrls(item: Submission, siteUrl: string): string[] {
   const candidates = new Set<string>();
   collectUrlCandidates(item.submissionData, candidates);
 
@@ -141,13 +175,18 @@ function collectManagedFileUrls(item: Submission, siteUrl: string): string[] {
   }
 
   for (const layer of item.enhancedLayers ?? []) {
-    collectUrlCandidates(getStringRecord(layer)?.signature, candidates);
+    collectUrlCandidates(layer, candidates);
   }
 
+  // The raw column too: layers are only built for a form whose LayerConfig
+  // still exists, and a deleted form's evaluation uploads are just as real.
+  collectUrlCandidates(item.evaluationDataRaw, candidates);
+
+  const sitePath = sitePathPrefix(siteUrl);
   const urls = new Set<string>();
   for (const candidate of candidates) {
     const serverRelativeUrl = normalizeServerRelativeUrl(candidate, siteUrl);
-    if (serverRelativeUrl && isManagedSubmissionFile(serverRelativeUrl, item.listTitle)) {
+    if (serverRelativeUrl && isManagedSubmissionFile(serverRelativeUrl, item.listTitle, sitePath)) {
       urls.add(serverRelativeUrl);
     }
   }
@@ -810,6 +849,17 @@ export function createSpClient(
     throw new Error(`Failed to delete file ${serverRelativeUrl}: ${response.status}`);
   }
 
+  /**
+   * Delete a submission and everything filed with it: its matrix child rows,
+   * every file it owns in this app's libraries — signatures, photos, uploaded
+   * attachments, the generated PDF — and then the item itself, which takes any
+   * SharePoint item attachments with it.
+   *
+   * Files go first and the item last, deliberately. A file whose owning row is
+   * already gone is unreachable rubbish nobody will ever find again; a row
+   * whose files failed to delete is still readable, still auditable, and can be
+   * deleted again. So a partial failure leaves the recoverable half.
+   */
   async function hardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
     const itemId = Number(item.id);
     if (!Number.isFinite(itemId) || itemId <= 0) {

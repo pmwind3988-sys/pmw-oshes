@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -14,12 +15,18 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Close as CloseIcon } from "@mui/icons-material";
+import { Close as CloseIcon, DeleteForeverOutlined as DeleteForeverIcon } from "@mui/icons-material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { normalizeEmail } from "../../utils/portalPeople";
-import { cancelSubmission, nudgeApprover, returnForInformation, signLayer } from "../../utils/portalActions";
+import {
+  cancelSubmission,
+  deleteSubmission,
+  nudgeApprover,
+  returnForInformation,
+  signLayer,
+} from "../../utils/portalActions";
 import { downloadRecordPdf } from "../../utils/portalPdf";
 import ReassignDialog from "./ReassignDialog";
 import { recordKey } from "../../utils/portalRecords";
@@ -89,6 +96,7 @@ export default function SubmissionDrawer() {
     userName,
     spClient,
     applyPatch,
+    removeRecord,
     appendAudit,
     toast,
     nudged,
@@ -103,6 +111,9 @@ export default function SubmissionDrawer() {
   const [reassignOpen, setReassignOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState("");
 
   const record = records.find((item) => recordKey(item) === drawerRef) ?? null;
   const open = Boolean(record);
@@ -129,6 +140,11 @@ export default function SubmissionDrawer() {
     Boolean(record) &&
     !record!.done &&
     (access.isAdmin || (record!.submitterEmail === email && record!.at === 0));
+  // Deletion is administrators only, and stays available on a settled record —
+  // a wrongly filed report is usually noticed after it has been signed, and
+  // "cancel it instead" is not an answer when the objection is that the photos
+  // and signatures should not exist at all.
+  const canDelete = !readOnly && access.isAdmin && Boolean(record);
 
   const trail = useMemo(
     () => (record ? audit.filter((entry) => entry.reference === record.reference) : []),
@@ -205,6 +221,34 @@ export default function SubmissionDrawer() {
     }
   };
 
+  const closeDeleteDialog = () => {
+    if (busy) return;
+    setDeleteOpen(false);
+    setDeleteConfirm("");
+    setDeleteError("");
+  };
+
+  const handleDelete = async () => {
+    if (!record) return;
+    setBusy(true);
+    setDeleteError("");
+    try {
+      const result = await deleteSubmission(actor, record);
+      appendAudit(result.audit);
+      // Order matters: the trail entry is appended before the record leaves,
+      // so the drawer closing does not race the only remaining evidence.
+      removeRecord(record);
+      toast(result.toast);
+      setDeleteOpen(false);
+      setDeleteConfirm("");
+      closeDrawer();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Could not delete this submission.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handlePdf = async () => {
     if (!record) return;
     try {
@@ -215,7 +259,11 @@ export default function SubmissionDrawer() {
   };
 
   const cancelLabel = record && record.submitterEmail === email ? "Withdraw" : "Cancel submission";
-  const hasActions = canSign || canChaseThis || canCancel;
+  const hasActions = canSign || canChaseThis || canCancel || canDelete;
+  // Typing the reference is the gate. A record with signatures and photos
+  // against it is worth more than one misplaced click, and this is the only
+  // action in the portal with nothing left to undo it from.
+  const deleteArmed = Boolean(record) && deleteConfirm.trim().toLowerCase() === record!.reference.toLowerCase();
 
   return (
     <>
@@ -393,14 +441,28 @@ export default function SubmissionDrawer() {
                   Download PDF
                 </Button>
 
-                {canCancel && (
-                  <Button
-                    onClick={() => setCancelOpen(true)}
-                    disabled={busy}
-                    sx={{ minHeight: 40, ml: "auto", color: editorial.muted }}
-                  >
-                    {cancelLabel}
-                  </Button>
+                {(canCancel || canDelete) && (
+                  <Stack direction="row" spacing={1} sx={{ ml: "auto", alignItems: "center" }}>
+                    {canCancel && (
+                      <Button onClick={() => setCancelOpen(true)} disabled={busy} sx={{ minHeight: 40, color: editorial.muted }}>
+                        {cancelLabel}
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteConfirm("");
+                          setDeleteOpen(true);
+                        }}
+                        disabled={busy}
+                        startIcon={<DeleteForeverIcon fontSize="small" />}
+                        sx={{ minHeight: 40, color: editorial.error }}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </Stack>
                 )}
               </Stack>
             </Box>
@@ -434,6 +496,63 @@ export default function SubmissionDrawer() {
           </Button>
           <Button variant="contained" onClick={() => void handleCancel()} disabled={busy}>
             Mark cancelled
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteOpen}
+        onClose={closeDeleteDialog}
+        fullWidth
+        maxWidth="sm"
+        transitionDuration={120}
+        slotProps={{ paper: { sx: { border: `1px solid rgba(198, 40, 40, 0.28)` } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: editorial.error, pb: 1 }}>
+          Delete {record?.reference} and everything with it?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
+            This deletes the whole record, not just the row:
+          </Typography>
+          <Box component="ul" sx={{ m: 0, mb: 2, pl: 2.5, color: editorial.muted, fontSize: 13.5, lineHeight: 1.9 }}>
+            <li>every answer filed on the form, and the SharePoint item holding them</li>
+            <li>every signature image from the approval chain</li>
+            <li>every photo and uploaded attachment in this form's library</li>
+            <li>any PDF generated from it, and any table rows filed with it</li>
+          </Box>
+          <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
+            Nothing in the portal brings it back. The reference keeps one line in the audit trail — that you deleted it,
+            and when — and that line is all that will be left.
+            {canCancel ? ` To keep the record and mark it void instead, close this and use “${cancelLabel}”.` : ""}
+          </Typography>
+          <TextField
+            label={`Type ${record?.reference ?? "the reference"} to confirm`}
+            placeholder={record?.reference ?? ""}
+            value={deleteConfirm}
+            onChange={(event) => setDeleteConfirm(event.target.value)}
+            fullWidth
+            autoFocus
+            autoComplete="off"
+          />
+          {deleteError && (
+            <Alert severity="error" sx={{ mt: 2, fontWeight: 700 }}>
+              {deleteError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button variant="outlined" onClick={closeDeleteDialog} disabled={busy}>
+            Keep it
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<DeleteForeverIcon fontSize="small" />}
+            onClick={() => void handleDelete()}
+            disabled={busy || !deleteArmed}
+          >
+            {busy ? "Deleting…" : "Delete permanently"}
           </Button>
         </DialogActions>
       </Dialog>
