@@ -40,7 +40,21 @@ interface SharePointUser {
 }
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
-const ADMIN_GROUP = "_HR_ Forms Owners";
+/**
+ * The SharePoint group whose members may change the appearance.
+ *
+ * Read from the same variable the browser reads (`src/config/oshes.ts`), and
+ * deliberately with no fallback. This was hardcoded to "_HR_ Forms Owners" —
+ * the pmw-hrform group — which does not exist on the OSHES site, so
+ * `getByName` returned 404, every membership check failed closed, and the save
+ * came back 403 for genuine administrators. A guessed name denies access in
+ * exactly the same way a genuine non-membership does, which is what made it
+ * cost an afternoon to spot; blank at least announces itself below.
+ *
+ * The client and the server MUST agree here. If they disagree the picker
+ * enables its Save button for someone the API will refuse.
+ */
+const ADMIN_GROUP = (process.env.VITE_OSHES_ADMIN_GROUP || process.env.OSHES_ADMIN_GROUP || "").trim();
 const SETTINGS_LIST = OSHES_LISTS.dashboardSettings;
 const SETTING_TITLE = "dashboard-background";
 const DEFAULT_SETTING: DashboardBackgroundSetting = {
@@ -219,37 +233,90 @@ async function delegatedSharePointGet<T>(accessToken: string, path: string): Pro
   return await response.json() as T;
 }
 
+/**
+ * Resolve the caller to an administrator, or to null.
+ *
+ * Every failure here denies, which is correct — but it means an operator
+ * misconfiguration and a genuine non-member produce the identical 403, so the
+ * log is the only place the difference can show. The cases are separated
+ * below and each says what to change, because "Failed to verify admin group
+ * membership: SharePoint GET 404" is true, unactionable, and was the entire
+ * diagnostic surface the last time this broke.
+ */
 async function verifyAdmin(accessToken: string): Promise<string | null> {
-  try {
-    const currentUser = await delegatedSharePointGet<SharePointUser>(
-      accessToken,
-      "/_api/web/currentuser?$select=Email,LoginName",
-    );
-    const members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
-      accessToken,
-      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email`,
-    );
-    const currentEmail = String(currentUser.Email || "").toLowerCase();
-    const currentLogin = String(currentUser.LoginName || "").toLowerCase();
-
-    const isAdmin = (members.value || []).some((member) => {
-      const email = String(member.Email || "").toLowerCase();
-      const login = String(member.LoginName || "").toLowerCase();
-      const loginEmail = login.split("|").pop() || "";
-      return (
-        (currentEmail && email === currentEmail) ||
-        (currentEmail && loginEmail === currentEmail) ||
-        (currentLogin && login === currentLogin)
-      );
-    });
-
-    return isAdmin ? (currentEmail || currentLogin || "admin") : null;
-  } catch (error) {
-    logWarn("api:dashboard-background", "Failed to verify admin group membership", {
-      errorMessage: error instanceof Error ? error.message : String(error),
+  if (!ADMIN_GROUP) {
+    logWarn("api:dashboard-background", "No admin group configured — refusing every appearance save", {
+      fix: "Set VITE_OSHES_ADMIN_GROUP to the SharePoint group title, matching the browser's value.",
     });
     return null;
   }
+
+  let currentUser: SharePointUser;
+  try {
+    currentUser = await delegatedSharePointGet<SharePointUser>(
+      accessToken,
+      "/_api/web/currentuser?$select=Email,LoginName",
+    );
+  } catch (error) {
+    // The site itself, or the delegated token. Not about the group.
+    logWarn("api:dashboard-background", "Could not read the signed-in SharePoint user", {
+      site: SP_SITE_URL,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      fix: "Check VITE_SP_SITE_URL and that the user's token carries AllSites.Manage for that site.",
+    });
+    return null;
+  }
+
+  let members: { value?: SharePointUser[] };
+  try {
+    members = await delegatedSharePointGet<{ value?: SharePointUser[] }>(
+      accessToken,
+      `/_api/web/sitegroups/getByName('${encodeURIComponent(ADMIN_GROUP)}')/users?$select=LoginName,Email`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // getByName 404s when no group carries that exact Title. It is a name
+    // mismatch far more often than a permissions problem, and the name is
+    // compared literally — spacing and case included.
+    const missingGroup = message.includes("404");
+    logWarn("api:dashboard-background", missingGroup
+      ? "Admin group not found on this site — no account can be verified"
+      : "Could not read admin group membership", {
+      adminGroup: ADMIN_GROUP,
+      site: SP_SITE_URL,
+      errorMessage: message,
+      fix: missingGroup
+        ? `No SharePoint group is titled "${ADMIN_GROUP}". List the real titles with <site-url>/_api/web/sitegroups?$select=Title and set VITE_OSHES_ADMIN_GROUP to match, in the browser and the server alike.`
+        : "Check that the signed-in user may read site groups.",
+    });
+    return null;
+  }
+
+  const currentEmail = String(currentUser.Email || "").toLowerCase();
+  const currentLogin = String(currentUser.LoginName || "").toLowerCase();
+
+  const isAdmin = (members.value || []).some((member) => {
+    const email = String(member.Email || "").toLowerCase();
+    const login = String(member.LoginName || "").toLowerCase();
+    const loginEmail = login.split("|").pop() || "";
+    return (
+      (currentEmail && email === currentEmail) ||
+      (currentEmail && loginEmail === currentEmail) ||
+      (currentLogin && login === currentLogin)
+    );
+  });
+
+  if (!isAdmin) {
+    // The ordinary, correct denial: configuration is fine, this account simply
+    // is not a member. Logged distinctly so it is never mistaken for the above.
+    logWarn("api:dashboard-background", "Account is not in the admin group", {
+      adminGroup: ADMIN_GROUP,
+      memberCount: (members.value || []).length,
+    });
+    return null;
+  }
+
+  return currentEmail || currentLogin || "admin";
 }
 
 async function ensureSettingsList(token: string): Promise<void> {
@@ -332,7 +399,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const updatedBy = await verifyAdmin(bearerToken);
     if (!updatedBy) {
-      return res.status(403).json({ error: "Only admins can change the dashboard background." });
+      // Naming the group leaks nothing — VITE_ variables are compiled into the
+      // browser bundle, so the client already knows it — and it turns the most
+      // common cause of this 403, a group title that does not match the site,
+      // into something the reader can act on without opening the server log.
+      return res.status(403).json({
+        error: ADMIN_GROUP
+          ? `Only members of the "${ADMIN_GROUP}" SharePoint group can change the appearance.`
+          : "No admin group is configured for this deployment, so the appearance cannot be changed. Set VITE_OSHES_ADMIN_GROUP.",
+      });
     }
 
     const requestedSetting = validateRequestedSetting(bodyRecord(req.body));
