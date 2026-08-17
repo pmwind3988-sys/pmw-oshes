@@ -9,9 +9,46 @@
 | Header, nav drawer, profile | `PortalShell.tsx` | Nav is a drawer at every width; the account lives top right. |
 | Record detail — layout | `RecordDetail.tsx` | `OverviewTab`, `AnswersTab`, `ApprovalsTab`, `TimelineTab`, plus `DetailRow` / `SoftCard`. No actions here. |
 | Record detail — actions | `SubmissionDrawer.tsx` | Tabbed drawer: gating, sign/return/nudge/reassign/cancel/delete/PDF, and the pinned action bar. |
-| Interactive statistics | `PortalStats.tsx` | `StatTile`, `StatTileRow`, `StatusMix`, `IntakeChart`. |
+| Interactive statistics | `PortalStats.tsx` | `StatTile`, `StatTileRow`, `StatusMix`, `IntakeChart`, `BarRows`, `DonutGauge`, `axisTicks`. |
+| Card, page header, table, task row | `../Widget.tsx` | Shared with `src/components/dashboard/`. See "One card shape" below. |
+| Radii and card recipes | `../../theme/surfaces.ts` | `radius`, `panelSx`, `sunkenSx`, `liftSx`, `gridline`. |
 | "What happens after submit" | `FlowStrip.tsx` | `blueprintSteps(entry)` for a form type, `recordSteps(record)` for one record. |
 | Status / severity pills | `PortalPills.tsx` | Also `ProportionBar`. |
+
+## One card shape
+Every panel in the portal *and* in `src/components/dashboard/` is `Widget` from
+`src/components/Widget.tsx`. There used to be four near-copies of the same card — a
+`PANEL_SX` constant plus a `PanelHead` / `PanelHeading` / `SectionCard` function in
+`HomeScreen`, `TodayScreen`, `FormHubScreen` and `SettingsScreen` — which had already drifted
+on padding, title size and where the count sat. Do not add a fifth.
+
+- `Widget` — title, caption, `meta` (the one summarising count, via `WidgetCount`), `actions`,
+  `onOpen` (renders the trailing arrow) and `footer`. `bare` drops the header for a card that
+  is all body. The arrow renders **only** where `onOpen` is passed: a chevron on a card that
+  does not open is the same lie as an unpressable statistic.
+- `WidgetGrid` — `auto-fit` with a `min` floor, so one grid gives three columns on a desktop
+  and one on a phone without a breakpoint list per screen.
+- `PageHeader` — `title` / `subtitle` / `eyebrow` / `meta` / `actions` / `back`. Every screen
+  used to write this by hand, which is why the title was 34px on four of them and 26px on two.
+- `DataTable` + `DataRow` + `DataCell` — the six hand-rolled `<table>`s. `DataRow` is
+  keyboard-operable whenever it takes `onOpen`.
+- `TaskRow` — icon tile, title, description, timestamp, trailing action. The primary action
+  rides on the row, so a queue never costs two clicks to do one thing.
+- `Callout`, `SectionLabel`, `WidgetEmpty`, `IconTile`.
+
+**Never type a pixel radius.** Import `radius` from `src/theme/surfaces.ts`. `editorial.ts` is
+copied byte-for-byte into pmw-hrform and holds colour only, which is why the geometry lives in
+`surfaces.ts` beside the other app-specific glue.
+
+## Charts are ruled, not floated
+Every chart draws its marks against a labelled scale: `axisTicks()` rounds the top to a number
+a reader can hold (15, not 13), and `gridline` is the one dashed rule they all share. A bar
+drawn against nothing shows that Tuesday beat Monday but not that it was eleven.
+
+Colour follows meaning, never variety: the brand carries volume, and `success` / `warning` /
+`error` are used **only** where the series really is approved / late / rejected. `DonutGauge`
+tops out at three or four segments — beyond that the arcs stop being comparable and `StatusMix`
+is the honest drawing.
 
 ## Conventions
 - **A statistic is a button.** Every count rendered by `PortalStats.tsx` takes an `onClick` that opens the rows it counted, via `setScreen(screen, formScope, statusScope)`. A count with no list behind it is a dead end — don't add one.

@@ -1,5 +1,8 @@
 import { Box, Button, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
+import { Callout, DataCell, DataRow, DataTable, PageHeader } from "../../components/Widget";
+import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { severityCaptureLabel } from "../../utils/portalCatalogue";
 import { saveCatalogueSettings } from "../../utils/portalCatalogueWrite";
@@ -11,7 +14,7 @@ const CHIP_SX = {
   whiteSpace: "nowrap",
   px: 0.9,
   py: 0.3,
-  borderRadius: "999px",
+  borderRadius: radius.full,
   border: editorialHairline,
 } as const;
 
@@ -127,137 +130,107 @@ export default function CatalogueScreen() {
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} sx={{ alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", mb: 3 }}>
-        <Box>
-          <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-            Form catalogue
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-            what each form does after submit, its per-layer SLA, and who can reach it — all data, not code
-          </Typography>
-        </Box>
-      </Stack>
+      <PageHeader
+        title="Form catalogue"
+        subtitle="what each form does after submit, its per-layer SLA, and who can reach it — all data, not code"
+        meta={`${catalogue.length} ${catalogue.length === 1 ? "form type" : "form types"}`}
+      />
 
       {(unset.length > 0 || mismatched.length > 0) && (
-        <Box
-          sx={{
-            border: `1px solid ${editorial.warning}`,
-            backgroundColor: editorial.yellowSoft,
-            borderRadius: "14px",
-            p: 2,
-            mb: 2.5,
-          }}
-        >
-          <Typography sx={{ fontSize: 14, fontWeight: 800, color: editorial.warning }}>
-            Check who can reach these forms
-          </Typography>
+        <Callout tone="warning" title="Check who can reach these forms" sx={{ mb: 2.5 }}>
           {unset.length > 0 && (
-            <Typography sx={{ fontSize: 13, mt: 0.75 }}>
+            <Typography sx={{ fontSize: 13 }}>
               {unset.length} {unset.length === 1 ? "form has" : "forms have"} never had public or internal set, and an
               unset form opens for anyone with the link: {unset.map((entry) => entry.name).join(", ")}. Toggling the
               column below once makes the intent explicit either way.
             </Typography>
           )}
           {mismatched.length > 0 && (
-            <Typography sx={{ fontSize: 13, mt: 0.75 }}>
+            <Typography sx={{ fontSize: 13, mt: unset.length > 0 ? 0.75 : 0 }}>
               {mismatched.length} {mismatched.length === 1 ? "form has" : "forms have"} a catalogue flag that disagrees
               with the column the form page reads: {mismatched.map((entry) => entry.name).join(", ")}. The link follows
               the column.
             </Typography>
           )}
-        </Box>
+        </Callout>
       )}
 
-      <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflowX: "auto" }}>
-        <Box component="table" sx={{ width: "100%", minWidth: 1000, borderCollapse: "collapse", fontSize: 13 }}>
-          <Box component="thead">
-            <Box
-              component="tr"
-              sx={{
-                "& th": {
-                  textAlign: "left",
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: editorial.muted,
-                  px: 2,
-                  py: 1.25,
-                  borderBottom: editorialHairline,
-                },
-              }}
-            >
-              <Box component="th" sx={{ width: 64 }}>Code</Box>
-              <Box component="th" sx={{ width: 220 }}>Form type</Box>
-              <Box component="th">Workflow</Box>
-              <Box component="th" sx={{ width: 120 }}>SLA per layer</Box>
-              <Box component="th" sx={{ width: 150 }}>Who can reach it</Box>
-              <Box component="th" sx={{ width: 120 }}>Severity field</Box>
-            </Box>
-          </Box>
-          <Box component="tbody">
-            {catalogue.map((entry) => (
-              <Box component="tr" key={entry.listTitle} sx={{ "& td": { px: 2, py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}>
-                <Box component="td" sx={{ fontWeight: 800 }}>{entry.code}</Box>
-                <Box component="td">
-                  <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{entry.name}</Typography>
-                  <Typography sx={{ fontSize: 11, color: editorial.muted }}>
-                    {entry.volume} in the last 30 days
-                  </Typography>
-                </Box>
-                <Box component="td"><WorkflowCell entry={entry} /></Box>
-                <Box component="td">
-                  {/* A form with no layers has nothing to be late for, so it is
-                      not offered an SLA it could never breach. */}
-                  {entry.hasWorkflow ? (
-                    <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                      <TextField
-                        size="small"
-                        value={entry.slaDays || ""}
-                        onChange={(event) => setSla(entry, event.target.value)}
-                        sx={{ width: 52, "& input": { textAlign: "center", fontVariantNumeric: "tabular-nums" } }}
-                        slotProps={{ htmlInput: { inputMode: "numeric", "aria-label": `SLA days for ${entry.name}` } }}
-                      />
-                      <Typography sx={{ fontSize: 12, color: editorial.muted }}>days</Typography>
-                    </Stack>
-                  ) : (
-                    <Typography sx={{ fontSize: 12, color: editorial.muted }}>—</Typography>
-                  )}
-                </Box>
-                <Box component="td">
-                  <Tooltip title={entry.visibility.note} enterDelay={300}>
-                    <Button
-                      size="small"
-                      onClick={() => togglePublic(entry)}
-                      sx={{
-                        minHeight: 32,
-                        px: 1.25,
-                        fontSize: 12,
-                        textAlign: "left",
-                        color:
-                          entry.visibility.unset || entry.visibility.mismatch
-                            ? editorial.warning
-                            : entry.isPublic
-                              ? editorial.pmwBlueDark
-                              : editorial.muted,
-                        backgroundColor:
-                          entry.visibility.unset || entry.visibility.mismatch
-                            ? editorial.yellowSoft
-                            : entry.isPublic
-                              ? editorial.blueWash
-                              : "transparent",
-                        border: editorialHairline,
-                      }}
-                    >
-                      {entry.visibility.label}
-                    </Button>
-                  </Tooltip>
-                </Box>
-                <Box component="td" sx={{ color: editorial.muted }}>{severityCaptureLabel(entry.severityCapture)}</Box>
-              </Box>
-            ))}
-          </Box>
-        </Box>
-      </Box>
+      <DataTable
+        minWidth={1000}
+        columns={[
+          { key: "code", label: "Code", width: 78 },
+          { key: "form", label: "Form type", width: 220 },
+          { key: "workflow", label: "Workflow" },
+          { key: "sla", label: "SLA per layer", width: 120 },
+          { key: "reach", label: "Who can reach it", width: 150 },
+          { key: "severity", label: "Severity field", width: 120 },
+        ]}
+      >
+        {catalogue.map((entry) => (
+          <DataRow key={entry.listTitle}>
+            <DataCell>
+              <ReferenceTag value={entry.code} />
+            </DataCell>
+            <DataCell>
+              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{entry.name}</Typography>
+              <Typography sx={{ fontSize: 11, color: editorial.muted }}>
+                {entry.volume} in the last 30 days
+              </Typography>
+            </DataCell>
+            <DataCell>
+              <WorkflowCell entry={entry} />
+            </DataCell>
+            <DataCell>
+              {/* A form with no layers has nothing to be late for, so it is
+                  not offered an SLA it could never breach. */}
+              {entry.hasWorkflow ? (
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+                  <TextField
+                    size="small"
+                    value={entry.slaDays || ""}
+                    onChange={(event) => setSla(entry, event.target.value)}
+                    sx={{ width: 52, "& input": { textAlign: "center", fontVariantNumeric: "tabular-nums" } }}
+                    slotProps={{ htmlInput: { inputMode: "numeric", "aria-label": `SLA days for ${entry.name}` } }}
+                  />
+                  <Typography sx={{ fontSize: 12, color: editorial.muted }}>days</Typography>
+                </Stack>
+              ) : (
+                <Typography sx={{ fontSize: 12, color: editorial.muted }}>—</Typography>
+              )}
+            </DataCell>
+            <DataCell>
+              <Tooltip title={entry.visibility.note} enterDelay={300}>
+                <Button
+                  size="small"
+                  onClick={() => togglePublic(entry)}
+                  sx={{
+                    minHeight: 32,
+                    px: 1.25,
+                    fontSize: 12,
+                    textAlign: "left",
+                    color:
+                      entry.visibility.unset || entry.visibility.mismatch
+                        ? editorial.warning
+                        : entry.isPublic
+                          ? editorial.pmwBlueDark
+                          : editorial.muted,
+                    backgroundColor:
+                      entry.visibility.unset || entry.visibility.mismatch
+                        ? editorial.warningWash
+                        : entry.isPublic
+                          ? editorial.blueWash
+                          : "transparent",
+                    border: editorialHairline,
+                  }}
+                >
+                  {entry.visibility.label}
+                </Button>
+              </Tooltip>
+            </DataCell>
+            <DataCell muted>{severityCaptureLabel(entry.severityCapture)}</DataCell>
+          </DataRow>
+        ))}
+      </DataTable>
 
       <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 3, maxWidth: "62ch" }}>
         An SLA is opt-in. Leave the box empty and that form has no deadline at all: it is never “past SLA”, and no

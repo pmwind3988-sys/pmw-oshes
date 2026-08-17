@@ -2,8 +2,10 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
+import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
+import { PageHeader, TaskRow, Widget, WidgetCount, WidgetEmpty, WidgetGrid } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
 import { IntakeChart, StatTile, StatTileRow, StatusMix } from "../../components/portal/PortalStats";
@@ -12,13 +14,6 @@ import { portalStats, scopeToForm } from "../../utils/portalStats";
 import { recordKey } from "../../utils/portalRecords";
 import { normalizeEmail } from "../../utils/portalPeople";
 import type { CatalogueEntry, StatFilter } from "../../types";
-
-const PANEL_SX = {
-  backgroundColor: editorial.panel,
-  border: editorialHairline,
-  borderRadius: "14px",
-  p: { xs: 1.75, sm: 2 },
-} as const;
 
 /**
  * One of the three doors out of this screen.
@@ -59,25 +54,22 @@ function Door({
       disabled={disabled}
       onClick={onOpen}
       sx={{
+        ...panelSx,
         display: "flex",
         flexDirection: "column",
         width: "100%",
+        height: "100%",
         minHeight: 128,
         textAlign: "left",
         font: "inherit",
         color: "inherit",
         p: { xs: 1.75, sm: 2 },
-        borderRadius: "14px",
-        border: `1px solid ${primary ? accent : editorial.border}`,
+        borderColor: primary ? accent : editorial.border,
         backgroundColor: primary ? editorial.blueWash : editorial.panel,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.62 : 1,
-        transition: "border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease",
-        "&:hover:not(:disabled)": {
-          borderColor: accent,
-          transform: "translateY(-2px)",
-          boxShadow: "0 10px 26px rgba(0, 90, 158, 0.12)",
-        },
+        transition: liftSx.transition,
+        "&:hover:not(:disabled)": { ...liftSx["&:hover"], borderColor: accent },
         "&:active:not(:disabled)": { transform: "translateY(0)" },
         "@media (prefers-reduced-motion: reduce)": {
           transition: "none",
@@ -147,7 +139,7 @@ function Badge({ children, tone = "muted" }: { children: React.ReactNode; tone?:
         fontWeight: 700,
         px: 0.9,
         py: 0.3,
-        borderRadius: "999px",
+        borderRadius: radius.full,
         border: "1px solid",
         whiteSpace: "nowrap",
       }}
@@ -215,21 +207,29 @@ export default function FormHubScreen() {
 
   return (
     <Box>
-      <Button
-        onClick={() => setScreen("home")}
-        startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
-        sx={{ minHeight: 36, px: 0.75, ml: -0.75, mb: 1.5, fontSize: 12.5, color: editorial.muted }}
-      >
-        All forms
-      </Button>
-
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        sx={{ alignItems: { md: "flex-end" }, justifyContent: "space-between", mb: 3 }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.75, mb: 0.75 }}>
+      <PageHeader
+        title={short}
+        subtitle={
+          entry.hasWorkflow
+            ? `${entry.workflow.label}${entry.firstApprover ? ` · first to ${entry.firstApprover}` : ""}`
+            : "no approval step — filing it is the whole of it"
+        }
+        back={
+          <Button
+            onClick={() => setScreen("home")}
+            startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
+            sx={{ minHeight: 36, px: 0.75, ml: -0.75, mb: 1.5, fontSize: 12.5, color: editorial.muted }}
+          >
+            All forms
+          </Button>
+        }
+        eyebrow={
+          <Stack
+            component="span"
+            direction="row"
+            spacing={0.75}
+            sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 0.75 }}
+          >
             <ReferenceTag value={entry.code} size="md" />
             <Badge tone={entry.workflow.kind === "evaluation" ? "purple" : entry.hasWorkflow ? "blue" : "muted"}>
               {entry.workflow.shortLabel}
@@ -238,25 +238,10 @@ export default function FormHubScreen() {
             {/* Only a form that declared an SLA advertises one. */}
             {entry.hasSla && <Badge>{entry.slaDays}-day SLA per layer</Badge>}
           </Stack>
-          <Typography component="h1" sx={{ fontSize: { xs: 28, sm: 34 }, fontWeight: 700, lineHeight: 1.1 }}>
-            {short}
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-            {entry.hasWorkflow
-              ? `${entry.workflow.label}${entry.firstApprover ? ` · first to ${entry.firstApprover}` : ""}`
-              : "no approval step — filing it is the whole of it"}
-          </Typography>
-        </Box>
-      </Stack>
+        }
+      />
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(auto-fit, minmax(230px, 1fr))" },
-          gap: { xs: 1.5, sm: 2 },
-          mb: 3.5,
-        }}
-      >
+      <WidgetGrid min={230} sx={{ mb: 3.5 }}>
         <Door
           primary
           eyebrow="File"
@@ -312,14 +297,15 @@ export default function FormHubScreen() {
             onOpen={() => openList("all")}
           />
         )}
-      </Box>
+      </WidgetGrid>
 
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.15fr) minmax(0, 1fr)" },
-          gap: { xs: 2, md: 2.5 },
+          gap: { xs: 1.5, sm: 2 },
           mb: 2.5,
+          alignItems: "stretch",
         }}
       >
         <FlowPanel
@@ -332,13 +318,15 @@ export default function FormHubScreen() {
           steps={blueprintSteps(entry)}
         />
 
-        <Box sx={PANEL_SX}>
-          <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Where they stand</Typography>
-          <Typography sx={{ fontSize: 12, color: editorial.muted, mb: 1.75 }}>
-            press a status to open that list
-          </Typography>
+        <Widget
+          title="Where they stand"
+          caption="press a status to open that list"
+          meta={<WidgetCount value={stats.total} />}
+          onOpen={() => openList("all")}
+          openLabel={`Open all ${short}`}
+        >
           <StatusMix buckets={stats.breakdown} onPick={(bucket) => openList("all", bucket.id)} />
-        </Box>
+        </Widget>
       </Box>
 
       <Box sx={{ mb: 2.5 }}>
@@ -374,78 +362,56 @@ export default function FormHubScreen() {
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1.15fr)" },
-          gap: { xs: 2, md: 2.5 },
+          gap: { xs: 1.5, sm: 2 },
+          alignItems: "stretch",
         }}
       >
-        <Box sx={PANEL_SX}>
-          <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Intake, last 14 days</Typography>
-          <Typography sx={{ fontSize: 12, color: editorial.muted, mb: 1.75 }}>
-            today is the last bar
-          </Typography>
+        <Widget
+          title="Intake, last 14 days"
+          caption="today is the last bar"
+          meta={<WidgetCount value={stats.last7} tone="muted" />}
+          onOpen={() => openList("all", "all")}
+          openLabel={`Open all ${short}`}
+        >
           <IntakeChart days={stats.daily} onPickDay={() => openList("all", "all")} />
-        </Box>
+        </Widget>
 
-        <Box sx={PANEL_SX}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}>
-            <Box>
-              <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Latest</Typography>
-              <Typography sx={{ fontSize: 12, color: editorial.muted }}>newest first</Typography>
-            </Box>
-            {formRecords.length > 5 && (
+        <Widget
+          title="Latest"
+          caption="newest first"
+          onOpen={formRecords.length > 5 ? () => openList("all") : undefined}
+          openLabel={`See all ${formRecords.length}`}
+          footer={
+            formRecords.length > 5 ? (
               <Button size="small" onClick={() => openList("all")} sx={{ px: 0, minWidth: 0, fontWeight: 800 }}>
                 See all {formRecords.length} →
               </Button>
-            )}
-          </Stack>
-
+            ) : undefined
+          }
+        >
           {formRecords.length === 0 ? (
-            <Typography sx={{ fontSize: 13, color: editorial.muted, py: 1 }}>
-              Nothing has been filed on this form yet.
-            </Typography>
+            <WidgetEmpty>Nothing has been filed on this form yet.</WidgetEmpty>
           ) : (
-            <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
+            <Box>
               {formRecords.slice(0, 5).map((record) => (
-                <Box
+                <TaskRow
                   key={recordKey(record)}
-                  component="button"
-                  type="button"
-                  onClick={() => openDrawer(recordKey(record))}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 1.5,
-                    width: "100%",
-                    py: 1.1,
-                    px: 0,
-                    border: "none",
-                    background: "none",
-                    font: "inherit",
-                    color: "inherit",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    "&:hover .hub-row-title": { color: editorial.pmwBlueDark },
-                  }}
-                >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography className="hub-row-title" sx={{ fontSize: 13.5, fontWeight: 700 }} noWrap>
-                      {record.subject}
-                    </Typography>
-                    <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, mt: 0.2 }}>
+                  title={record.subject}
+                  description={
+                    <Stack component="span" direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0 }}>
                       <ReferenceTag value={record.reference} sx={{ flex: "none" }} />
-                      <Typography sx={{ fontSize: 11, color: editorial.muted, minWidth: 0 }} noWrap>
+                      <Box component="span" sx={{ minWidth: 0 }}>
                         {record.submitterEmail === email ? "you" : record.submitter} · {record.filedLabel}
-                      </Typography>
+                      </Box>
                     </Stack>
-                  </Box>
-                  <Box sx={{ flex: "none" }}>
-                    <StatusPill status={record.status} />
-                  </Box>
-                </Box>
+                  }
+                  onOpen={() => openDrawer(recordKey(record))}
+                  action={<StatusPill status={record.status} />}
+                />
               ))}
-            </Stack>
+            </Box>
           )}
-        </Box>
+        </Widget>
       </Box>
     </Box>
   );

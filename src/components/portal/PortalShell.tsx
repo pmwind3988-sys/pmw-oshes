@@ -7,6 +7,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
 import { portalSections, roleLabel } from "../../utils/portalRole";
 import { builderUrl } from "../../config/oshes";
@@ -65,21 +66,27 @@ function NavList({
                 aria-current={active ? "page" : undefined}
                 onClick={() => onPick(item.screen)}
                 sx={{
-                  width: "100%",
+                  width: "calc(100% - 16px)",
                   minHeight: 44,
                   display: "flex",
                   alignItems: "center",
                   gap: 1,
-                  px: 2.5,
+                  mx: 1,
+                  px: 1.5,
                   py: 1,
                   border: "none",
-                  borderLeft: `2px solid ${active ? editorial.pmwBlue : "transparent"}`,
+                  // A rounded pill rather than a full-bleed band with an edge
+                  // rail: the selected item then reads as one object the same
+                  // shape as everything else on the page, instead of as a strip
+                  // of the drawer that happens to be tinted.
+                  borderRadius: radius.md,
                   background: active ? editorial.blueWash : "transparent",
                   color: active ? editorial.pmwBlueDark : editorial.ink,
                   font: "inherit",
                   fontWeight: active ? 800 : 600,
                   textAlign: "left",
                   cursor: "pointer",
+                  transition: "background-color 0.14s ease",
                   "&:hover": { background: editorial.blueWash },
                 }}
               >
@@ -90,10 +97,16 @@ function NavList({
                   <Box
                     component="span"
                     sx={{
-                      fontSize: 11.5,
-                      color: editorial.muted,
-                      fontVariantNumeric: "tabular-nums",
+                      minWidth: 22,
+                      textAlign: "center",
+                      px: 0.6,
+                      py: 0.15,
+                      borderRadius: radius.full,
+                      fontSize: 11,
                       fontWeight: 800,
+                      fontVariantNumeric: "tabular-nums",
+                      color: active ? editorial.pmwBlueDark : editorial.muted,
+                      backgroundColor: active ? editorial.pmwBlueSoft : editorial.neutralWash,
                     }}
                   >
                     {item.count}
@@ -235,18 +248,41 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
         <Box sx={{ flex: 1 }} />
 
+        {/* The one count that follows you across every screen. Red rather than
+            the brand outline it used to wear: this is the only thing in the bar
+            that is a queue with your name on it, and it has to out-read the
+            wordmark beside it. */}
         {queue.length > 0 && screen !== "queue" && (
-          <Button
-            size="small"
-            variant="outlined"
+          <Box
+            component="button"
+            type="button"
             onClick={() => pick("queue")}
-            sx={{ flex: "none", minHeight: 36, px: { xs: 1.25, sm: 1.75 } }}
+            sx={{
+              flex: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.75,
+              minHeight: 36,
+              px: { xs: 1.25, sm: 1.5 },
+              borderRadius: radius.full,
+              border: `1px solid ${editorial.error}`,
+              backgroundColor: editorial.errorWash,
+              color: editorial.error,
+              font: "inherit",
+              fontSize: 12.5,
+              fontWeight: 800,
+              cursor: "pointer",
+              transition: "background-color 0.16s ease",
+              "&:hover": { backgroundColor: editorial.errorFill, color: editorial.onStatus },
+            }}
           >
-            {queue.length}
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" }, ml: 0.5 }}>
+            <Box component="span" sx={{ fontVariantNumeric: "tabular-nums" }}>
+              {queue.length}
+            </Box>
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
               to sign
             </Box>
-          </Button>
+          </Box>
         )}
 
         <Box
@@ -267,7 +303,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             pr: { xs: 0.5, sm: 1 },
             py: 0.5,
             border: editorialHairline,
-            borderRadius: "999px",
+            borderRadius: radius.full,
             background: profileOpen ? editorial.blueWash : editorial.panel,
             font: "inherit",
             color: "inherit",
@@ -317,7 +353,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 py: 0.3,
                 fontSize: 11,
                 fontWeight: 800,
-                borderRadius: "999px",
+                borderRadius: radius.full,
                 border: editorialHairline,
                 backgroundColor: editorial.blueWash,
                 color: editorial.pmwBlueDark,

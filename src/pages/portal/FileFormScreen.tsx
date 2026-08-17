@@ -1,7 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { Box, Stack, Typography } from "@mui/material";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { panelSx, radius } from "../../theme/surfaces";
+import { IconTile, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
+import ReferenceTag from "../../components/ReferenceTag";
 import type { CatalogueEntry } from "../../types";
 
 /**
@@ -26,25 +31,22 @@ export default function FileFormScreen() {
   const openable = (entry: CatalogueEntry) => Boolean(entry.slug);
 
   return (
-    <Box sx={{ maxWidth: 760 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-          File a form
-        </Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-          each one opens the published form itself · your name and email come from your account
-        </Typography>
-      </Box>
+    <Box sx={{ maxWidth: 800 }}>
+      <PageHeader
+        title="File a form"
+        subtitle="each one opens the published form itself · your name and email come from your account"
+        meta={catalogue.length > 0 ? `${catalogue.length} published` : undefined}
+      />
 
       {catalogue.length === 0 ? (
-        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", p: 2 }}>
-          <Typography sx={{ fontSize: 13, color: editorial.muted }}>
+        <Widget bare>
+          <WidgetEmpty>
             No form types are published yet. Forms are authored in the PMW form builder; once one is published there it
             appears here.
-          </Typography>
-        </Box>
+          </WidgetEmpty>
+        </Widget>
       ) : (
-        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflow: "hidden" }}>
+        <Box sx={{ ...panelSx, overflow: "hidden" }}>
           {catalogue.map((entry, index) => {
             const canOpen = openable(entry);
             return (
@@ -56,13 +58,12 @@ export default function FileFormScreen() {
                 aria-disabled={canOpen ? undefined : true}
                 sx={{
                   width: "100%",
-                  minHeight: 54,
+                  minHeight: 64,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1.5,
                   px: 2,
-                  py: 1.25,
+                  py: 1.5,
                   textAlign: "left",
                   cursor: canOpen ? "pointer" : "default",
                   border: "none",
@@ -71,12 +72,22 @@ export default function FileFormScreen() {
                   color: "inherit",
                   font: "inherit",
                   opacity: canOpen ? 1 : 0.6,
+                  transition: "background-color 0.16s ease",
                   "&:hover": canOpen ? { background: editorial.blueWash } : undefined,
+                  "&:hover .file-form-arrow": canOpen ? { color: editorial.pmwBlueDark, transform: "translateX(3px)" } : undefined,
+                  "@media (prefers-reduced-motion: reduce)": {
+                    "&:hover .file-form-arrow": { transform: "none" },
+                  },
                 }}
               >
-                <Box sx={{ minWidth: 0 }}>
+                <IconTile tone={canOpen ? "ink" : "muted"}>
+                  <DescriptionOutlinedIcon />
+                </IconTile>
+
+                <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
-                    <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{entry.name}</Typography>
+                    <Typography sx={{ fontSize: 15.5, fontWeight: 700 }}>{entry.name}</Typography>
+                    <ReferenceTag value={entry.code} />
                     {entry.isPublic && (
                       <Box
                         component="span"
@@ -87,7 +98,7 @@ export default function FileFormScreen() {
                           textTransform: "uppercase",
                           px: 0.8,
                           py: 0.25,
-                          borderRadius: "999px",
+                          borderRadius: radius.full,
                           border: editorialHairline,
                           color: editorial.muted,
                         }}
@@ -98,7 +109,7 @@ export default function FileFormScreen() {
                   </Stack>
                   {/* What happens after you submit — which for plenty of these
                       forms is nothing, and saying so is the point. */}
-                  <Typography sx={{ fontSize: 12, color: editorial.muted }}>
+                  <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.2 }}>
                     {canOpen
                       ? entry.hasWorkflow
                         ? `${entry.workflow.label} · first to ${entry.firstApprover}`
@@ -106,7 +117,18 @@ export default function FileFormScreen() {
                       : "This form has no published link yet — republish it in the form builder to open it here."}
                   </Typography>
                 </Box>
-                {canOpen && <Typography sx={{ color: editorial.muted, flex: "none" }}>→</Typography>}
+
+                {canOpen && (
+                  <ArrowForwardIcon
+                    className="file-form-arrow"
+                    sx={{
+                      fontSize: 18,
+                      flex: "none",
+                      color: editorial.muted,
+                      transition: "color 0.16s ease, transform 0.16s ease",
+                    }}
+                  />
+                )}
               </Box>
             );
           })}

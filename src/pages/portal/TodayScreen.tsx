@@ -1,9 +1,20 @@
 import { useMemo, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
+import {
+  PageHeader,
+  TaskRow,
+  Widget,
+  WidgetCount,
+  WidgetEmpty,
+  WidgetGrid,
+} from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
-import { ProportionBar, SeverityPill } from "../../components/portal/PortalPills";
+import { SeverityPill } from "../../components/portal/PortalPills";
+import { BarRows, StatTile, StatTileRow, type BarRow } from "../../components/portal/PortalStats";
 import { anySla, bottlenecks, recordKey, severeRecords, stuckRecords, waitingLongest } from "../../utils/portalRecords";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
@@ -11,36 +22,14 @@ import { nudgeApprover } from "../../utils/portalActions";
 import type { PortalRecord } from "../../types";
 import ReassignDialog from "../../components/portal/ReassignDialog";
 
-const PANEL_SX = {
-  backgroundColor: editorial.panel,
-  border: editorialHairline,
-  borderRadius: "14px",
-  p: 2,
-} as const;
-
-function PanelHeading({ title, caption, right }: { title: string; caption: string; right?: React.ReactNode }) {
-  return (
-    <Stack direction="row" spacing={2} sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 17, fontWeight: 700 }}>{title}</Typography>
-        <Typography sx={{ fontSize: 12, color: editorial.muted }}>{caption}</Typography>
-      </Box>
-      {right}
-    </Stack>
-  );
-}
-
-function EmptyLine({ children }: { children: React.ReactNode }) {
-  return (
-    <Typography sx={{ fontSize: 13, color: editorial.muted, py: 1.5 }}>{children}</Typography>
-  );
-}
-
 /**
  * Today — the admin and evaluator landing screen.
  *
  * Panel order is deliberate: what is dangerous now, then what has stalled, then
- * what is waiting on you personally, then the shape of the day's intake.
+ * what is waiting on you personally, then the shape of the day's intake. The
+ * statistics across the top are the same four questions as headlines, so the
+ * screen can be read in three seconds from the doorway and in three minutes at
+ * the desk.
  */
 export default function TodayScreen({ severityFirst = true, showBottlenecks = true }: {
   severityFirst?: boolean;
@@ -61,8 +50,28 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   const people = useMemo(() => bottlenecks(records), [records]);
   const filedToday = useMemo(() => records.filter((record) => record.hoursSinceFiled <= 24).length, [records]);
 
-  const maxToday = Math.max(1, ...catalogue.map((entry) => entry.today));
-  const inbound = [...catalogue].sort((a, b) => b.today - a.today);
+  /** Approvers as bars: how much is sitting with each, and how long the worst has waited. */
+  const peopleRows = useMemo<BarRow[]>(
+    () =>
+      people.map((person) => ({
+        id: `${person.name}-${person.role}`,
+        label: `${person.name} · ${person.role}`,
+        value: person.open,
+        hint: person.worstLabel,
+        tone: person.breached > 0 ? ("alert" as const) : ("ink" as const),
+      })),
+    [people],
+  );
+
+  /** Form types as bars, busiest first — the day's intake by kind. */
+  const inboundRows = useMemo<BarRow[]>(
+    () =>
+      [...catalogue]
+        .sort((a, b) => b.today - a.today)
+        .map((entry) => ({ id: entry.listTitle, label: entry.name, value: entry.today })),
+    [catalogue],
+  );
+
   const showChase = access.canChase;
 
   const handleNudge = async (record: PortalRecord) => {
@@ -78,21 +87,16 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   };
 
   const severePanel = (
-    <Box sx={PANEL_SX} key="severity">
-      <PanelHeading title="High severity · last 24 hours" caption="paged to the duty officer on receipt" />
+    <Widget
+      key="severity"
+      title="High severity · last 24 hours"
+      caption="paged to the duty officer on receipt"
+      meta={<WidgetCount value={severe.length} tone={severe.length > 0 ? "alert" : "ink"} />}
+    >
       {severe.length === 0 ? (
-        <EmptyLine>Nothing high-severity in the last 24 hours.</EmptyLine>
+        <WidgetEmpty>Nothing high-severity in the last 24 hours.</WidgetEmpty>
       ) : (
-        <Box
-          sx={{
-            display: "grid",
-            // minmax(0, 1fr) rather than a bare 1fr: 1fr floors at the track's
-            // min-content width, so one long unbroken reference or email would
-            // widen the whole grid past the viewport.
-            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-            gap: 1.5,
-          }}
-        >
+        <WidgetGrid min={230}>
           {severe.map((record) => (
             <Box
               key={recordKey(record)}
@@ -100,15 +104,17 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
               type="button"
               onClick={() => openDrawer(recordKey(record))}
               sx={{
+                ...panelSx,
+                ...liftSx,
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
                 textAlign: "left",
-                border: editorialHairline,
-                borderRadius: "12px",
-                background: editorial.panel,
+                borderRadius: radius.base,
                 font: "inherit",
                 color: "inherit",
                 p: 1.5,
                 cursor: "pointer",
-                "&:hover": { borderColor: editorial.pmwBlue },
               }}
             >
               <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
@@ -116,42 +122,53 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                   <ReferenceTag value={record.reference} />
                   <SeverityPill label={record.severity} tone={record.tone} />
                 </Stack>
-                <Typography sx={{ fontSize: 11, color: editorial.muted, whiteSpace: "nowrap" }}>{record.filedLabel}</Typography>
+                <Typography sx={{ fontSize: 11, color: editorial.muted, whiteSpace: "nowrap" }}>
+                  {record.filedLabel}
+                </Typography>
               </Stack>
-              <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
-              <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.5 }}>{record.location || "Location not given"}</Typography>
-              <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 1.25, pt: 1, borderTop: editorialHairline }}>
+              <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
+              <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.5 }}>
+                {record.location || "Location not given"}
+              </Typography>
+              <Typography sx={{ fontSize: 11, color: editorial.muted, mt: "auto", pt: 1.25 }}>
                 {record.layerLabel}
               </Typography>
             </Box>
           ))}
-        </Box>
+        </WidgetGrid>
       )}
-    </Box>
+    </Widget>
   );
 
   const stuckPanel = (
-    <Box sx={PANEL_SX} key="stuck">
-      <PanelHeading
-        title={slaInUse ? "Stuck approvals" : "Longest waits"}
-        caption="oldest first · age measured on the current layer only"
-        right={
-          slaInUse ? (
-            <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-              {stuck.length} past SLA
-            </Typography>
-          ) : undefined
-        }
-      />
+    <Widget
+      key="stuck"
+      title={slaInUse ? "Stuck approvals" : "Longest waits"}
+      caption="oldest first · age measured on the current layer only"
+      meta={<WidgetCount value={waiting.length} tone={slaInUse && stuck.length > 0 ? "alert" : "muted"} />}
+    >
       {waiting.length === 0 ? (
-        <EmptyLine>
+        <WidgetEmpty>
           {slaInUse ? "Nothing is past its SLA right now." : "Nothing is waiting on an approver right now."}
-        </EmptyLine>
+        </WidgetEmpty>
       ) : (
         <Box sx={{ overflowX: "auto" }}>
           <Box component="table" sx={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 13 }}>
             <Box component="thead">
-              <Box component="tr" sx={{ "& th": { textAlign: "left", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: editorial.muted, pb: 1, borderBottom: editorialHairline } }}>
+              <Box
+                component="tr"
+                sx={{
+                  "& th": {
+                    textAlign: "left",
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: editorial.muted,
+                    pb: 1,
+                    borderBottom: editorialHairline,
+                  },
+                }}
+              >
                 <Box component="th" sx={{ width: 118 }}>Reference</Box>
                 <Box component="th">Form</Box>
                 <Box component="th" sx={{ width: 170 }}>Waiting on</Box>
@@ -162,13 +179,29 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
             </Box>
             <Box component="tbody">
               {waiting.map((record) => (
-                <Box component="tr" key={recordKey(record)} sx={{ "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}>
+                <Box
+                  component="tr"
+                  key={recordKey(record)}
+                  sx={{
+                    "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" },
+                    "&:hover td": { backgroundColor: editorial.blueSoft },
+                  }}
+                >
                   <Box component="td">
                     <Box
                       component="button"
                       type="button"
                       onClick={() => openDrawer(recordKey(record))}
-                      sx={{ border: "none", background: "none", p: 0, font: "inherit", fontWeight: 700, color: editorial.pmwBlueDark, cursor: "pointer", textAlign: "left" }}
+                      sx={{
+                        border: "none",
+                        background: "none",
+                        p: 0,
+                        font: "inherit",
+                        fontWeight: 700,
+                        color: editorial.pmwBlueDark,
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
                     >
                       {record.reference}
                     </Box>
@@ -183,7 +216,9 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                   </Box>
                   <Box component="td" sx={{ fontVariantNumeric: "tabular-nums" }}>{record.layerLabel}</Box>
                   <Box component="td">
-                    <Typography sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{record.ageOnLayerLabel}</Typography>
+                    <Typography sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                      {record.ageOnLayerLabel}
+                    </Typography>
                     {record.slaNote && (
                       <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
                         {record.slaNote}
@@ -202,7 +237,12 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                         >
                           {nudged[record.reference] ? "Nudged" : "Nudge"}
                         </Button>
-                        <Button size="small" variant="outlined" onClick={() => setReassignTarget(record)} sx={{ minHeight: 32, px: 1.25 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setReassignTarget(record)}
+                          sx={{ minHeight: 32, px: 1.25 }}
+                        >
                           Reassign
                         </Button>
                       </Stack>
@@ -214,129 +254,102 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
           </Box>
         </Box>
       )}
-    </Box>
+    </Widget>
   );
 
   return (
     <Box>
-      <Stack direction="row" spacing={2} sx={{ alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", mb: 3.5 }}>
-        <Box>
-          <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-            Today
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-            {formatTodayDate()} · {filedToday} filed in the last 24 h
-            {slaInUse ? ` · ${stuck.length} approvals past SLA` : ""}
-          </Typography>
-        </Box>
-        {access.canExport && (
-          <Button
-            variant="outlined"
-            onClick={() => toast(`Exported ${exportRecordsCsv(records)} rows with the columns you can see, plus approval history.`)}
-            sx={{ minHeight: 40 }}
-          >
-            Export view to CSV
-          </Button>
-        )}
-      </Stack>
+      <PageHeader
+        title="Today"
+        subtitle={
+          slaInUse
+            ? `${filedToday} filed in the last 24 h · ${stuck.length} approvals past SLA`
+            : `${filedToday} filed in the last 24 h`
+        }
+        meta={formatTodayDate()}
+        actions={
+          access.canExport ? (
+            <Button
+              variant="outlined"
+              onClick={() =>
+                toast(
+                  `Exported ${exportRecordsCsv(records)} rows with the columns you can see, plus approval history.`,
+                )
+              }
+              sx={{ minHeight: 40 }}
+            >
+              Export view to CSV
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <Stack spacing={3.4}>
+      <Box sx={{ mb: 3 }}>
+        <StatTileRow>
+          <StatTile
+            value={severe.length}
+            label="High severity"
+            hint="last 24 hours"
+            tone={severe.length > 0 ? "alert" : "ink"}
+          />
+          <StatTile value={filedToday} label="Filed today" hint="last 24 hours" />
+          <StatTile value={queue.length} label="Awaiting you" hint="on your layer now" tone="ink" />
+          {/* An SLA nobody set is not a target of zero — the tile is absent. */}
+          {slaInUse && <StatTile value={stuck.length} label="Past SLA" hint="over their target" tone="alert" />}
+        </StatTileRow>
+      </Box>
+
+      <Stack spacing={{ xs: 2, md: 2.5 }}>
         {severityFirst ? [severePanel, stuckPanel] : [stuckPanel, severePanel]}
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              lg: showBottlenecks ? "minmax(0, 1fr) minmax(0, 1fr)" : "minmax(0, 1fr)",
-            },
-            gap: 3.4,
-          }}
-        >
-          <Box sx={PANEL_SX}>
-            <PanelHeading
-              title="Awaiting your signature"
-              caption="signing releases it to the next layer immediately"
-              right={<Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{queue.length}</Typography>}
-            />
+        <WidgetGrid min={showBottlenecks ? 340 : 600}>
+          <Widget
+            title="Awaiting your signature"
+            caption="signing releases it to the next layer immediately"
+            meta={<WidgetCount value={queue.length} />}
+          >
             {queue.length === 0 ? (
-              <EmptyLine>Your queue is clear.</EmptyLine>
+              <WidgetEmpty>Your queue is clear.</WidgetEmpty>
             ) : (
-              <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
+              <Box>
                 {queue.map((record) => (
-                  <Stack
+                  <TaskRow
                     key={recordKey(record)}
-                    direction="row"
-                    spacing={1.5}
-                    sx={{ alignItems: "center", justifyContent: "space-between", py: 1.25 }}
-                  >
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{record.subject}</Typography>
-                      <Typography sx={{ fontSize: 11, color: editorial.muted }}>
-                        {record.reference} · {record.formName} · {record.layerLabel} · waiting {record.ageOnLayerLabel}
-                      </Typography>
-                    </Box>
-                    <Button variant="contained" size="small" onClick={() => openDrawer(recordKey(record))} sx={{ flex: "none", minHeight: 36 }}>
-                      Review
-                    </Button>
-                  </Stack>
+                    icon={<PendingActionsOutlinedIcon />}
+                    tone={record.overdue ? "alert" : "ink"}
+                    title={record.subject}
+                    description={`${record.reference} · ${record.formName} · ${record.layerLabel}`}
+                    timestamp={`waiting ${record.ageOnLayerLabel}`}
+                    onOpen={() => openDrawer(recordKey(record))}
+                    action={
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => openDrawer(recordKey(record))}
+                        sx={{ minHeight: 32 }}
+                      >
+                        Review
+                      </Button>
+                    }
+                  />
                 ))}
-              </Stack>
+              </Box>
             )}
-          </Box>
+          </Widget>
 
           {showBottlenecks && (
-            <Box sx={PANEL_SX}>
-              <PanelHeading title="Where work is sitting" caption="approvers ranked by longest wait on their current layer" />
-              {people.length === 0 ? (
-                <EmptyLine>Nothing is open with anyone right now.</EmptyLine>
-              ) : (
-                <Stack spacing={1.75}>
-                  {people.map((person) => (
-                    <Box key={`${person.name}-${person.role}`}>
-                      <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "baseline", mb: 0.5 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                          {person.name}
-                          <Box component="span" sx={{ color: editorial.muted, fontWeight: 400 }}> · {person.role}</Box>
-                        </Typography>
-                        <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                          {person.worstLabel}
-                        </Typography>
-                      </Stack>
-                      <ProportionBar percent={person.barPercent} />
-                      <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 0.5 }}>
-                        {person.open} open{slaInUse ? ` · ${person.breached} past SLA` : ""}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Box>
+            <Widget
+              title="Where work is sitting"
+              caption="open items per approver · the label is their longest wait"
+            >
+              <BarRows rows={peopleRows} emptyNote="Nothing is open with anyone right now." valueSuffix="open" />
+            </Widget>
           )}
-        </Box>
+        </WidgetGrid>
 
-        <Box sx={PANEL_SX}>
-          <PanelHeading title="Inbound today, by form" caption="form types come from the catalogue — this list follows it" />
-          {inbound.length === 0 ? (
-            <EmptyLine>No form types are published yet.</EmptyLine>
-          ) : (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, columnGap: 3.4, rowGap: 1.25 }}>
-              {inbound.map((entry) => (
-                <Stack key={entry.listTitle} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                  <Typography sx={{ width: 200, flex: "none", fontSize: 13 }} noWrap title={entry.name}>
-                    {entry.name}
-                  </Typography>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <ProportionBar percent={Math.round((entry.today / maxToday) * 100)} height={10} />
-                  </Box>
-                  <Typography sx={{ fontSize: 26, fontWeight: 700, width: 48, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                    {entry.today}
-                  </Typography>
-                </Stack>
-              ))}
-            </Box>
-          )}
-        </Box>
+        <Widget title="Inbound today, by form" caption="form types come from the catalogue — this list follows it">
+          <BarRows rows={inboundRows} emptyNote="No form types are published yet." valueSuffix="filed" />
+        </Widget>
       </Stack>
 
       <ReassignDialog record={reassignTarget} onClose={() => setReassignTarget(null)} />

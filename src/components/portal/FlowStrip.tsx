@@ -1,5 +1,6 @@
-import { Box, Stack, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { Box, Typography } from "@mui/material";
+import { editorial } from "../../theme/editorial";
+import { Widget } from "../Widget";
 import type { CatalogueEntry, PortalRecord } from "../../types";
 
 /**
@@ -225,21 +226,8 @@ export function FlowPanel({
   steps: FlowStep[];
 }) {
   return (
-    <Box
-      sx={{
-        backgroundColor: editorial.panel,
-        border: editorialHairline,
-        borderRadius: "14px",
-        p: { xs: 1.75, sm: 2 },
-      }}
-    >
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.75 }}>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{title}</Typography>
-          <Typography sx={{ fontSize: 12, color: editorial.muted }}>{caption}</Typography>
-        </Box>
-      </Stack>
+    <Widget title={title} caption={caption}>
       <FlowStrip steps={steps} />
-    </Box>
+    </Widget>
   );
 }

@@ -1,96 +1,41 @@
 import { useMemo, useState } from "react";
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
+import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
+import { editorial } from "../../theme/editorial";
+import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
+import {
+  PageHeader,
+  SectionLabel,
+  TaskRow,
+  Widget,
+  WidgetCount,
+  WidgetEmpty,
+  WidgetGrid,
+} from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
-import { IntakeChart, StatTile, StatTileRow, StatusMix } from "../../components/portal/PortalStats";
+import {
+  DonutGauge,
+  IntakeChart,
+  StatTile,
+  StatTileRow,
+  StatusMix,
+  type GaugeSegment,
+} from "../../components/portal/PortalStats";
 import { recordKey } from "../../utils/portalRecords";
 import { portalStats, scopeToForm } from "../../utils/portalStats";
 import { portalSections } from "../../utils/portalRole";
 import { formatTodayDate } from "../../utils/portalTime";
-import type { CatalogueEntry, PortalRecord, PortalScreen } from "../../types";
-
-const PANEL_SX = {
-  backgroundColor: editorial.panel,
-  border: editorialHairline,
-  borderRadius: "14px",
-  p: { xs: 1.75, sm: 2 },
-} as const;
-
-function PanelHead({ title, caption, right }: { title: string; caption: string; right?: React.ReactNode }) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1.5}
-      sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5, minWidth: 0 }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{title}</Typography>
-        <Typography sx={{ fontSize: 12, color: editorial.muted }}>{caption}</Typography>
-      </Box>
-      {right}
-    </Stack>
-  );
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <Typography sx={{ fontSize: 13, color: editorial.muted, py: 1 }}>{children}</Typography>;
-}
-
-/** One record, one line — the same row shape every panel on this page uses. */
-function RecordLine({
-  record,
-  onOpen,
-  right,
-}: {
-  record: PortalRecord;
-  onOpen: () => void;
-  right?: React.ReactNode;
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={1.5}
-      sx={{ alignItems: "center", justifyContent: "space-between", py: 1.1, minWidth: 0 }}
-    >
-      <Box
-        component="button"
-        type="button"
-        onClick={onOpen}
-        sx={{
-          minWidth: 0,
-          flex: 1,
-          textAlign: "left",
-          border: "none",
-          background: "none",
-          p: 0,
-          font: "inherit",
-          color: "inherit",
-          cursor: "pointer",
-          "&:hover .home-line-title": { color: editorial.pmwBlueDark },
-        }}
-      >
-        <Typography className="home-line-title" sx={{ fontSize: 13.5, fontWeight: 700 }} noWrap>
-          {record.subject}
-        </Typography>
-        <Stack direction="row" spacing={0.6} sx={{ alignItems: "center", minWidth: 0, mt: 0.2 }}>
-          <ReferenceTag value={record.reference} sx={{ flex: "none" }} />
-          <Typography sx={{ fontSize: 11, color: editorial.muted, minWidth: 0 }} noWrap>
-            {record.formName} · {record.hasWorkflow ? record.layerLabel : "no approval step"}
-          </Typography>
-        </Stack>
-      </Box>
-      <Box sx={{ flex: "none" }}>{right}</Box>
-    </Stack>
-  );
-}
+import type { CatalogueEntry, PortalRecord, PortalScreen, StatFilter } from "../../types";
 
 /**
  * A form type as a door into its own workspace.
  *
  * The card carries the three numbers that decide whether you need to go in —
- * how many are yours, how many are open, how many are on your layer — so the
+ * how many are yours, how many are open, how many arrived today — so the
  * dashboard answers "is there anything for me on permits?" without a click. The
  * whole card is the target, not a link buried in it.
  */
@@ -107,36 +52,31 @@ function FormCard({
   waiting: number;
   onOpen: () => void;
 }) {
+  const urgent = waiting > 0;
   return (
     <Box
       component="button"
       type="button"
       onClick={onOpen}
       sx={{
+        ...panelSx,
+        ...liftSx,
         display: "flex",
         flexDirection: "column",
         width: "100%",
+        height: "100%",
         textAlign: "left",
         font: "inherit",
         color: "inherit",
         p: { xs: 1.75, sm: 2 },
-        borderRadius: "14px",
-        border: `1px solid ${waiting > 0 ? editorial.error : editorial.border}`,
-        backgroundColor: editorial.panel,
+        borderColor: urgent ? editorial.error : editorial.border,
         cursor: "pointer",
-        transition: "border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease",
-        "&:hover": {
-          borderColor: waiting > 0 ? editorial.error : editorial.pmwBlue,
-          transform: "translateY(-2px)",
-          boxShadow: "0 10px 26px rgba(0, 90, 158, 0.12)",
-        },
-        "&:active": { transform: "translateY(0)" },
-        "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
+        "&:hover": { ...liftSx["&:hover"], borderColor: urgent ? editorial.error : editorial.pmwBlue },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", width: "100%", mb: 0.75, minWidth: 0 }}>
         <ReferenceTag value={entry.code} sx={{ flex: "none" }} />
-        {waiting > 0 && (
+        {urgent && (
           <Box
             component="span"
             sx={{
@@ -148,7 +88,7 @@ function FormCard({
               textTransform: "uppercase",
               px: 0.8,
               py: 0.3,
-              borderRadius: "999px",
+              borderRadius: radius.full,
               color: editorial.onStatus,
               backgroundColor: editorial.errorFill,
             }}
@@ -166,7 +106,13 @@ function FormCard({
       <Stack
         direction="row"
         spacing={2}
-        sx={{ mt: "auto", pt: 1.5, width: "100%", borderTop: editorialHairline }}
+        sx={{
+          mt: "auto",
+          pt: 1.5,
+          width: "100%",
+          borderTop: `1px solid ${editorial.border}`,
+          alignItems: "flex-end",
+        }}
       >
         {[
           { value: mine, label: "yours" },
@@ -180,7 +126,7 @@ function FormCard({
             <Typography sx={{ fontSize: 10.5, color: editorial.muted }}>{stat.label}</Typography>
           </Box>
         ))}
-        <Typography sx={{ ml: "auto", alignSelf: "flex-end", fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark }}>
+        <Typography sx={{ ml: "auto", fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark }}>
           Open →
         </Typography>
       </Stack>
@@ -189,24 +135,35 @@ function FormCard({
 }
 
 /** A small link tile for the pages that are not a form: catalogue, people, audit, settings. */
-function LinkTile({ label, hint, count, onOpen }: { label: string; hint: string; count?: number | null; onOpen: () => void }) {
+function LinkTile({
+  label,
+  hint,
+  count,
+  onOpen,
+}: {
+  label: string;
+  hint: string;
+  count?: number | null;
+  onOpen: () => void;
+}) {
   return (
     <Box
       component="button"
       type="button"
       onClick={onOpen}
       sx={{
+        ...panelSx,
         display: "block",
         width: "100%",
+        height: "100%",
         textAlign: "left",
         font: "inherit",
         color: "inherit",
         p: 1.5,
-        borderRadius: "12px",
-        border: editorialHairline,
-        backgroundColor: editorial.panel,
+        borderRadius: radius.base,
         cursor: "pointer",
-        "&:hover": { borderColor: editorial.pmwBlue, backgroundColor: editorial.blueSoft },
+        transition: "border-color 0.16s ease, background-color 0.16s ease",
+        "&:hover": { borderColor: editorial.pmwBlue, backgroundColor: editorial.blueWash },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", justifyContent: "space-between" }}>
@@ -214,7 +171,9 @@ function LinkTile({ label, hint, count, onOpen }: { label: string; hint: string;
           {label}
         </Typography>
         {count !== null && count !== undefined && (
-          <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontVariantNumeric: "tabular-nums", flex: "none" }}>
+          <Typography
+            sx={{ fontSize: 12.5, color: editorial.muted, fontVariantNumeric: "tabular-nums", flex: "none" }}
+          >
             {count}
           </Typography>
         )}
@@ -236,7 +195,10 @@ function LinkTile({ label, hint, count, onOpen }: { label: string; hint: string;
  * is moving, then the pages that are not forms.
  *
  * Every number here is pressable and opens exactly the rows it counted, so
- * reading the dashboard and acting on it are the same gesture.
+ * reading the dashboard and acting on it are the same gesture. The work rows
+ * carry their own action as well, because a queue that makes you open an item
+ * to discover the button is two clicks where the list already knew there was
+ * one thing to do.
  */
 export default function HomeScreen() {
   const {
@@ -280,8 +242,39 @@ export default function HomeScreen() {
             row.entry.name.toLowerCase().includes(needle) || row.entry.code.toLowerCase().includes(needle),
         )
       : counted;
-    return matching.sort((a, b) => b.waiting - a.waiting || b.weight - a.weight || a.entry.name.localeCompare(b.entry.name));
+    return matching.sort(
+      (a, b) => b.waiting - a.waiting || b.weight - a.weight || a.entry.name.localeCompare(b.entry.name),
+    );
   }, [catalogue, records, myRecords, queue, formQuery]);
+
+  /**
+   * The ring: everything on record, split by whether it still needs somebody.
+   *
+   * Zero-count states are dropped rather than drawn as a legend entry with no
+   * arc — a deployment that has never rejected anything should not carry the
+   * word "Rejected" on its dashboard.
+   */
+  const gaugeSegments = useMemo<GaugeSegment<StatFilter>[]>(() => {
+    const all: GaugeSegment<StatFilter>[] = [
+      { id: "open", label: "Still moving", count: stats.open, tone: "ink", hint: "in a chain now" },
+      { id: "Returned", label: "Sent back", count: stats.returned, tone: "alert", hint: "with the filer" },
+      {
+        id: "Approved",
+        label: "Settled",
+        count: stats.approved + stats.recorded,
+        tone: "positive",
+        hint: "signed off or recorded",
+      },
+      {
+        id: "Cancelled",
+        label: "Ended",
+        count: stats.rejected + stats.cancelled,
+        tone: "muted",
+        hint: "rejected or cancelled",
+      },
+    ];
+    return all.filter((segment) => segment.count > 0);
+  }, [stats]);
 
   const sections = portalSections(access, {
     queue: queue.length,
@@ -306,17 +299,26 @@ export default function HomeScreen() {
 
   const extras = (["today", "cat", "people", "audit"] as const).filter((screen) => has(screen));
 
+  /** The one line under a work row: which form, which step, how long it has sat. */
+  const waitLine = (record: PortalRecord): string =>
+    `${record.formName} · ${record.hasWorkflow ? record.layerLabel : "no approval step"}`;
+
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
-        <Typography component="h1" sx={{ fontSize: { xs: 27, sm: 34 }, fontWeight: 700, lineHeight: 1.1 }}>
-          {greeting}
-        </Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>{formatTodayDate()}</Typography>
-        <Typography sx={{ fontSize: { xs: 14, sm: 15 }, mt: 1.5, fontWeight: 600 }}>{headline}</Typography>
-      </Box>
+      <PageHeader
+        title={greeting}
+        subtitle={headline}
+        meta={formatTodayDate()}
+        actions={
+          has("file") && access.canFile ? (
+            <Button variant="contained" onClick={() => setScreen("file")} sx={{ minHeight: 40 }}>
+              File a form
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <Box sx={{ mb: 3.5 }}>
+      <Box sx={{ mb: 3 }}>
         <StatTileRow>
           {has("queue") && (
             <StatTile
@@ -363,6 +365,107 @@ export default function HomeScreen() {
         </StatTileRow>
       </Box>
 
+      <WidgetGrid min={330} sx={{ mb: 3.5 }}>
+        {has("queue") && (
+          <Widget
+            title={access.isEvaluator ? "To evaluate" : "To approve"}
+            caption={hint("queue")}
+            meta={<WidgetCount value={queue.length} tone={queue.length > 0 ? "alert" : "ink"} />}
+            onOpen={() => setScreen("queue")}
+            openLabel="Open your queue"
+            footer={
+              <Button
+                onClick={() => setScreen("queue")}
+                size="small"
+                sx={{ px: 0, minWidth: 0, fontWeight: 800 }}
+              >
+                Open your queue →
+              </Button>
+            }
+          >
+            {queue.length === 0 ? (
+              <WidgetEmpty>Your queue is clear.</WidgetEmpty>
+            ) : (
+              <Box>
+                {queue.slice(0, 4).map((record) => (
+                  <TaskRow
+                    key={recordKey(record)}
+                    icon={<PendingActionsOutlinedIcon />}
+                    tone={record.overdue ? "alert" : "ink"}
+                    title={record.subject}
+                    description={waitLine(record)}
+                    timestamp={record.waitNote || `waiting ${record.ageOnLayerLabel}`}
+                    onOpen={() => openDrawer(recordKey(record))}
+                    action={
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => openDrawer(recordKey(record))}
+                        sx={{ minHeight: 32 }}
+                      >
+                        Review
+                      </Button>
+                    }
+                  />
+                ))}
+              </Box>
+            )}
+          </Widget>
+        )}
+
+        <Widget
+          title="Your recent filings"
+          caption={hint("mine")}
+          meta={<WidgetCount value={myRecords.length} />}
+          onOpen={() => setScreen("mine", null, "all")}
+          openLabel="See everything you filed"
+          footer={
+            <Button
+              onClick={() => setScreen("mine", null, "all")}
+              size="small"
+              sx={{ px: 0, minWidth: 0, fontWeight: 800 }}
+            >
+              See everything you filed →
+            </Button>
+          }
+        >
+          {myRecords.length === 0 ? (
+            <WidgetEmpty>You have not filed anything yet. Pick a form below to start one.</WidgetEmpty>
+          ) : (
+            <Box>
+              {myRecords.slice(0, 4).map((record) => (
+                <TaskRow
+                  key={recordKey(record)}
+                  icon={record.returned ? <ReplayOutlinedIcon /> : <DescriptionOutlinedIcon />}
+                  tone={record.returned ? "alert" : "muted"}
+                  title={record.subject}
+                  description={waitLine(record)}
+                  timestamp={`filed ${record.filedLabel}`}
+                  onOpen={() => openDrawer(recordKey(record))}
+                  action={<StatusPill status={record.status} />}
+                />
+              ))}
+            </Box>
+          )}
+        </Widget>
+
+        {has("subs") && records.length > 0 && (
+          <Widget
+            title="Where records stand"
+            caption="press a slice to open that list"
+            onOpen={() => setScreen("subs", null, "all")}
+            openLabel="Open all records"
+          >
+            <DonutGauge
+              segments={gaugeSegments}
+              total={stats.total}
+              centreLabel="On record"
+              onPick={(segment) => setScreen("subs", null, segment.id)}
+            />
+          </Widget>
+        )}
+      </WidgetGrid>
+
       <Box sx={{ mb: 3.5 }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -387,26 +490,15 @@ export default function HomeScreen() {
         </Stack>
 
         {forms.length === 0 ? (
-          <Box sx={PANEL_SX}>
-            <Empty>
+          <Widget bare>
+            <WidgetEmpty>
               {catalogue.length === 0
                 ? "No form types are published yet. Forms are authored in the PMW form builder; once one is published there it appears here."
                 : "No form matches that search."}
-            </Empty>
-          </Box>
+            </WidgetEmpty>
+          </Widget>
         ) : (
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(3, minmax(0, 1fr))",
-                xl: "repeat(4, minmax(0, 1fr))",
-              },
-              gap: { xs: 1.5, sm: 2 },
-            }}
-          >
+          <WidgetGrid min={244}>
             {forms.map((row) => (
               <FormCard
                 key={row.entry.listTitle}
@@ -417,134 +509,47 @@ export default function HomeScreen() {
                 onOpen={() => setScreen("form", row.entry.listTitle)}
               />
             ))}
-          </Box>
+          </WidgetGrid>
         )}
-      </Box>
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-          gap: { xs: 2, md: 2.5 },
-          mb: 2.5,
-        }}
-      >
-        {has("queue") && (
-          <Box sx={PANEL_SX}>
-            <PanelHead
-              title={access.isEvaluator ? "To evaluate" : "To approve"}
-              caption={hint("queue")}
-              right={
-                <Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", flex: "none" }}>
-                  {queue.length}
-                </Typography>
-              }
-            />
-            {queue.length === 0 ? (
-              <Empty>Your queue is clear.</Empty>
-            ) : (
-              <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
-                {queue.slice(0, 4).map((record) => (
-                  <RecordLine
-                    key={recordKey(record)}
-                    record={record}
-                    onOpen={() => openDrawer(recordKey(record))}
-                    right={
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => openDrawer(recordKey(record))}
-                        sx={{ minHeight: 32 }}
-                      >
-                        Review
-                      </Button>
-                    }
-                  />
-                ))}
-              </Stack>
-            )}
-            <Button
-              onClick={() => setScreen("queue")}
-              size="small"
-              sx={{ alignSelf: "flex-start", mt: 1.25, px: 0, minWidth: 0, fontWeight: 800 }}
-            >
-              Open your queue →
-            </Button>
-          </Box>
-        )}
-
-        <Box sx={PANEL_SX}>
-          <PanelHead
-            title="Your recent filings"
-            caption={hint("mine")}
-            right={
-              <Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", flex: "none" }}>
-                {myRecords.length}
-              </Typography>
-            }
-          />
-          {myRecords.length === 0 ? (
-            <Empty>You have not filed anything yet. Pick a form above to start one.</Empty>
-          ) : (
-            <Stack divider={<Box sx={{ borderTop: editorialHairline }} />}>
-              {myRecords.slice(0, 4).map((record) => (
-                <RecordLine
-                  key={recordKey(record)}
-                  record={record}
-                  onOpen={() => openDrawer(recordKey(record))}
-                  right={<StatusPill status={record.status} />}
-                />
-              ))}
-            </Stack>
-          )}
-          <Button
-            onClick={() => setScreen("mine", null, "all")}
-            size="small"
-            sx={{ alignSelf: "flex-start", mt: 1.25, px: 0, minWidth: 0, fontWeight: 800 }}
-          >
-            See everything you filed →
-          </Button>
-        </Box>
       </Box>
 
       {has("subs") && (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) minmax(0, 1fr)" },
-            gap: { xs: 2, md: 2.5 },
-            mb: 2.5,
-          }}
-        >
-          <Box sx={PANEL_SX}>
-            <PanelHead title="Where everything stands" caption="press a status to open that list" />
+        <WidgetGrid min={340} sx={{ mb: 3.5 }}>
+          <Widget
+            title="Where everything stands"
+            caption="press a status to open that list"
+            onOpen={() => setScreen("subs", null, "all")}
+            openLabel="Open all records"
+          >
             <StatusMix buckets={stats.breakdown} onPick={(bucket) => setScreen("subs", null, bucket.id)} />
-          </Box>
+          </Widget>
 
-          <Box sx={PANEL_SX}>
-            <PanelHead title="Intake, last 14 days" caption="today is the last bar" />
+          <Widget
+            title="Intake, last 14 days"
+            caption="today is the last bar"
+            meta={<WidgetCount value={stats.last7} tone="muted" />}
+            onOpen={() => setScreen("subs", null, "all")}
+            openLabel="Open all records"
+          >
             <IntakeChart days={stats.daily} onPickDay={() => setScreen("subs", null, "all")} />
-          </Box>
-        </Box>
+          </Widget>
+        </WidgetGrid>
       )}
 
       {extras.length > 0 && (
         <Box sx={{ mt: 3.5 }}>
-          <Typography sx={{ fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: editorial.softMuted, mb: 1.25 }}>
-            {access.canSeeEveryRecord ? "Oversight" : "More"}
-          </Typography>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(auto-fit, minmax(200px, 1fr))" },
-              gap: 1.5,
-            }}
-          >
+          <SectionLabel>{access.canSeeEveryRecord ? "Oversight" : "More"}</SectionLabel>
+          <WidgetGrid min={200}>
             {extras.includes("today") && (
               <LinkTile label="Today" hint={hint("today")} onOpen={() => setScreen("today")} />
             )}
             {extras.includes("cat") && (
-              <LinkTile label="Form catalogue" hint={hint("cat")} count={catalogue.length} onOpen={() => setScreen("cat")} />
+              <LinkTile
+                label="Form catalogue"
+                hint={hint("cat")}
+                count={catalogue.length}
+                onOpen={() => setScreen("cat")}
+              />
             )}
             {extras.includes("people") && (
               <LinkTile label="People & roles" hint={hint("people")} onOpen={() => setScreen("people")} />
@@ -553,7 +558,7 @@ export default function HomeScreen() {
               <LinkTile label="Audit trail" hint={hint("audit")} count={audit.length} onOpen={() => setScreen("audit")} />
             )}
             <LinkTile label="Settings" hint={hint("settings")} onOpen={() => setScreen("settings")} />
-          </Box>
+          </WidgetGrid>
         </Box>
       )}
     </Box>

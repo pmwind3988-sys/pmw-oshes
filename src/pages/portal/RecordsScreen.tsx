@@ -2,7 +2,16 @@ import { useMemo, useState } from "react";
 import { Box, Button, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
+import {
+  DataCell,
+  DataRow,
+  DataTable,
+  PageHeader,
+  Widget,
+  WidgetEmpty,
+} from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
 import { exportRecordsCsv } from "../../utils/portalExport";
@@ -117,46 +126,52 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
 
   return (
     <Box>
-      {/* Arriving from a form's workspace, the way back is to that workspace —
-          not to the top of the portal. */}
-      {focusForm && scopedForm && (
-        <Button
-          onClick={() => setScreen("form", focusForm)}
-          startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
-          sx={{ minHeight: 36, px: 0.75, ml: -0.75, mb: 1.5, fontSize: 12.5, color: editorial.muted }}
-        >
-          {scopedForm.name}
-        </Button>
-      )}
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        meta={`${rows.length} of ${source.length} ${source.length === 1 ? "record" : "records"}`}
+        // Arriving from a form's workspace, the way back is to that workspace —
+        // not to the top of the portal.
+        back={
+          focusForm && scopedForm ? (
+            <Button
+              onClick={() => setScreen("form", focusForm)}
+              startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
+              sx={{ minHeight: 36, px: 0.75, ml: -0.75, mb: 1.5, fontSize: 12.5, color: editorial.muted }}
+            >
+              {scopedForm.name}
+            </Button>
+          ) : undefined
+        }
+        actions={
+          /* Both framings are one click apart, so the table never becomes a dead
+             end for an account that can see more than its own filings. */
+          records.length > myRecords.length ? (
+            <Button
+              variant="outlined"
+              onClick={() => setScreen(mine ? "subs" : "mine", formFilter === "all" ? null : formFilter, statusFilter)}
+              sx={{ minHeight: 40, flex: "none" }}
+            >
+              {mine ? "Show everything I can see" : "Show only mine"}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{ alignItems: { sm: "flex-end" }, justifyContent: "space-between", mb: 3 }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 34 }, fontWeight: 700, lineHeight: 1.1 }}>
-            {title}
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>{subtitle}</Typography>
-        </Box>
-        {/* Both framings are one click apart, so the table never becomes a dead
-            end for an account that can see more than its own filings. */}
-        {records.length > myRecords.length && (
-          <Button
-            variant="outlined"
-            onClick={() => setScreen(mine ? "subs" : "mine", formFilter === "all" ? null : formFilter, statusFilter)}
-            sx={{ minHeight: 40, flex: "none" }}
-          >
-            {mine ? "Show everything I can see" : "Show only mine"}
-          </Button>
-        )}
-      </Stack>
-
+      {/* The filter bar is a panel of its own: it is a control surface, not part
+          of the table, and framing it that way is what stops six inputs reading
+          as the table's first row. */}
       <Stack
         direction="row"
-        spacing={1.7}
-        sx={{ flexWrap: "wrap", alignItems: "flex-end", mb: 2, rowGap: 1.7 }}
+        spacing={1.5}
+        sx={{
+          ...panelSx,
+          p: { xs: 1.5, sm: 1.75 },
+          mb: 2,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+          rowGap: 1.5,
+        }}
       >
         <TextField
           select
@@ -180,7 +195,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as StatFilter)}
-          sx={{ width: { xs: "calc(50% - 6.8px)", sm: 200 } }}
+          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 } }}
         >
           {statusOptions.map((option) => (
             <MenuItem key={option.value} value={option.value}>
@@ -195,7 +210,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Workflow"
           value={workflowFilter}
           onChange={(event) => setWorkflowFilter(event.target.value as typeof workflowFilter)}
-          sx={{ width: { xs: "calc(50% - 6.8px)", sm: 200 } }}
+          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 } }}
         >
           {WORKFLOW_OPTIONS.map((option) => (
             <MenuItem key={option.value} value={option.value}>
@@ -220,19 +235,15 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
             }
             sx={{ minHeight: 40, width: { xs: "100%", sm: "auto" } }}
           >
-            Export {rows.length} rows to CSV
+            Export {rows.length} rows
           </Button>
         )}
       </Stack>
 
-      <Typography sx={{ fontSize: 12, color: editorial.muted, mb: 1.25 }}>
-        {rows.length} of {source.length} {source.length === 1 ? "record" : "records"}
-      </Typography>
-
       {rows.length === 0 ? (
-        <Box sx={{ ...{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px" }, p: 2 }}>
-          <Typography sx={{ fontSize: 13, color: editorial.muted }}>{emptyLine}</Typography>
-        </Box>
+        <Widget bare>
+          <WidgetEmpty>{emptyLine}</WidgetEmpty>
+        </Widget>
       ) : (
         <>
           {/* Phone: one card per record, everything stacked and nothing clipped. */}
@@ -244,16 +255,14 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
                 type="button"
                 onClick={() => openRecord(record)}
                 sx={{
+                  ...panelSx,
+                  ...liftSx,
                   width: "100%",
                   textAlign: "left",
                   font: "inherit",
                   color: "inherit",
                   p: 1.5,
-                  borderRadius: "14px",
-                  border: editorialHairline,
-                  backgroundColor: editorial.panel,
                   cursor: "pointer",
-                  "&:hover": { borderColor: editorial.pmwBlue },
                 }}
               >
                 <Stack
@@ -291,82 +300,49 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           </Stack>
 
           {/* Desktop: the table, which scrolls inside its own box if it must. */}
-          <Box
-            sx={{
-              display: { xs: "none", md: "block" },
-              backgroundColor: editorial.panel,
-              border: editorialHairline,
-              borderRadius: "14px",
-              overflowX: "auto",
-            }}
-          >
-            <Box component="table" sx={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
-              <Box component="thead">
-                <Box
-                  component="tr"
-                  sx={{
-                    "& th": {
-                      textAlign: "left",
-                      fontSize: 11,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      color: editorial.muted,
-                      px: 2,
-                      py: 1.25,
-                      borderBottom: editorialHairline,
-                    },
-                  }}
-                >
-                  <Box component="th" sx={{ width: 120 }}>Reference</Box>
-                  <Box component="th">Form</Box>
-                  <Box component="th" sx={{ width: 150 }}>Source</Box>
-                  <Box component="th" sx={{ width: 190 }}>Stage</Box>
-                  <Box component="th" sx={{ width: 150 }}>Status</Box>
-                  <Box component="th" sx={{ width: 105 }}>Filed</Box>
-                </Box>
-              </Box>
-              <Box component="tbody">
-                {rows.map((record) => (
-                  <Box
-                    component="tr"
-                    key={recordKey(record)}
-                    onClick={() => openRecord(record)}
-                    tabIndex={0}
-                    role="button"
-                    onKeyDown={(event: React.KeyboardEvent) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openRecord(record);
-                      }
-                    }}
-                    sx={{
-                      cursor: "pointer",
-                      "& td": { px: 2, py: compact ? 0.85 : 1.25, borderBottom: editorialHairline, verticalAlign: "top" },
-                      "&:hover": { backgroundColor: editorial.blueWash },
-                    }}
-                  >
-                    <Box component="td"><ReferenceTag value={record.reference} size="md" /></Box>
-                    <Box component="td">
-                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>
-                      {!compact && <Typography sx={{ fontSize: 12, color: editorial.muted }}>{record.subject}</Typography>}
-                    </Box>
-                    <Box component="td" sx={{ color: editorial.muted }}>{record.source}</Box>
-                    <Box component="td">
-                      <Typography sx={{ fontSize: 13 }}>{record.stage}</Typography>
-                      {/* The wait line says the SLA where there is one and the
-                          plain age where there is not — never "no SLA". */}
-                      {!compact && record.waitNote && (
-                        <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
-                          {record.waitNote}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Box component="td"><StatusPill status={record.status} /></Box>
-                    <Box component="td" sx={{ color: editorial.muted, whiteSpace: "nowrap" }}>{record.filedLabel}</Box>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
+          <Box sx={{ display: { xs: "none", md: "block" }, borderRadius: radius.lg, overflow: "hidden" }}>
+            <DataTable
+              minWidth={860}
+              columns={[
+                { key: "ref", label: "Reference", width: 120 },
+                { key: "form", label: "Form" },
+                { key: "source", label: "Source", width: 150 },
+                { key: "stage", label: "Stage", width: 190 },
+                { key: "status", label: "Status", width: 150 },
+                { key: "filed", label: "Filed", width: 105 },
+              ]}
+            >
+              {rows.map((record) => (
+                <DataRow key={recordKey(record)} compact={compact} onOpen={() => openRecord(record)}>
+                  <DataCell>
+                    <ReferenceTag value={record.reference} size="md" />
+                  </DataCell>
+                  <DataCell>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>
+                    {!compact && (
+                      <Typography sx={{ fontSize: 12, color: editorial.muted }}>{record.subject}</Typography>
+                    )}
+                  </DataCell>
+                  <DataCell muted>{record.source}</DataCell>
+                  <DataCell>
+                    <Typography sx={{ fontSize: 13 }}>{record.stage}</Typography>
+                    {/* The wait line says the SLA where there is one and the
+                        plain age where there is not — never "no SLA". */}
+                    {!compact && record.waitNote && (
+                      <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
+                        {record.waitNote}
+                      </Typography>
+                    )}
+                  </DataCell>
+                  <DataCell>
+                    <StatusPill status={record.status} />
+                  </DataCell>
+                  <DataCell muted nowrap>
+                    {record.filedLabel}
+                  </DataCell>
+                </DataRow>
+              ))}
+            </DataTable>
           </Box>
         </>
       )}

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
+import { PageHeader, Widget } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { useAppearance } from "../../contexts/AppearanceContext";
 import AppearancePicker from "../../components/dashboard/AppearancePicker";
@@ -8,20 +10,12 @@ import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
 import { accessSummary, portalNav, roleLabel } from "../../utils/portalRole";
 import type { PortalScreen } from "../../types";
 
-const PANEL_SX = {
-  backgroundColor: editorial.panel,
-  border: editorialHairline,
-  borderRadius: "14px",
-  p: 2.5,
-} as const;
-
+/** A settings group. Roomier than a dashboard widget, because these are read, not scanned. */
 function Panel({ title, caption, children }: { title: string; caption: string; children: React.ReactNode }) {
   return (
-    <Box sx={PANEL_SX}>
-      <Typography sx={{ fontSize: 17, fontWeight: 700 }}>{title}</Typography>
-      <Typography sx={{ fontSize: 12, color: editorial.muted, mb: 2 }}>{caption}</Typography>
+    <Widget title={title} caption={caption} sx={{ p: { xs: 2, sm: 2.5 } }}>
       {children}
-    </Box>
+    </Widget>
   );
 }
 
@@ -123,16 +117,13 @@ export default function SettingsScreen() {
 
   return (
     <Box sx={{ maxWidth: 840 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-          Settings
-        </Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-          your account, what it can do, and where the portal opens
-        </Typography>
-      </Box>
+      <PageHeader
+        title="Settings"
+        subtitle="your account, what it can do, and where the portal opens"
+        meta={roleLabel(role)}
+      />
 
-      <Stack spacing={2.5}>
+      <Stack spacing={{ xs: 1.5, sm: 2 }}>
         <Panel title="Account" caption="from your Microsoft 365 sign-in — nothing here is stored by this app">
           <Row label="Name" value={userName || "—"} />
           <Row label="Signed in as" value={userEmail || "—"} />
@@ -157,7 +148,7 @@ export default function SettingsScreen() {
                       fontWeight: 800,
                       px: 0.9,
                       py: 0.3,
-                      borderRadius: "999px",
+                      borderRadius: radius.full,
                       border: editorialHairline,
                       whiteSpace: "nowrap",
                       color: capability.granted ? editorial.pmwBlueDark : editorial.muted,

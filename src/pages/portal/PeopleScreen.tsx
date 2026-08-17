@@ -1,9 +1,18 @@
 import { useMemo } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
+import { DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { displayName, normalizeEmail } from "../../utils/portalPeople";
 import type { PortalPerson } from "../../types";
+
+/** Two letters, so a table of names scans as faces rather than as a column of text. */
+function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+  return (words[0] ?? "?").slice(0, 2).toUpperCase();
+}
 
 /**
  * People & roles.
@@ -61,85 +70,85 @@ export default function PeopleScreen() {
   }, [catalogue, records, directory, userEmail, isAdmin]);
 
   return (
-    <Box sx={{ maxWidth: 960 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography component="h1" sx={{ fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>
-          People &amp; roles
-        </Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-          a role decides what the dashboard shows and what can be signed — an approval layer points at a role, not a
-          person
-        </Typography>
-      </Box>
+    <Box sx={{ maxWidth: 1000 }}>
+      <PageHeader
+        title="People & roles"
+        subtitle="a role decides what the dashboard shows and what can be signed — an approval layer points at a role, not a person"
+        meta={people.length > 0 ? `${people.length} ${people.length === 1 ? "person" : "people"}` : undefined}
+      />
 
       {people.length === 0 ? (
-        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", p: 2 }}>
-          <Typography sx={{ fontSize: 13, color: editorial.muted }}>
+        <Widget bare>
+          <WidgetEmpty>
             No layer points at a named person yet. Assign approvers on the Layers tab of the form builder.
-          </Typography>
-        </Box>
+          </WidgetEmpty>
+        </Widget>
       ) : (
-        <Box sx={{ backgroundColor: editorial.panel, border: editorialHairline, borderRadius: "14px", overflowX: "auto" }}>
-          <Box component="table" sx={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: 13 }}>
-            <Box component="thead">
-              <Box
-                component="tr"
-                sx={{
-                  "& th": {
-                    textAlign: "left",
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    color: editorial.muted,
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: editorialHairline,
-                  },
-                }}
-              >
-                <Box component="th" sx={{ width: 190 }}>Name</Box>
-                <Box component="th" sx={{ width: 170 }}>Approval role</Box>
-                <Box component="th" sx={{ width: 130 }}>System role</Box>
-                <Box component="th" sx={{ width: 100 }}>Open items</Box>
-                <Box component="th">Sees</Box>
-              </Box>
-            </Box>
-            <Box component="tbody">
-              {people.map((person) => (
-                <Box
-                  component="tr"
-                  key={`${person.email}-${person.approvalRole}`}
-                  sx={{ "& td": { px: 2, py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}
-                >
-                  <Box component="td">
+        <DataTable
+          minWidth={840}
+          columns={[
+            { key: "name", label: "Name", width: 230 },
+            { key: "role", label: "Approval role", width: 170 },
+            { key: "system", label: "System role", width: 130 },
+            { key: "open", label: "Open items", width: 100 },
+            { key: "sees", label: "Sees" },
+          ]}
+        >
+          {people.map((person) => (
+            <DataRow key={`${person.email}-${person.approvalRole}`}>
+              <DataCell>
+                <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", minWidth: 0 }}>
+                  <Box
+                    sx={{
+                      flex: "none",
+                      width: 30,
+                      height: 30,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: radius.full,
+                      backgroundColor: editorial.pmwBlueSoft,
+                      color: editorial.pmwBlueDark,
+                      fontSize: 11.5,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {initialsOf(person.name)}
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{person.name}</Typography>
-                    <Typography sx={{ fontSize: 11, color: editorial.muted }}>{person.email}</Typography>
+                    <Typography sx={{ fontSize: 11, color: editorial.muted }} noWrap>
+                      {person.email}
+                    </Typography>
                   </Box>
-                  <Box component="td">{person.approvalRole}</Box>
-                  <Box component="td">
-                    <Box
-                      component="span"
-                      sx={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        px: 0.9,
-                        py: 0.3,
-                        borderRadius: "999px",
-                        border: editorialHairline,
-                        backgroundColor: editorial.blueSoft,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {person.systemRole}
-                    </Box>
-                  </Box>
-                  <Box component="td" sx={{ fontVariantNumeric: "tabular-nums" }}>{person.openItems}</Box>
-                  <Box component="td" sx={{ color: editorial.muted }}>{person.sees}</Box>
+                </Stack>
+              </DataCell>
+              <DataCell>{person.approvalRole}</DataCell>
+              <DataCell>
+                <Box
+                  component="span"
+                  sx={{
+                    display: "inline-block",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    px: 0.9,
+                    py: 0.3,
+                    borderRadius: radius.full,
+                    border: editorialHairline,
+                    backgroundColor: editorial.blueSoft,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {person.systemRole}
                 </Box>
-              ))}
-            </Box>
-          </Box>
-        </Box>
+              </DataCell>
+              <DataCell sx={{ fontVariantNumeric: "tabular-nums", fontWeight: person.openItems > 0 ? 800 : 400 }}>
+                {person.openItems}
+              </DataCell>
+              <DataCell muted>{person.sees}</DataCell>
+            </DataRow>
+          ))}
+        </DataTable>
       )}
     </Box>
   );
