@@ -36,6 +36,7 @@ import {
   Search as SearchIcon,
 } from "@mui/icons-material";
 import { editorial, editorialShadow } from "../../theme/editorial";
+import { panelSx, radius } from "../../theme/surfaces";
 import {
   EMPTY_SUBMISSION_FILTERS,
   applyFormTypeChange,
@@ -102,20 +103,20 @@ export default function Toolbar({
   const searchFieldSx = {
     minWidth: 0,
     "& .MuiOutlinedInput-root": {
-      borderRadius: "10px",
+      borderRadius: radius.md,
       backgroundColor: editorial.paperSoft,
       transition: "background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
       "&:hover": {
         backgroundColor: editorial.blueSoft,
       },
       "&.Mui-focused": {
-        backgroundColor: "#ffffff",
+        backgroundColor: editorial.panel,
         boxShadow: `0 0 0 3px ${editorial.pmwBlueSoft}`,
       },
     },
   } as const;
   const selectSx = {
-    borderRadius: "10px",
+    borderRadius: radius.md,
     backgroundColor: editorial.paperSoft,
     "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
       borderColor: editorial.pmwBlue,
@@ -192,8 +193,7 @@ export default function Toolbar({
   return (
     <Box
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
-        borderRadius: "12px",
+        ...panelSx,
         boxShadow: editorialShadow,
         p: { xs: 1.5, sm: 2 },
       }}
@@ -256,7 +256,7 @@ export default function Toolbar({
               height: 40,
               minWidth: { xs: 116, sm: 178 },
               px: { xs: 1.25, sm: 2 },
-              borderRadius: "10px",
+              borderRadius: radius.md,
               whiteSpace: "nowrap",
               ...(advancedOpen
                 ? {
@@ -515,7 +515,7 @@ export default function Toolbar({
                     onClick={onOpenExport}
                     sx={{
                       minHeight: 40,
-                      borderRadius: "10px",
+                      borderRadius: radius.md,
                       px: 1.5,
                       color: editorial.pmwBlueDark,
                       borderColor: editorial.pmwBlueSoft,

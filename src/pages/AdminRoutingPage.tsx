@@ -57,6 +57,7 @@ import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
 import { editorial, editorialShadow } from "../theme/editorial";
+import { radius } from "../theme/surfaces";
 import { downloadCsv } from "../utils/csv";
 import { directoryToCsv } from "../utils/approvalDirectoryCsv";
 import type { DirectoryImportPlan } from "../utils/approvalDirectoryCsv";
@@ -370,7 +371,7 @@ export default function AdminRoutingPage() {
 
         {/* Not set up yet: teach what the list is for before asking to make it. */}
         {!loading && !loadError && !listExists && (
-          <Paper sx={{ p: 4, borderRadius: "16px", boxShadow: editorialShadow, textAlign: "center" }}>
+          <Paper sx={{ p: 4, borderRadius: radius.lg, boxShadow: editorialShadow, textAlign: "center" }}>
             <Typography sx={{ fontSize: "1.05rem", fontWeight: 800, color: editorial.ink, mb: 1 }}>
               The approval directory has not been set up yet
             </Typography>
@@ -434,7 +435,7 @@ export default function AdminRoutingPage() {
               </Alert>
             )}
 
-            <Paper sx={{ borderRadius: "16px", boxShadow: editorialShadow, overflow: "hidden" }}>
+            <Paper sx={{ borderRadius: radius.lg, boxShadow: editorialShadow, overflow: "hidden" }}>
               <Tabs
                 value={tab}
                 onChange={(_, value: RoutingTab) => setTab(value)}
@@ -644,9 +645,9 @@ export default function AdminRoutingPage() {
                             alignItems: { sm: "center" },
                             gap: 1.5,
                             p: 1.5,
-                            borderRadius: "10px",
-                            border: `1px solid ${problem.blocking ? "#F0C9C9" : editorial.border}`,
-                            backgroundColor: problem.blocking ? "#FDF3F3" : editorial.paperSoft,
+                            borderRadius: radius.base,
+                            border: `1px solid ${problem.blocking ? `color-mix(in srgb, ${editorial.error} 34%, transparent)` : editorial.border}`,
+                            backgroundColor: problem.blocking ? editorial.errorWash : editorial.paperSoft,
                           }}
                         >
                           <Chip
@@ -656,7 +657,7 @@ export default function AdminRoutingPage() {
                               fontWeight: 700,
                               fontSize: "0.65rem",
                               color: problem.blocking ? editorial.error : editorial.warning,
-                              backgroundColor: problem.blocking ? "#FBE9E9" : editorial.yellowSoft,
+                              backgroundColor: problem.blocking ? editorial.errorWash : editorial.warningWash,
                             }}
                           />
                           <Typography sx={{ flex: 1, fontSize: "0.82rem", color: editorial.ink }}>

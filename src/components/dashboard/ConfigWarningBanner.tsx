@@ -7,7 +7,8 @@ import {
 } from "@mui/material";
 import { Warning as WarningIcon, Close as CloseIcon } from "@mui/icons-material";
 import { useState } from "react";
-import { editorial } from "../../theme/editorial";
+import { editorial, editorialShadow } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 
 interface ConfigWarningBannerProps {
   missingLists: string[];
@@ -24,10 +25,10 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
         severity="warning"
         icon={<WarningIcon />}
         sx={{
-          borderRadius: "12px",
-          border: "1px solid rgba(177, 92, 0, 0.38)",
-          backgroundColor: "#FFF3E0",
-          boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
+          borderRadius: radius.lg,
+          border: `1px solid color-mix(in srgb, ${editorial.warning} 42%, transparent)`,
+          backgroundColor: editorial.warningWash,
+          boxShadow: editorialShadow,
           color: editorial.ink,
           "& .MuiAlert-message": {
             width: "100%",
@@ -44,7 +45,7 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
             size="small"
             onClick={() => setOpen(false)}
             sx={{
-              borderRadius: "10px",
+              borderRadius: radius.md,
               "&:focus-visible": {
                 outline: `3px solid ${editorial.yellowSoft}`,
                 outlineOffset: 2,
@@ -66,13 +67,14 @@ export default function ConfigWarningBanner({ missingLists }: ConfigWarningBanne
             <Box
               key={list}
               sx={{
-                backgroundColor: editorial.yellowSoft,
+                backgroundColor: editorial.panel,
+                border: `1px solid color-mix(in srgb, ${editorial.warning} 30%, transparent)`,
                 color: editorial.warning,
                 fontFamily: "monospace",
                 fontSize: "0.75rem",
                 px: 1.5,
                 py: 0.5,
-                borderRadius: "6px",
+                borderRadius: radius.sm,
               }}
             >
               {list}

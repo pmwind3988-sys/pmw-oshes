@@ -18,6 +18,7 @@ import ListHeader from "../components/dashboard/ListHeader";
 import SubmissionRow from "../components/dashboard/SubmissionRow";
 import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
+import { PageHeader, SectionLabel } from "../components/Widget";
 import DetailModal from "../components/dashboard/DetailModal";
 import {
   collectFieldCatalog,
@@ -27,7 +28,8 @@ import {
 } from "../utils/submissionFilters";
 import { csvCell, downloadCsv } from "../utils/csv";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
-import { editorial, editorialShadow } from "../theme/editorial";
+import { editorial, editorialShadow, editorialShadowHover } from "../theme/editorial";
+import { panelSx, radius } from "../theme/surfaces";
 
 const EXPORT_BASE_COLUMNS = [
   "Reference",
@@ -164,8 +166,7 @@ export default function AdminHomePage() {
     <Box
       sx={{
         minHeight: "100vh",
-        background:
-          "var(--app-bg, linear-gradient(180deg, #F6FAFD 0%, #F8FAFC 48%, #FFFFFF 100%))",
+        background: `var(--app-bg, linear-gradient(180deg, ${editorial.blueSoft} 0%, ${editorial.paper} 48%, ${editorial.panel} 100%))`,
         color: editorial.ink,
         WebkitFontSmoothing: "antialiased",
         position: "relative",
@@ -178,8 +179,7 @@ export default function AdminHomePage() {
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
-          background:
-            "linear-gradient(90deg, rgba(0, 120, 212, 0.045) 0%, rgba(255,255,255,0) 42%, rgba(98, 100, 167, 0.04) 100%)",
+          background: `linear-gradient(90deg, color-mix(in srgb, ${editorial.pmwBlue} 5%, transparent) 0%, transparent 42%, color-mix(in srgb, ${editorial.pmwPurple} 5%, transparent) 100%)`,
         },
       }}
     >
@@ -202,18 +202,14 @@ export default function AdminHomePage() {
           zIndex: 1,
         }}
       >
-        <Box
-          component="section"
-          sx={{
-            mb: { xs: 2.5, md: 3.5 },
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(280px, auto)" },
-            gap: { xs: 2, md: 3 },
-            alignItems: "end",
-          }}
-        >
-          <Box>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1.5 }}>
+        {/* The same page header the portal screens wear — chips as the eyebrow,
+            the identity card as the right-hand meta — so crossing between the
+            two halves of the product does not feel like changing app. */}
+        <PageHeader
+          title="PMW Group HR Portal"
+          subtitle={dashboardSubtitle}
+          eyebrow={
+            <Stack component="span" direction="row" spacing={1} sx={{ display: "flex", flexWrap: "wrap", rowGap: 1 }}>
               <Chip
                 icon={<DashboardIcon />}
                 label={workspaceLabel}
@@ -232,7 +228,7 @@ export default function AdminHomePage() {
                 label={`${visibleLists.length} visible form${visibleLists.length === 1 ? "" : "s"}`}
                 size="small"
                 sx={{
-                  backgroundColor: "rgba(255, 255, 255, 0.82)",
+                  backgroundColor: editorial.panel,
                   color: editorial.muted,
                   border: `1px solid ${editorial.border}`,
                   fontWeight: 800,
@@ -240,80 +236,58 @@ export default function AdminHomePage() {
                 }}
               />
             </Stack>
-            <Typography
-              variant="h1"
-              sx={{
-                color: editorial.ink,
-                fontSize: { xs: "2rem", sm: "2.55rem", md: "3rem" },
-                lineHeight: 1,
-                textWrap: "balance",
-              }}
-            >
-              PMW Group HR Portal
-            </Typography>
-            <Typography
-              variant="h6"
-              sx={{
-                color: editorial.muted,
-                fontWeight: 700,
-                mt: 1,
-                maxWidth: 820,
-                textWrap: "pretty",
-              }}
-            >
-              {dashboardSubtitle}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              justifySelf: { xs: "start", md: "end" },
-              display: "grid",
-              gridTemplateColumns: "40px minmax(0, 1fr)",
-              gap: 1.25,
-              alignItems: "center",
-              maxWidth: "100%",
-              px: 1.5,
-              py: 1.25,
-              borderRadius: "8px",
-              color: editorial.muted,
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
-              boxShadow: editorialShadow,
-            }}
-          >
+          }
+          actions={
             <Box
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "8px",
-                display: "flex",
+                ...panelSx,
+                display: "grid",
+                gridTemplateColumns: "40px minmax(0, 1fr)",
+                gap: 1.25,
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
-                color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
-                boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.06)",
+                maxWidth: "100%",
+                px: 1.5,
+                py: 1.25,
+                color: editorial.muted,
+                boxShadow: editorialShadow,
               }}
             >
-              {isAdmin ? <AdminIcon sx={{ fontSize: 20 }} /> : <PersonIcon sx={{ fontSize: 20 }} />}
-            </Box>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 800 }}>
-                Signed in as
-              </Typography>
-              <Typography
-                variant="body2"
+              <Box
                 sx={{
-                  color: editorial.ink,
-                  fontWeight: 800,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  width: 40,
+                  height: 40,
+                  borderRadius: radius.sm,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isAdmin ? editorial.purpleWash : editorial.blueWash,
+                  color: isAdmin ? editorial.pmwPurpleDark : editorial.pmwBlueDark,
+                  border: `1px solid ${isAdmin ? editorial.pmwPurpleSoft : editorial.pmwBlueSoft}`,
                 }}
               >
-                {userEmail}
-              </Typography>
+                {isAdmin ? <AdminIcon sx={{ fontSize: 20 }} /> : <PersonIcon sx={{ fontSize: 20 }} />}
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 11, color: editorial.softMuted, fontWeight: 800 }}>
+                  Signed in as
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    color: editorial.ink,
+                    fontWeight: 800,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {userEmail}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
-        </Box>
+          }
+          sx={{ mb: { xs: 2.5, md: 3.5 } }}
+        />
 
         {missingConfigs.length > 0 && (
           <Box sx={{ mb: 4 }}>
@@ -321,12 +295,16 @@ export default function AdminHomePage() {
           </Box>
         )}
 
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: { xs: 3, md: 3.5 } }}>
           <StatsRow submissions={submissions} />
         </Box>
 
+        {/* The section rules the page was missing: four counts, then a card per
+            form, then the table — three groups a reader can name, instead of one
+            column of unlabelled bands. */}
         {visibleLists.length > 0 && (
-          <Box sx={{ mb: 4 }}>
+          <Box sx={{ mb: { xs: 3, md: 3.5 } }}>
+            <SectionLabel>Forms on this site</SectionLabel>
             <ListSummaryCards
               submissions={submissions}
               visibleLists={visibleLists}
@@ -338,7 +316,8 @@ export default function AdminHomePage() {
           </Box>
         )}
 
-        <Box sx={{ mb: 4 }}>
+        <Box sx={{ mb: { xs: 2, md: 2.5 } }}>
+          <SectionLabel>Submissions</SectionLabel>
           <Toolbar
             filters={filters}
             setFilters={setFilters}
@@ -363,10 +342,10 @@ export default function AdminHomePage() {
             onClose={() => setDeleteResult(null)}
             sx={{
               mb: 2,
-              borderRadius: "8px",
-              backgroundColor: deleteResult.warnings.length > 0 ? "#FFF3E0" : "#F1FAF1",
-              border: `1px solid ${deleteResult.warnings.length > 0 ? "rgba(177, 92, 0, 0.42)" : "rgba(16, 124, 16, 0.42)"}`,
-              boxShadow: "0 10px 26px rgba(16, 16, 16, 0.12), 0 0 0 1px rgba(16, 16, 16, 0.04)",
+              borderRadius: radius.lg,
+              backgroundColor: deleteResult.warnings.length > 0 ? editorial.warningWash : editorial.successWash,
+              border: `1px solid color-mix(in srgb, ${deleteResult.warnings.length > 0 ? editorial.warning : editorial.success} 42%, transparent)`,
+              boxShadow: editorialShadow,
               color: editorial.ink,
               "& .MuiAlert-message": {
                 width: "100%",
@@ -421,8 +400,8 @@ export default function AdminHomePage() {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: "8px",
-              boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(16, 16, 16, 0.18)",
+              borderRadius: radius.lg,
+              boxShadow: editorialShadowHover,
               overflow: "hidden",
             },
           },
@@ -433,7 +412,7 @@ export default function AdminHomePage() {
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "8px",
+              borderRadius: radius.sm,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -460,7 +439,7 @@ export default function AdminHomePage() {
               value={exportScope}
               label="Scope"
               onChange={(event) => setExportScope(event.target.value as "current" | "all")}
-              sx={{ borderRadius: "8px", backgroundColor: editorial.paperSoft }}
+              sx={{ borderRadius: radius.base, backgroundColor: editorial.paperSoft }}
             >
               <MenuItem value="current">Current view (filters applied)</MenuItem>
               <MenuItem value="all">All submissions</MenuItem>
@@ -471,10 +450,10 @@ export default function AdminHomePage() {
             severity={exportRows.length > 0 ? "info" : "warning"}
             sx={{
               mt: 2,
-              borderRadius: "8px",
-              backgroundColor: exportRows.length > 0 ? editorial.blueWash : editorial.yellowSoft,
+              borderRadius: radius.sm,
+              backgroundColor: exportRows.length > 0 ? editorial.blueWash : editorial.warningWash,
               color: exportRows.length > 0 ? editorial.pmwBlueDark : editorial.warning,
-              boxShadow: `inset 0 0 0 1px ${exportRows.length > 0 ? editorial.pmwBlueSoft : "rgba(177, 92, 0, 0.28)"}`,
+              boxShadow: `inset 0 0 0 1px ${exportRows.length > 0 ? editorial.pmwBlueSoft : `color-mix(in srgb, ${editorial.warning} 30%, transparent)`}`,
               "& .MuiAlert-icon": {
                 color: exportRows.length > 0 ? editorial.pmwBlueDark : editorial.warning,
               },
@@ -491,7 +470,6 @@ export default function AdminHomePage() {
           <Button
             onClick={() => setExportOpen(false)}
             sx={{
-              borderRadius: "8px",
               minHeight: 40,
               px: 2,
               textTransform: "none",
@@ -506,7 +484,6 @@ export default function AdminHomePage() {
             onClick={handleExportCsv}
             disabled={exportRows.length === 0}
             sx={{
-              borderRadius: "8px",
               minHeight: 40,
               fontWeight: 800,
               textTransform: "none",
@@ -529,9 +506,9 @@ export default function AdminHomePage() {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: "8px",
-              border: `1px solid rgba(198, 40, 40, 0.18)`,
-              boxShadow: "0 18px 48px rgba(16, 16, 16, 0.18)",
+              borderRadius: radius.lg,
+              border: `1px solid color-mix(in srgb, ${editorial.error} 26%, transparent)`,
+              boxShadow: editorialShadowHover,
             },
           },
         }}
@@ -541,11 +518,11 @@ export default function AdminHomePage() {
             sx={{
               width: 40,
               height: 40,
-              borderRadius: "8px",
+              borderRadius: radius.sm,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "rgba(198, 40, 40, 0.08)",
+              backgroundColor: editorial.errorWash,
               color: editorial.error,
               flexShrink: 0,
             }}
@@ -562,17 +539,17 @@ export default function AdminHomePage() {
           </Box>
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
-            <Alert severity="error" sx={{ borderRadius: "8px", mb: 2, fontWeight: 700 }}>
+            <Alert severity="error" sx={{ borderRadius: radius.sm, mb: 2, fontWeight: 700 }}>
               This removes the SharePoint item, generated PDFs, signature images, uploaded files stored in app-managed libraries, and matrix child rows. This action cannot be undone.
             </Alert>
           {deleteError && (
-            <Alert severity="error" sx={{ borderRadius: "8px", fontWeight: 700 }}>
+            <Alert severity="error" sx={{ borderRadius: radius.sm, fontWeight: 700 }}>
               {deleteError}
             </Alert>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={closeDeleteDialog} disabled={deleteStatus === "deleting"} sx={{ borderRadius: "8px", minHeight: 40 }}>
+          <Button onClick={closeDeleteDialog} disabled={deleteStatus === "deleting"} sx={{ minHeight: 40 }}>
             Cancel
           </Button>
           <Button
@@ -582,7 +559,6 @@ export default function AdminHomePage() {
             onClick={confirmHardDelete}
             disabled={deleteStatus === "deleting"}
             sx={{
-              borderRadius: "8px",
               minHeight: 40,
               fontWeight: 800,
               textTransform: "none",

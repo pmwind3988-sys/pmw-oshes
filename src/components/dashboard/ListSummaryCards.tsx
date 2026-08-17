@@ -1,4 +1,4 @@
-import { Box, Grid, Typography, IconButton, Tooltip } from "@mui/material";
+import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import {
   AccessTime as AccessTimeIcon,
   ArrowForward as ArrowForwardIcon,
@@ -8,7 +8,9 @@ import {
   Edit as EditIcon,
 } from "@mui/icons-material";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
-import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
+import { panelSx, radius } from "../../theme/surfaces";
+import { WidgetGrid } from "../Widget";
 
 interface ListSummaryCardsProps {
   submissions: Submission[];
@@ -19,6 +21,15 @@ interface ListSummaryCardsProps {
   onEditForm: (listTitle: string) => void;
 }
 
+/**
+ * One card per SharePoint list, carrying its volume and its approval mix.
+ *
+ * Rebuilt on the shared card geometry — a hairline and a 14px radius rather
+ * than a shadowed 8px tile on a 94%-white wash — so the admin dashboard and the
+ * portal read as one product rather than two eras of one. The stacked bar and
+ * its legend are the only colour here, and they are the status tokens, because
+ * approved / pending / rejected is exactly what those tokens mean.
+ */
 export default function ListSummaryCards({
   submissions,
   visibleLists,
@@ -28,7 +39,7 @@ export default function ListSummaryCards({
   onEditForm,
 }: ListSummaryCardsProps) {
   return (
-    <Grid container spacing={2}>
+    <WidgetGrid min={260}>
       {visibleLists.map((list) => {
         const meta = listMetaMap[list.title] ?? {
           icon: "📋",
@@ -53,225 +64,154 @@ export default function ListSummaryCards({
           }
         }
 
-        const approvedWidth = count > 0 ? `${(listApproved / count) * 100}%` : "0%";
-        const pendingWidth = count > 0 ? `${(listPending / count) * 100}%` : "0%";
-        const rejectedWidth = count > 0 ? `${(listRejected / count) * 100}%` : "0%";
+        const share = (value: number) => (count > 0 ? `${(value / count) * 100}%` : "0%");
         const cardCaption = isAdmin ? "All visible submissions" : "Visible to you";
 
+        const legend = [
+          { key: "approved", icon: <CheckCircleIcon sx={{ fontSize: 14 }} />, colour: editorial.success, text: `${listApproved} approved` },
+          { key: "pending", icon: <AccessTimeIcon sx={{ fontSize: 14 }} />, colour: editorial.warning, text: `${listPending} pending` },
+          { key: "rejected", icon: <CancelIcon sx={{ fontSize: 14 }} />, colour: editorial.error, text: `${listRejected} rejected` },
+        ];
+
         return (
-          <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={list.id}>
-            <Box
-              sx={{
-                minHeight: 224,
-                backgroundColor: "rgba(255, 255, 255, 0.94)",
-                borderRadius: "8px",
-                boxShadow: editorialShadow,
-                p: { xs: 1.75, sm: 2 },
-                pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
-                position: "relative",
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-                transition: "box-shadow 0.2s ease, transform 0.2s ease",
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  inset: "0 0 auto 0",
-                  height: 3,
-                  backgroundColor: meta.color,
-                },
-                "&:hover": {
-                  boxShadow: editorialShadowHover,
-                  transform: "translateY(-2px)",
-                },
-                "@media (prefers-reduced-motion: reduce)": {
-                  transition: "box-shadow 0.2s ease",
-                  "&:hover": {
-                    transform: "none",
-                  },
-                },
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "8px",
-                    backgroundColor: meta.pale,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.06)",
-                  }}
-                >
-                  <DescriptionIcon sx={{ fontSize: 22, color: meta.color }} />
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 800,
-                      color: editorial.ink,
-                      lineHeight: 1.2,
-                      mb: 0.25,
-                      textWrap: "balance",
-                    }}
-                  >
-                    {list.title}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700, display: "block" }}>
-                    {meta.category} · {cardCaption}
-                  </Typography>
-                </Box>
-                {canUseFormBuilder && (
-                  <Tooltip title={`Edit ${list.title}`}>
-                    <IconButton
-                      aria-label={`Edit ${list.title}`}
-                      onClick={() => onEditForm(list.title)}
-                      size="small"
-                      sx={{
-                        position: "absolute",
-                        top: 12,
-                        right: 12,
-                        width: 40,
-                        height: 40,
-                        borderRadius: "8px",
-                        backgroundColor: editorial.purpleWash,
-                        color: editorial.pmwPurpleDark,
-                        boxShadow: `inset 0 0 0 1px ${editorial.pmwPurpleSoft}`,
-                        transition: "background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease",
-                        "&:hover": {
-                          backgroundColor: editorial.pmwPurpleSoft,
-                          boxShadow: `inset 0 0 0 1px ${editorial.pmwPurple}`,
-                        },
-                        "&:active": {
-                          transform: "scale(0.96)",
-                        },
-                        "&:focus-visible": {
-                          outline: `3px solid ${editorial.pmwPurpleSoft}`,
-                          outlineOffset: 2,
-                        },
-                      }}
-                    >
-                      <EditIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
+          <Box
+            key={list.id}
+            sx={{
+              ...panelSx,
+              position: "relative",
+              overflow: "hidden",
+              minHeight: 224,
+              height: "100%",
+              p: { xs: 1.75, sm: 2 },
+              pt: canUseFormBuilder ? { xs: 2.25, sm: 2.5 } : { xs: 1.75, sm: 2 },
+              display: "flex",
+              flexDirection: "column",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                inset: "0 0 auto 0",
+                height: 3,
+                backgroundColor: meta.color,
+              },
+            }}
+          >
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", mb: 2 }}>
+              <Box
+                sx={{
+                  flex: "none",
+                  width: 42,
+                  height: 42,
+                  borderRadius: radius.md,
+                  backgroundColor: meta.pale,
+                  border: `1px solid ${editorial.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <DescriptionIcon sx={{ fontSize: 20, color: meta.color }} />
               </Box>
-
-              <Box sx={{ mt: "auto" }}>
-                <Typography
-                  variant="h2"
-                  sx={{
-                    fontWeight: 800,
-                    color: editorial.ink,
-                    letterSpacing: 0,
-                    fontSize: "2.4rem",
-                    mb: 0.5,
-                    lineHeight: 1,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {count}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={{ fontSize: 15.5, fontWeight: 800, color: editorial.ink, lineHeight: 1.25, textWrap: "balance" }}>
+                  {list.title}
                 </Typography>
-                <Typography variant="caption" sx={{ color: editorial.softMuted, fontWeight: 800 }}>
-                  {count === 1 ? "submission" : "submissions"}
+                <Typography sx={{ fontSize: 11.5, color: editorial.muted, fontWeight: 700, mt: 0.2 }}>
+                  {meta.category} · {cardCaption}
                 </Typography>
               </Box>
-
-              {count > 0 ? (
-                <Box sx={{ mt: 2 }}>
-                  <Box
+              {canUseFormBuilder && (
+                <Tooltip title={`Edit ${list.title}`}>
+                  <IconButton
+                    aria-label={`Edit ${list.title}`}
+                    onClick={() => onEditForm(list.title)}
+                    size="small"
                     sx={{
-                      display: "flex",
-                      height: 7,
-                      overflow: "hidden",
-                      borderRadius: 999,
-                      backgroundColor: editorial.neutralWash,
-                      mb: 1.5,
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      width: 34,
+                      height: 34,
+                      minWidth: 34,
+                      minHeight: 34,
+                      borderRadius: radius.sm,
+                      backgroundColor: editorial.purpleWash,
+                      color: editorial.pmwPurpleDark,
+                      border: `1px solid ${editorial.pmwPurpleSoft}`,
+                      "&:hover": { backgroundColor: editorial.pmwPurpleSoft, borderColor: editorial.pmwPurple },
+                      "&:focus-visible": { outline: `3px solid ${editorial.pmwPurpleSoft}`, outlineOffset: 2 },
                     }}
                   >
-                    <Box sx={{ width: approvedWidth, backgroundColor: editorial.successFill }} />
-                    <Box sx={{ width: pendingWidth, backgroundColor: editorial.warningFill }} />
-                    <Box sx={{ width: rejectedWidth, backgroundColor: editorial.errorFill }} />
-                  </Box>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      fontSize: "0.75rem",
-                      color: editorial.success,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <CheckCircleIcon sx={{ fontSize: 14 }} />
-                    {listApproved} approved
-                  </Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      fontSize: "0.75rem",
-                      color: editorial.warning,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <AccessTimeIcon sx={{ fontSize: 14 }} />
-                    {listPending} pending
-                  </Box>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      fontSize: "0.75rem",
-                      color: editorial.error,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <CancelIcon sx={{ fontSize: 14 }} />
-                    {listRejected} rejected
-                  </Box>
-                  </Box>
-                </Box>
-              ) : (
-                <Typography
-                  variant="body2"
-                  sx={{ color: editorial.muted, fontStyle: "italic", mt: 2 }}
-                >
-                  No submissions
-                </Typography>
+                    <EditIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
               )}
+            </Stack>
 
-              {!isAdmin && !canUseFormBuilder && count > 0 && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    gap: 0.5,
-                    color: editorial.pmwBlueDark,
-                    fontSize: "0.75rem",
-                    fontWeight: 800,
-                    mt: 2,
-                    transition: "transform 0.2s ease",
-                    ".MuiBox-root:hover &": {
-                      transform: "translateX(2px)",
-                    },
-                  }}
-                >
-                  Listed below
-                  <ArrowForwardIcon sx={{ fontSize: 14 }} />
-                </Box>
-              )}
+            <Box sx={{ mt: "auto" }}>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  color: count === 0 ? editorial.softMuted : editorial.ink,
+                  fontSize: 36,
+                  lineHeight: 1,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {count}
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, color: editorial.softMuted, fontWeight: 800, mt: 0.4 }}>
+                {count === 1 ? "submission" : "submissions"}
+              </Typography>
             </Box>
-          </Grid>
+
+            {count > 0 ? (
+              <Box sx={{ mt: 2 }}>
+                <Stack
+                  direction="row"
+                  spacing={0.4}
+                  sx={{ height: 8, overflow: "hidden", borderRadius: radius.full, mb: 1.25 }}
+                >
+                  <Box sx={{ width: share(listApproved), borderRadius: radius.full, backgroundColor: editorial.successFill }} />
+                  <Box sx={{ width: share(listPending), borderRadius: radius.full, backgroundColor: editorial.warningFill }} />
+                  <Box sx={{ width: share(listRejected), borderRadius: radius.full, backgroundColor: editorial.errorFill }} />
+                </Stack>
+                <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+                  {legend.map((item) => (
+                    <Stack
+                      key={item.key}
+                      direction="row"
+                      spacing={0.5}
+                      sx={{ alignItems: "center", fontSize: 11.5, color: item.colour, fontWeight: 700 }}
+                    >
+                      {item.icon}
+                      {item.text}
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+            ) : (
+              <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 2 }}>No submissions</Typography>
+            )}
+
+            {!isAdmin && !canUseFormBuilder && count > 0 && (
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  alignItems: "center",
+                  color: editorial.pmwBlueDark,
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  mt: 2,
+                }}
+              >
+                Listed below
+                <ArrowForwardIcon sx={{ fontSize: 14 }} />
+              </Stack>
+            )}
+          </Box>
         );
       })}
-    </Grid>
+    </WidgetGrid>
   );
 }

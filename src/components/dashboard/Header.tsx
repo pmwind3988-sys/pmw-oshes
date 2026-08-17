@@ -26,7 +26,8 @@ import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
 import AppearancePicker from "./AppearancePicker";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial, editorialHairline, editorialShadowHover } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 import { builderUrl } from "../../config/oshes";
 
 interface HeaderProps {
@@ -67,8 +68,8 @@ export default function Header({
   const mainMenuOpen = Boolean(mainMenuAnchorEl);
   const menuPaperSx = {
     minWidth: { xs: 230, sm: 260 },
-    borderRadius: "12px",
-    boxShadow: "0 14px 32px rgba(16, 16, 16, 0.12)",
+    borderRadius: radius.lg,
+    boxShadow: editorialShadowHover,
     border: editorialHairline,
     mt: 1,
   } as const;
@@ -79,7 +80,7 @@ export default function Header({
     color,
   });
   const iconButtonSx = {
-    borderRadius: "10px",
+    borderRadius: radius.md,
     color: editorial.pmwBlueDark,
     backgroundColor: editorial.blueWash,
     border: `1px solid ${editorial.pmwBlueSoft}`,
@@ -128,7 +129,10 @@ export default function Header({
       position="sticky"
       elevation={0}
       sx={{
-        backgroundColor: "rgba(255, 255, 255, 0.82)",
+        // Through color-mix on the panel token rather than a literal white at
+        // 82%: on the dark contrast themes a translucent white bar over a dark
+        // page rendered as a grey smear with black text on it.
+        backgroundColor: `color-mix(in srgb, ${editorial.panel} 86%, transparent)`,
         backdropFilter: "blur(18px)",
         borderBottom: editorialHairline,
         boxShadow: "none",
@@ -272,7 +276,7 @@ export default function Header({
               sx={{
                 ml: 0.5,
                 p: 0.75,
-                borderRadius: "12px",
+                borderRadius: radius.lg,
                 backgroundColor: editorial.panel,
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 transition: "background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
@@ -289,7 +293,7 @@ export default function Header({
                 },
               }}
             >
-              <Box sx={{ width: 32, height: 32, borderRadius: "8px", backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Box sx={{ width: 32, height: 32, borderRadius: radius.sm, backgroundColor: editorial.blueWash, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <PersonIcon sx={{ fontSize: 18, color: editorial.pmwBlueDark }} />
               </Box>
             </IconButton>

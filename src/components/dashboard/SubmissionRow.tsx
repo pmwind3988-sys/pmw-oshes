@@ -21,6 +21,7 @@ import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";
 import StatusBadge from "./StatusBadge";
 import { editorial, editorialShadow, editorialShadowHover } from "../../theme/editorial";
+import { panelSx, radius } from "../../theme/surfaces";
 import { SUBMISSION_GRID_COLUMNS, SUBMISSION_GRID_GAP } from "./submissionGrid";
 import {
   formatDashboardDate,
@@ -89,7 +90,7 @@ export default function SubmissionRow({
     }
   };
   const identityChipSx = {
-    borderRadius: "8px",
+    borderRadius: radius.sm,
     backgroundColor: editorial.blueWash,
     color: editorial.pmwBlueDark,
     border: `1px solid ${editorial.pmwBlueSoft}`,
@@ -101,7 +102,7 @@ export default function SubmissionRow({
     },
   } as const;
   const layerChipSx = {
-    borderRadius: "8px",
+    borderRadius: radius.sm,
     backgroundColor: editorial.purpleWash,
     color: editorial.pmwPurpleDark,
     border: `1px solid ${editorial.pmwPurpleSoft}`,
@@ -122,8 +123,7 @@ export default function SubmissionRow({
         onClick={handleOpen}
         onKeyDown={handleKeyDown}
         sx={{
-          backgroundColor: "rgba(255, 255, 255, 0.94)",
-          borderRadius: "8px",
+          ...panelSx,
           boxShadow: editorialShadow,
           p: 2,
           mb: 2,
@@ -166,13 +166,13 @@ export default function SubmissionRow({
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: "8px",
-                      border: `1px solid rgba(198, 40, 40, 0.2)`,
-                      backgroundColor: "rgba(198, 40, 40, 0.08)",
+                      borderRadius: radius.sm,
+                      border: `1px solid color-mix(in srgb, ${editorial.error} 30%, transparent)`,
+                      backgroundColor: editorial.errorWash,
                       color: editorial.error,
                       transition: "background-color 0.18s ease, transform 0.18s ease",
                       "&:hover": {
-                        backgroundColor: "rgba(198, 40, 40, 0.14)",
+                        backgroundColor: `color-mix(in srgb, ${editorial.error} 18%, transparent)`,
                       },
                       "&:active": {
                         transform: "scale(0.96)",
@@ -188,7 +188,7 @@ export default function SubmissionRow({
               sx={{
                 width: 40,
                 height: 40,
-                borderRadius: "8px",
+                borderRadius: radius.sm,
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 backgroundColor: editorial.blueWash,
                 color: editorial.pmwBlueDark,
@@ -236,17 +236,19 @@ export default function SubmissionRow({
         gap: SUBMISSION_GRID_GAP,
         px: 2.5,
         py: 2,
-        backgroundColor: "rgba(255, 255, 255, 0.92)",
+        backgroundColor: editorial.panel,
         borderRadius: 0,
         borderBottom: `1px solid ${editorial.border}`,
         alignItems: "center",
         cursor: "pointer",
-        transition: "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+        transition: "background-color 0.2s ease, box-shadow 0.2s ease",
         outline: "none",
+        // The hovered row lights up and grows a brand rail on its leading edge.
+        // It used to lift 1px as well, which shifted the row out from under the
+        // cursor and made the pointer flicker between two rows on a dense list.
         "&:hover": {
-          backgroundColor: "#ffffff",
-          boxShadow: "inset 3px 0 0 rgba(0, 120, 212, 0.55), 0 8px 22px rgba(0, 90, 158, 0.08)",
-          transform: "translateY(-1px)",
+          backgroundColor: editorial.blueSoft,
+          boxShadow: `inset 3px 0 0 ${editorial.pmwBlue}`,
         },
         "&:focus-visible": {
           backgroundColor: editorial.blueSoft,
@@ -334,11 +336,11 @@ export default function SubmissionRow({
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: "8px",
+                  borderRadius: radius.sm,
                   color: editorial.error,
                   transition: "background-color 0.18s ease, transform 0.18s ease",
                   "&:hover": {
-                    backgroundColor: "rgba(198, 40, 40, 0.1)",
+                    backgroundColor: editorial.errorWash,
                   },
                   "&:active": {
                     transform: "scale(0.96)",
