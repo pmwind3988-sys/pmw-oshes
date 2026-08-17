@@ -237,6 +237,41 @@ export function buildDashboardBackgroundCss(setting: DashboardAppearanceSetting)
   return buildDashboardBackgroundDefCss(findDashboardBackground(setting.backgroundId), imageOpacity);
 }
 
+/**
+ * The fields an administrator actually chooses. Everything else on the record
+ * — who last changed it, and when — is written by the server and is not part
+ * of "has this been edited?".
+ */
+export const APPEARANCE_CHOICE_FIELDS = [
+  "contrastThemeId",
+  "colorThemeId",
+  "fontThemeId",
+  "backgroundId",
+  "customImageUrl",
+  "customImageSource",
+  "imageOpacity",
+] as const satisfies readonly (keyof DashboardAppearanceSetting)[];
+
+/**
+ * Has the draft moved away from what is persisted?
+ *
+ * Compare against the *saved* record, never against whatever is currently
+ * painted: the picker previews by pushing its draft into the live setting, so
+ * a draft measured against the live setting is measured against itself and the
+ * Save button can never enable.
+ *
+ * Field by field rather than by stringifying both sides, because
+ * `JSON.stringify` is key-order sensitive — two records with identical values
+ * but different insertion order would compare as different and light the button
+ * up for a change nobody made.
+ */
+export function isAppearanceDirty(
+  draft: DashboardAppearanceSetting,
+  saved: DashboardAppearanceSetting,
+): boolean {
+  return APPEARANCE_CHOICE_FIELDS.some((field) => draft[field] !== saved[field]);
+}
+
 /** Coerce an API payload or a stale cache into a complete, valid record. */
 export function normalizeDashboardAppearance(value: unknown): DashboardAppearanceSetting {
   const raw = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;

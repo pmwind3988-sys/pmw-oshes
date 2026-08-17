@@ -29,6 +29,7 @@ import {
   buildCustomBackgroundCss,
   buildDashboardBackgroundDefCss,
   DEFAULT_DASHBOARD_APPEARANCE,
+  isAppearanceDirty,
   normalizeImageOpacity,
   normalizeImageUrl,
   type DashboardAppearanceSetting,
@@ -167,8 +168,11 @@ function Specimen({ p, label }: { p: ResolvedAppearance; label: string }) {
 }
 
 export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
-  const { setting, backgrounds, loading, saving, error, preview, save } = useAppearance();
-  const [draft, setDraft] = useState<DashboardAppearanceSetting>(setting);
+  // `saved`, not `setting`: while this dialog previews, `setting` *is* the
+  // draft, so seeding and dirty-checking against it would compare the draft
+  // with itself.
+  const { saved, backgrounds, loading, saving, error, preview, save } = useAppearance();
+  const [draft, setDraft] = useState<DashboardAppearanceSetting>(saved);
   const [validationError, setValidationError] = useState("");
 
   // Seeding the draft on open is a state adjustment, not a synchronisation with
@@ -176,14 +180,14 @@ export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
   // this way the first paint of the dialog already has the right draft instead
   // of rendering once with the old one and correcting itself.
   //
-  // Keyed on the open/closed transition rather than on `setting`: reopening
-  // seeds from whatever is live, but the 60s poll landing mid-decision must not
+  // Keyed on the open/closed transition rather than on `saved`: reopening seeds
+  // from whatever is persisted, but the 60s poll landing mid-decision must not
   // reset a half-made choice.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDraft(setting);
+      setDraft(saved);
       setValidationError("");
     }
   }
@@ -208,7 +212,7 @@ export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
   }
 
   const customPreviewUrl = normalizeImageUrl(draft.customImageUrl);
-  const dirty = JSON.stringify({ ...draft, updatedAt: 0, updatedBy: 0 }) !== JSON.stringify({ ...setting, updatedAt: 0, updatedBy: 0 });
+  const dirty = isAppearanceDirty(draft, saved);
 
   // Each axis is previewed against the other two as they currently stand, so a
   // contrast card shows what it would look like with *your* colour theme.

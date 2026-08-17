@@ -43,7 +43,21 @@ import {
 --------------------------------------------------------------------------- */
 
 interface AppearanceContextValue {
+  /**
+   * What is on screen right now — the preview candidate while the picker is
+   * open, the saved record otherwise. Anything that displays the current look
+   * wants this.
+   */
   setting: DashboardAppearanceSetting;
+  /**
+   * What is actually persisted, ignoring any preview.
+   *
+   * Separate from `setting` because a previewing picker would otherwise be
+   * comparing its own draft against itself: `preview()` puts the candidate into
+   * `setting`, so "has anything changed?" answered against `setting` is always
+   * no, and the Save button never enables.
+   */
+  saved: DashboardAppearanceSetting;
   resolved: ResolvedAppearance;
   backgrounds: typeof DASHBOARD_BACKGROUNDS;
   loading: boolean;
@@ -152,6 +166,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
 
   const value = useMemo<AppearanceContextValue>(() => ({
     setting: active,
+    saved: setting,
     resolved,
     backgrounds: DASHBOARD_BACKGROUNDS,
     loading,
@@ -159,7 +174,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
     error,
     preview,
     save,
-  }), [active, resolved, loading, saving, error, preview, save]);
+  }), [active, setting, resolved, loading, saving, error, preview, save]);
 
   return (
     <AppearanceContext.Provider value={value}>
