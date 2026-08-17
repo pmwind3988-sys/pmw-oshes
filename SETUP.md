@@ -319,12 +319,12 @@ rather than failing:
 | `Master Form.IsPublic` column | Catalogue cannot persist the public flag |
 | `LayerConfig.slaDays` | That form has no SLA: never overdue, and no SLA UI is rendered for it |
 | `Returned` on `FormStatus` | Return-to-submitter falls back to another status |
-| `AdminPanelSettings` theme columns | Background still saves; colour, contrast and typeface do not — see below |
+| `AdminPanelSettings` theme columns | Created by the browser on first save; if that account cannot alter the list, the background still saves and the theme does not — see below |
 
-### The appearance columns — one manual step
+### The appearance columns — normally self-healing
 
-Settings → Appearance stores its choice in the `AdminPanelSettings` list, which
-needs three columns the earlier schema did not have:
+Settings → Appearance stores its choice in the `AdminPanelSettings` list, in
+three columns the earlier schema did not have:
 
 | Column | Type |
 |---|---|
@@ -332,19 +332,21 @@ needs three columns the earlier schema did not have:
 | `ContrastTheme` | Single line of text |
 | `FontTheme` | Single line of text |
 
-The API tries to create them on every save and will normally fail, because the
-system app is granted the `write` role in section B — enough to add list *items*,
-not to alter list *schema*. Graph answers `403 accessDenied` on the column
-create and then `400 Field 'ColorTheme' is not recognized` on the write.
+**The serverless API cannot create these.** It authenticates as the application,
+which section B grants the `write` role — enough to add list *items*, not to
+alter list *schema*. Graph answers `403 accessDenied` on the column create, then
+`400 Field 'ColorTheme' is not recognized` on the write.
 
-That is not fatal: the save falls back to the columns the list does have, so the
-wallpaper still applies, and the picker stays open showing what did not stick.
-Add the three columns in SharePoint (List settings → Create column) and the
-theme starts persisting immediately — no redeploy.
+The browser can, and does. The signed-in administrator's delegated token carries
+`AllSites.Manage`, so when the API reports the columns are missing, the client
+creates them and retries the save. In practice the first save by a site owner
+provisions the list and succeeds, and nothing needs doing by hand.
 
-Granting the app the `manage` role instead would let it create them itself, but
-hand-adding three columns is the smaller change and does not widen what the
-serverless API can do to every other list on the site.
+It only falls back if that account may not alter the list either — group
+membership grants the app role, not necessarily site ownership. Then the
+wallpaper still saves, the picker stays open naming what did not stick, and
+either a site owner saves once or the three columns get added through
+List settings → Create column. Both fix it permanently, with no redeploy.
 
 ---
 

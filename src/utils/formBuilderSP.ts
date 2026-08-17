@@ -891,6 +891,10 @@ const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec
   [OSHES_LISTS.dashboardSettings]: { t: 100, desc: 'Shared OSHES dashboard settings', cols: [
     { n: 'BackgroundId', k: 2 }, { n: 'CustomImageUrl', k: 3, ml: true },
     { n: 'CustomImageSource', k: 3, ml: true }, { n: 'ImageOpacity', k: 9 },
+    // The appearance axes. Created from the browser on the signed-in admin's
+    // delegated token, which carries AllSites.Manage — the serverless API holds
+    // only the `write` role and is refused when it tries the same thing.
+    { n: 'ColorTheme', k: 2 }, { n: 'ContrastTheme', k: 2 }, { n: 'FontTheme', k: 2 },
     { n: 'UpdatedBy', k: 2 }, { n: 'UpdatedAt', k: 4 },
   ]},
 };

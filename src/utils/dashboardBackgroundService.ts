@@ -68,6 +68,12 @@ export async function fetchDashboardAppearance(): Promise<DashboardAppearanceSet
   return normalizeDashboardAppearance(data.setting);
 }
 
+/** Read the body without consuming it — the caller still needs to parse it. */
+async function reportsMissingColumns(response: Response): Promise<boolean> {
+  const body = (await response.clone().json().catch(() => null)) as DashboardAppearanceResponse | null;
+  return Boolean(body?.warning);
+}
+
 export async function saveDashboardAppearance(
   instance: IPublicClientApplication,
   accounts: AccountInfo[],
@@ -85,6 +91,26 @@ export async function saveDashboardAppearance(
   if (!response.ok && response.status >= 500) {
     await ensureDashboardBackgroundSettingsList(token);
     response = await postSetting();
+  }
+
+  // A 200 carrying a warning means the write succeeded but the settings list had
+  // no column for part of it. The API cannot fix that itself: it authenticates
+  // as the application, which SETUP.md grants the `write` role, and altering
+  // list schema needs more. This token is the signed-in administrator's and
+  // carries AllSites.Manage — so the columns are created from here and the save
+  // retried. Once, and only when the server actually reported the gap.
+  if (response.ok && await reportsMissingColumns(response)) {
+    try {
+      await ensureDashboardBackgroundSettingsList(token);
+      const retried = await postSetting();
+      // Only if the retry is genuinely better: a failed one must not discard
+      // the background the first attempt did save.
+      if (retried.ok) response = retried;
+    } catch {
+      // Creating columns takes more than membership of the admin group — a site
+      // owner has it, an ordinary member may not. The first response stands,
+      // warning and all, which is the right thing to show.
+    }
   }
 
   if (!response.ok) {
