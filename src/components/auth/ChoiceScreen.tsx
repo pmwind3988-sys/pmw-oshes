@@ -206,8 +206,12 @@ export default function ChoiceScreen({ onLogin }: ChoiceScreenProps) {
                   onLogin();
                 }}
                 sx={{
-                  backgroundColor: editorial.black,
-                  color: editorial.white,
+                  // A deliberately inverted CTA: the ink colour as a fill, the
+                  // panel colour as its text. Stated as the inverse pair rather
+                  // than as black-on-white so it stays inverted on a dark theme
+                  // instead of becoming a black button on a black page.
+                  backgroundColor: editorial.inverseSurface,
+                  color: editorial.inverseInk,
                   borderRadius: 0,
                   py: 1.75,
                   fontSize: "1rem",
@@ -215,7 +219,7 @@ export default function ChoiceScreen({ onLogin }: ChoiceScreenProps) {
                   boxShadow: "none",
                   transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                   "&:hover": {
-                    backgroundColor: "#333333",
+                    backgroundColor: "color-mix(in srgb, var(--pmw-inverse-surface, #000000) 82%, var(--pmw-inverse-ink, #ffffff))",
                     boxShadow: "none",
                   },
                 }}
@@ -228,9 +232,9 @@ export default function ChoiceScreen({ onLogin }: ChoiceScreenProps) {
                   <Checkbox
                     size="small"
                     sx={{
-                      color: "rgba(17, 24, 39, 0.3)",
+                      color: editorial.softMuted,
                       "&.Mui-checked": {
-                        color: editorial.black,
+                        color: editorial.ink,
                       },
                     }}
                   />

@@ -268,7 +268,7 @@ export default function Toolbar({
                     },
                   }
                 : {
-                    backgroundColor: editorial.white,
+                    backgroundColor: editorial.panel,
                     color: editorial.pmwBlueDark,
                     boxShadow: `inset 0 0 0 1px ${editorial.pmwBlueSoft}`,
                     "&:hover": {
@@ -519,7 +519,7 @@ export default function Toolbar({
                       px: 1.5,
                       color: editorial.pmwBlueDark,
                       borderColor: editorial.pmwBlueSoft,
-                      backgroundColor: editorial.white,
+                      backgroundColor: editorial.panel,
                       fontWeight: 800,
                       textTransform: "none",
                       transition: "background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease",
@@ -565,7 +565,7 @@ export default function Toolbar({
                 onDelete={chip.onDelete}
                 sx={{
                   maxWidth: 280,
-                  backgroundColor: editorial.white,
+                  backgroundColor: editorial.panel,
                   color: editorial.ink,
                   border: `1px solid ${editorial.border}`,
                   fontWeight: 700,

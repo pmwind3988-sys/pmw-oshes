@@ -39,7 +39,7 @@ import { createFieldFilter, type FieldFilter } from "../../utils/submissionFilte
 
 const controlSx = {
   borderRadius: "10px",
-  backgroundColor: editorial.white,
+  backgroundColor: editorial.panel,
 } as const;
 
 /** The HTML input type a single-value editor uses for this field kind. */

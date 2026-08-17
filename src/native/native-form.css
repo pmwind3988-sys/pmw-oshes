@@ -31,17 +31,22 @@
   --nf-line: #e4e9f0;
   --nf-line-strong: #cbd5e1;
 
-  /* Brand — the PMW blue and purple the rest of the app already uses. */
-  --nf-brand: #0078d4;
-  --nf-brand-deep: #005a9e;
-  --nf-brand-wash: #eaf4fc;
+  /* Brand — inherited from the workspace's colour theme, so a form filed from
+     a Teal or Violet portal is that colour too. Only the brand follows the
+     theme: ink, surfaces and lines above stay the engine's own, because a form
+     is often rendered outside the app entirely (a public QR route, a builder
+     preview, a print) where those variables do not exist. The literals after
+     the comma are what render there. */
+  --nf-brand: var(--pmw-hue, #0078d4);
+  --nf-brand-deep: var(--pmw-hue-deep, #005a9e);
+  --nf-brand-wash: color-mix(in srgb, var(--nf-brand) 10%, var(--nf-panel));
   /* Text and glyphs that sit *on* `--nf-brand-wash`. Separate from
      `--nf-brand-deep` because the wash inverts in dark mode and the deep blue
      does not: on the dark wash it drops to roughly 1.4:1 and the section
      numbers disappear. This is the only token the two themes disagree about in
      direction rather than in shade. */
-  --nf-brand-ink: #005a9e;
-  --nf-accent: #6264a7;
+  --nf-brand-ink: var(--pmw-hue-deep, #005a9e);
+  --nf-accent: var(--pmw-hue-accent, #6264a7);
 
   /* Status */
   --nf-danger: #c62828;
@@ -57,7 +62,7 @@
   --nf-radius-pill: 999px;
   --nf-control-h: 40px;
   --nf-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 14px rgba(16, 24, 40, 0.05);
-  --nf-ring: 0 0 0 3px rgba(0, 120, 212, 0.14);
+  --nf-ring: 0 0 0 3px color-mix(in srgb, var(--nf-brand) 16%, transparent);
 
   /* Type */
   --nf-fs-label: 12.5px;
@@ -89,8 +94,11 @@
   --nf-sunken: #111b26;
   --nf-line: #2a3646;
   --nf-line-strong: #3b4a5c;
-  --nf-brand-wash: #10293c;
-  --nf-brand-ink: #8ecbf7;
+  /* Both derive from the brand hue so they follow the colour theme, and both
+     are recomputed here rather than inherited because the wash inverts in dark
+     mode and the deep brand does not — see the note on `--nf-brand-ink` above. */
+  --nf-brand-wash: color-mix(in srgb, var(--nf-brand) 22%, var(--nf-panel));
+  --nf-brand-ink: color-mix(in srgb, var(--nf-brand) 55%, #ffffff);
   --nf-danger-wash: #331314;
   --nf-good-wash: #102814;
   --nf-warn-wash: #2e2003;

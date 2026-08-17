@@ -28,9 +28,9 @@ const STOP_TONE: Record<ChainStopReason, "ok" | "warn" | "bad"> = {
 };
 
 const TONE_STYLE = {
-  ok: { color: editorial.success, background: "#EAF6EA", icon: <CheckCircleIcon fontSize="small" /> },
-  warn: { color: editorial.warning, background: editorial.yellowSoft, icon: <InfoOutlinedIcon fontSize="small" /> },
-  bad: { color: editorial.error, background: "#FBE9E9", icon: <ErrorOutlinedIcon fontSize="small" /> },
+  ok: { color: editorial.success, background: editorial.successWash, icon: <CheckCircleIcon fontSize="small" /> },
+  warn: { color: editorial.warning, background: editorial.warningWash, icon: <InfoOutlinedIcon fontSize="small" /> },
+  bad: { color: editorial.error, background: editorial.errorWash, icon: <ErrorOutlinedIcon fontSize="small" /> },
 } as const;
 
 interface ChainTraceViewProps {
@@ -68,7 +68,7 @@ export default function ChainTraceView({ trace, startLabel = "Submits" }: ChainT
                 borderRadius: "10px",
                 px: 0.5,
                 border: `1px solid ${index === 0 ? editorial.pmwBlueSoft : editorial.border}`,
-                backgroundColor: index === 0 ? editorial.blueWash : editorial.white,
+                backgroundColor: index === 0 ? editorial.blueWash : editorial.panel,
               }}
             />
           </Stack>

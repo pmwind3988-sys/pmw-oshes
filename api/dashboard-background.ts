@@ -27,6 +27,9 @@ interface DashboardBackgroundSetting {
   customImageUrl: string;
   customImageSource: string;
   imageOpacity: number;
+  colorThemeId: string;
+  contrastThemeId: string;
+  fontThemeId: string;
   updatedBy?: string;
   updatedAt?: string;
 }
@@ -41,14 +44,19 @@ const ADMIN_GROUP = "_HR_ Forms Owners";
 const SETTINGS_LIST = OSHES_LISTS.dashboardSettings;
 const SETTING_TITLE = "dashboard-background";
 const DEFAULT_SETTING: DashboardBackgroundSetting = {
-  backgroundId: "clarity",
+  backgroundId: "theme",
   customImageUrl: "",
   customImageSource: "",
   imageOpacity: 0.22,
+  colorThemeId: "pmw",
+  contrastThemeId: "paper",
+  fontThemeId: "inter",
 };
 const ALLOWED_BACKGROUND_IDS = new Set([
+  "theme",
   "clarity",
   "paper-grid",
+  "aurora",
   "workspace",
   "studio",
   "city-glass",
@@ -57,6 +65,21 @@ const ALLOWED_BACKGROUND_IDS = new Set([
   "prism",
   "custom",
 ]);
+
+/**
+ * Kept in step with `src/theme/appearance.ts` by hand, because the API bundle
+ * cannot import from `src/`. The client validates too, so a mismatch here is
+ * not a security hole — but an id the server rejects is one the picker can
+ * offer and never save, so adding a theme means editing both lists.
+ */
+const ALLOWED_COLOR_THEMES = new Set(["pmw", "indigo", "teal", "violet", "magenta", "graphite"]);
+const ALLOWED_CONTRAST_THEMES = new Set(["paper", "mono", "azure", "sepia", "midnight", "noir"]);
+const ALLOWED_FONT_THEMES = new Set(["inter", "system", "editorial", "grotesk", "plex"]);
+
+function pickId(value: unknown, allowed: Set<string>, fallback: string): string {
+  const id = typeof value === "string" ? value : "";
+  return allowed.has(id) ? id : fallback;
+}
 
 function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string {
   const lowerName = name.toLowerCase();
@@ -114,8 +137,16 @@ function normalizeSetting(fields: Record<string, unknown> | undefined): Dashboar
     ? normalizeImageSource(fields?.CustomImageSource)
     : "";
 
+  // The theme is read even when the background falls back, so an unreachable
+  // custom image costs the wallpaper and not the whole look.
+  const themes = {
+    colorThemeId: pickId(fields?.ColorTheme, ALLOWED_COLOR_THEMES, DEFAULT_SETTING.colorThemeId),
+    contrastThemeId: pickId(fields?.ContrastTheme, ALLOWED_CONTRAST_THEMES, DEFAULT_SETTING.contrastThemeId),
+    fontThemeId: pickId(fields?.FontTheme, ALLOWED_FONT_THEMES, DEFAULT_SETTING.fontThemeId),
+  };
+
   if (backgroundId === "custom" && !customImageUrl) {
-    return DEFAULT_SETTING;
+    return { ...DEFAULT_SETTING, ...themes };
   }
 
   return {
@@ -123,6 +154,7 @@ function normalizeSetting(fields: Record<string, unknown> | undefined): Dashboar
     customImageUrl,
     customImageSource,
     imageOpacity: normalizeImageOpacity(fields?.ImageOpacity),
+    ...themes,
     updatedBy: fields?.UpdatedBy ? String(fields.UpdatedBy) : undefined,
     updatedAt: fields?.UpdatedAt ? String(fields.UpdatedAt) : undefined,
   };
@@ -134,12 +166,22 @@ function validateRequestedSetting(body: Record<string, unknown>): DashboardBackg
     return { error: "Invalid background selection." };
   }
 
+  // An unknown theme id is corrected to the default rather than rejected: it
+  // means this deployment is older than the client that sent it, and refusing
+  // the whole save would also discard the background choice that came with it.
+  const themes = {
+    colorThemeId: pickId(body.colorThemeId, ALLOWED_COLOR_THEMES, DEFAULT_SETTING.colorThemeId),
+    contrastThemeId: pickId(body.contrastThemeId, ALLOWED_CONTRAST_THEMES, DEFAULT_SETTING.contrastThemeId),
+    fontThemeId: pickId(body.fontThemeId, ALLOWED_FONT_THEMES, DEFAULT_SETTING.fontThemeId),
+  };
+
   if (backgroundId !== "custom") {
     return {
       backgroundId,
       customImageUrl: "",
       customImageSource: "",
       imageOpacity: normalizeImageOpacity(body.imageOpacity),
+      ...themes,
     };
   }
 
@@ -157,6 +199,7 @@ function validateRequestedSetting(body: Record<string, unknown>): DashboardBackg
     customImageUrl,
     customImageSource,
     imageOpacity: normalizeImageOpacity(body.imageOpacity),
+    ...themes,
   };
 }
 
@@ -239,6 +282,9 @@ async function upsertSetting(
     CustomImageUrl: setting.customImageUrl,
     CustomImageSource: setting.customImageSource,
     ImageOpacity: setting.imageOpacity,
+    ColorTheme: setting.colorThemeId,
+    ContrastTheme: setting.contrastThemeId,
+    FontTheme: setting.fontThemeId,
     UpdatedBy: updatedBy,
     UpdatedAt: updatedAt,
   };

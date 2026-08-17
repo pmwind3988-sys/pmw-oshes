@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
+import { useAppearance } from "../../contexts/AppearanceContext";
+import AppearancePicker from "../../components/dashboard/AppearancePicker";
+import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
 import { accessSummary, portalNav, roleLabel } from "../../utils/portalRole";
 import type { PortalScreen } from "../../types";
 
@@ -80,6 +84,7 @@ export default function SettingsScreen() {
     role,
     userName,
     userEmail,
+    isAdmin,
     prefs,
     setPrefs,
     records,
@@ -91,6 +96,8 @@ export default function SettingsScreen() {
     toast,
     onSignOut,
   } = usePortal();
+  const { setting: appearance, resolved } = useAppearance();
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   const startOptions = portalNav(access, {
     queue: queue.length,
@@ -168,6 +175,42 @@ export default function SettingsScreen() {
           ))}
         </Panel>
 
+        {/* Appearance sits above Preferences because it is the opposite kind of
+            setting — one record for the whole workspace rather than one per
+            browser — and saying so once, here, is clearer than repeating it on
+            each row. */}
+        <Panel
+          title="Appearance"
+          caption={
+            isAdmin
+              ? "one setting for the whole workspace — changing it changes what everyone sees"
+              : "chosen by an administrator for the whole workspace"
+          }
+        >
+          <Row label="Contrast" value={`${resolved.contrast.label} — ${resolved.contrast.note}`} />
+          <Row label="Colour" value={`${resolved.color.label} — ${resolved.color.note}`} />
+          <Row label="Typeface" value={`${resolved.font.label} — ${resolved.font.note}`} />
+          <Row
+            label="Background"
+            value={
+              appearance.backgroundId === "custom"
+                ? appearance.customImageSource || "Custom image"
+                : findDashboardBackground(appearance.backgroundId).label
+            }
+          />
+          {appearance.updatedBy && (
+            <Row
+              label="Last changed"
+              value={`by ${appearance.updatedBy}${appearance.updatedAt ? ` on ${new Date(appearance.updatedAt).toLocaleDateString()}` : ""}`}
+            />
+          )}
+          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, pt: 2 }}>
+            <Button variant="outlined" onClick={() => setAppearanceOpen(true)} sx={{ minHeight: 40 }}>
+              {isAdmin ? "Change appearance" : "View themes"}
+            </Button>
+          </Stack>
+        </Panel>
+
         <Panel title="Preferences" caption="remembered in this browser only, so a shared machine never carries them over">
           <Stack sx={{ pt: 0.5 }}>
             <Stack
@@ -243,6 +286,8 @@ export default function SettingsScreen() {
           </Stack>
         </Panel>
       </Stack>
+
+      <AppearancePicker open={appearanceOpen} onClose={() => setAppearanceOpen(false)} isAdmin={isAdmin} />
     </Box>
   );
 }

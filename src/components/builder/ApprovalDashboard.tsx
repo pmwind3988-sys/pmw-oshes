@@ -2860,8 +2860,8 @@ export default function ApprovalDashboard() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: editorial.white,
-                backgroundColor: actionSuccess.type === "rejected" ? editorial.error : editorial.success,
+                color: editorial.onStatus,
+                backgroundColor: actionSuccess.type === "rejected" ? editorial.errorFill : editorial.successFill,
               }}
             >
               {actionSuccess.type === "rejected" ? <CloseIcon sx={{ fontSize: 36 }} /> : <CheckIcon sx={{ fontSize: 36 }} />}

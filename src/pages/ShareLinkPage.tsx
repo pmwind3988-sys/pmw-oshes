@@ -109,7 +109,7 @@ export default function ShareLinkPage() {
             borderRadius: "18px",
             overflow: "hidden",
             border: editorialHairline,
-            background: editorial.white,
+            background: editorial.panel,
           }}
         >
           <Box

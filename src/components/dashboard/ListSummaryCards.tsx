@@ -188,13 +188,13 @@ export default function ListSummaryCards({
                       height: 7,
                       overflow: "hidden",
                       borderRadius: 999,
-                      backgroundColor: "rgba(16, 16, 16, 0.08)",
+                      backgroundColor: editorial.neutralWash,
                       mb: 1.5,
                     }}
                   >
-                    <Box sx={{ width: approvedWidth, backgroundColor: editorial.success }} />
-                    <Box sx={{ width: pendingWidth, backgroundColor: editorial.warning }} />
-                    <Box sx={{ width: rejectedWidth, backgroundColor: editorial.error }} />
+                    <Box sx={{ width: approvedWidth, backgroundColor: editorial.successFill }} />
+                    <Box sx={{ width: pendingWidth, backgroundColor: editorial.warningFill }} />
+                    <Box sx={{ width: rejectedWidth, backgroundColor: editorial.errorFill }} />
                   </Box>
                   <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                   <Box

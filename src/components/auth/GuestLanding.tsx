@@ -239,8 +239,10 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
               startIcon={<LoginIcon />}
               onClick={onLogin}
               sx={{
-                backgroundColor: editorial.black,
-                color: editorial.white,
+                // See the matching CTA in ChoiceScreen: the inverse pair, so a
+                // dark theme inverts it rather than hiding it.
+                backgroundColor: editorial.inverseSurface,
+                color: editorial.inverseInk,
                 borderRadius: 0,
                 py: 1.75,
                 px: 4,
@@ -249,7 +251,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 boxShadow: "none",
                 transition: "background-color 0.2s ease, box-shadow 0.2s ease",
                 "&:hover": {
-                  backgroundColor: "#333333",
+                  backgroundColor: "color-mix(in srgb, var(--pmw-inverse-surface, #000000) 82%, var(--pmw-inverse-ink, #ffffff))",
                   boxShadow: "none",
                 },
               }}

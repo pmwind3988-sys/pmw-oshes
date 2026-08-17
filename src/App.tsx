@@ -5,8 +5,7 @@ import {
   useIsAuthenticated,
 } from "@azure/msal-react";
 import type { AccountInfo } from "@azure/msal-browser";
-import { ThemeProvider, CssBaseline, Box } from "@mui/material";
-import theme from "./theme";
+import { Box } from "@mui/material";
 import { loginRequest } from "./auth/msalConfig";
 import { createSpClient, isSharePointForbiddenError } from "./utils/sharepointClient";
 import {
@@ -1239,24 +1238,22 @@ export default function App() {
 
   if (!isPublicRoute && pageState === "wrong_tenant") {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <WrongTenantScreen userEmail={userEmail} onLogout={handleSignOut} onSwitch={handleSwitchAccount} />
-      </ThemeProvider>
+      </>
     );
   }
 
   if (!isPublicRoute && pageState === "restricted") {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <RestrictedAccessScreen
           userEmail={userEmail}
           onRetry={handleRestrictedRetry}
           onSwitch={handleSwitchAccount}
           onSignOut={handleSignOut}
         />
-      </ThemeProvider>
+      </>
     );
   }
 
@@ -1264,8 +1261,7 @@ export default function App() {
     const isReauthError = authErrorMode === "reauth";
 
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <ErrorScreen
           errorMsg={errorMsg}
           onRetry={isReauthError ? handleRelogin : handleGenericRetry}
@@ -1275,7 +1271,7 @@ export default function App() {
           primaryActionIcon={isReauthError ? "login" : undefined}
           recoverySteps={isReauthError ? buildAuthLoadingSteps("reauth", authErrorStep ?? "reauth") : undefined}
         />
-      </ThemeProvider>
+      </>
     );
   }
 
@@ -1285,15 +1281,14 @@ export default function App() {
     (isPublicRoute && pageState === "loading" && authErrorMode === "reauth")
   ) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <LoadingScreen
           userEmail={userEmail || undefined}
           progress={loadProgress}
           status={loadStatus}
           steps={buildAuthLoadingSteps(authLoadStep)}
         />
-      </ThemeProvider>
+      </>
     );
   }
 
@@ -1301,23 +1296,21 @@ export default function App() {
 
   if (showAuthGate && pageState === "choice") {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <SignInScreen
           onLogin={handleLogin}
           onReportSomething={() => navigate("/report")}
           onTrackReport={() => navigate("/track")}
         />
-      </ThemeProvider>
+      </>
     );
   }
 
   if (showAuthGate && pageState === "guest") {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+      <>
         <GuestLanding onLogin={handleLogin} onForgetChoice={handleForgetChoice} />
-      </ThemeProvider>
+      </>
     );
   }
 
@@ -1391,8 +1384,7 @@ export default function App() {
   );
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <>
       <ErrorBoundary>
         <Routes>
           <Route
@@ -1542,6 +1534,6 @@ export default function App() {
         </Routes>
 
       </ErrorBoundary>
-    </ThemeProvider>
+    </>
   );
 }

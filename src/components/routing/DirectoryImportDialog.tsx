@@ -53,10 +53,10 @@ interface DirectoryImportDialogProps {
 }
 
 const ACTION_STYLE: Record<DirectoryImportAction, { label: string; color: string; background: string }> = {
-  create: { label: "Add", color: editorial.success, background: "#EAF6EA" },
+  create: { label: "Add", color: editorial.success, background: editorial.successWash },
   update: { label: "Change", color: editorial.pmwBlueDark, background: editorial.blueWash },
   unchanged: { label: "No change", color: editorial.softMuted, background: editorial.paper },
-  error: { label: "Skipped", color: editorial.error, background: "#FBE9E9" },
+  error: { label: "Skipped", color: editorial.error, background: editorial.errorWash },
 };
 
 export default function DirectoryImportDialog({

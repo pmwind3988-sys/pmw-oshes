@@ -325,7 +325,7 @@ export default function AdminRoutingPage() {
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: editorial.appSurface }}>
       {/* Header */}
-      <Box sx={{ backgroundColor: editorial.white, borderBottom: `1px solid ${editorial.border}` }}>
+      <Box sx={{ backgroundColor: editorial.panel, borderBottom: `1px solid ${editorial.border}` }}>
         <Container maxWidth="lg" sx={{ py: 2.5 }}>
           <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
             <IconButton onClick={() => navigate("/admin/dashboard")} size="small" aria-label="Back to dashboard">

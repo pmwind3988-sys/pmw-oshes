@@ -1,12 +1,12 @@
 import type { AccountInfo, IPublicClientApplication } from "@azure/msal-browser";
-import type { DashboardBackgroundSetting } from "./dashboardBackgrounds";
+import { normalizeDashboardAppearance, type DashboardAppearanceSetting } from "./dashboardBackgrounds";
 import { acquireAccessTokenSilentOrRedirect } from "./authRecovery";
 import { ensureDashboardBackgroundSettingsList } from "./formBuilderSP";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
-interface DashboardBackgroundResponse {
-  setting: DashboardBackgroundSetting;
+interface DashboardAppearanceResponse {
+  setting: unknown;
 }
 
 function apiHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -40,24 +40,27 @@ async function acquireSharePointToken(
   });
 }
 
-export async function fetchDashboardBackground(): Promise<DashboardBackgroundSetting> {
+export async function fetchDashboardAppearance(): Promise<DashboardAppearanceSetting> {
   const response = await fetch("/api/dashboard-background", {
     headers: apiHeaders(),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to load dashboard background: ${response.status}`);
+    throw new Error(`Failed to load the dashboard appearance: ${response.status}`);
   }
 
-  const data = (await response.json()) as DashboardBackgroundResponse;
-  return data.setting;
+  const data = (await response.json()) as DashboardAppearanceResponse;
+  // Normalized here rather than trusted: a site provisioned before the theme
+  // columns existed returns a record with no theme ids at all, and the whole
+  // app reads these values as colours.
+  return normalizeDashboardAppearance(data.setting);
 }
 
-export async function saveDashboardBackground(
+export async function saveDashboardAppearance(
   instance: IPublicClientApplication,
   accounts: AccountInfo[],
-  setting: DashboardBackgroundSetting,
-): Promise<DashboardBackgroundSetting> {
+  setting: DashboardAppearanceSetting,
+): Promise<DashboardAppearanceSetting> {
   const token = await acquireSharePointToken(instance, accounts);
   const postSetting = () =>
     fetch("/api/dashboard-background", {
@@ -73,7 +76,7 @@ export async function saveDashboardBackground(
   }
 
   if (!response.ok) {
-    let message = `Failed to save dashboard background: ${response.status}`;
+    let message = `Failed to save the dashboard appearance: ${response.status}`;
     try {
       const data = (await response.json()) as { error?: string };
       if (data.error) message = data.error;
@@ -83,6 +86,6 @@ export async function saveDashboardBackground(
     throw new Error(message);
   }
 
-  const data = (await response.json()) as DashboardBackgroundResponse;
-  return data.setting;
+  const data = (await response.json()) as DashboardAppearanceResponse;
+  return normalizeDashboardAppearance(data.setting);
 }

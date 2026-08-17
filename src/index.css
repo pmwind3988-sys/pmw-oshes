@@ -9,22 +9,86 @@
   font-family: var(--pmw-font-main) !important;
 }
 
+/* The universal rule above is `!important` so it beats MUI's own font stack on
+   every element. That also means it beats any heading face — so the heading
+   font theme has to be `!important` too, and win on specificity (0,0,1 over
+   0,0,0) to land after it. Without this pair, choosing "Editorial Serif"
+   changes nothing anywhere. `.pmw-heading` is the opt-in for a display line
+   that is not an <h*> element. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.pmw-heading {
+  font-family: var(--pmw-font-heading, var(--pmw-font-main)) !important;
+}
+
+/* Tabular figures — references, counts, timestamps — where the font theme
+   nominates a face for them. */
+.pmw-numeric {
+  font-family: var(--pmw-font-mono, var(--pmw-font-main)) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The values below are only the pre-boot defaults. `applyAppearance` overwrites
+   every one of them on <html> before React renders (see theme/appearanceBoot),
+   and they are what a page that never boots the theme falls back to — so they
+   must stay a complete, coherent light palette rather than a partial one. */
 :root {
   --pmw-font-main: "Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  --pmw-font-heading: var(--pmw-font-main);
+  --pmw-font-mono: var(--pmw-font-main);
+
   --pmw-ink: #101010;
   --pmw-muted: #5f646d;
-  --pmw-paper: #f7f5ef;
+  --pmw-soft-muted: #747b86;
   --pmw-panel: #ffffff;
+  --pmw-canvas: #f6f9fc;
+  --pmw-sunken: #f1f3f6;
+  --pmw-paper: #f8fafc;
+  --pmw-paper-soft: #f9fbfd;
+  --pmw-border: #dde4ec;
+  --pmw-border-strong: #111111;
+
   --pmw-blue: #0078d4;
   --pmw-blue-dark: #005a9e;
+  --pmw-blue-light: #2f96dd;
+  --pmw-blue-soft: #d7ecfa;
+  --pmw-blue-wash: #edf7fe;
+  --pmw-blue-wash-soft: #f6fafd;
+  --pmw-blue-ink: #005a9e;
+  --pmw-on-blue: #ffffff;
+  --pmw-sky: #bfddf4;
+  --pmw-sky-soft: #eef7fd;
+
   --pmw-purple: #6264a7;
   --pmw-purple-dark: #4b4d89;
-  --pmw-sky: #bfddf4;
-  --pmw-sky-soft: #eaf5fc;
-  --pmw-blue-wash: #eaf5fc;
-  --pmw-purple-wash: #f1f0fa;
+  --pmw-purple-soft: #e6e7f6;
+  --pmw-purple-wash: #f4f3fb;
+  --pmw-purple-ink: #4b4d89;
+  --pmw-on-purple: #ffffff;
+
+  --pmw-success: #107c10;
+  --pmw-success-wash: #e8f4e8;
+  --pmw-success-ink: #107c10;
+  --pmw-warning: #b15c00;
+  --pmw-warning-wash: #fff4d6;
+  --pmw-warning-ink: #b15c00;
+  --pmw-error: #c62828;
+  --pmw-error-wash: #fdeded;
+  --pmw-error-ink: #c62828;
   --pmw-yellow: #fff546;
-  --pmw-border: #d6dce5;
+  --pmw-on-yellow: #101010;
+
+  --pmw-inverse-surface: #000000;
+  --pmw-inverse-ink: #ffffff;
+
+  --pmw-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 14px 36px rgba(0, 90, 158, 0.08);
+  --pmw-shadow-hover: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.1), 0 18px 42px rgba(0, 90, 158, 0.12);
+  --pmw-ring: 0 0 0 3px rgba(0, 120, 212, 0.22);
+
   --app-bg-fallback: linear-gradient(180deg, #eaf5fc 0%, #f7fafd 48%, #ffffff 100%);
 }
 
@@ -93,8 +157,15 @@ video {
 
 img {
   height: auto;
-  outline: 1px solid rgba(0, 0, 0, 0.1);
+  /* A hairline so a white-cornered logo does not bleed into a white panel. It
+     has to invert with the theme, or on Midnight the same rule draws a black
+     halo around every image. */
+  outline: 1px solid var(--pmw-image-edge, rgba(0, 0, 0, 0.1));
   outline-offset: -1px;
+}
+
+:root[data-appearance-mode="dark"] {
+  --pmw-image-edge: rgba(255, 255, 255, 0.14);
 }
 
 h1,

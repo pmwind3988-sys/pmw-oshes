@@ -19,7 +19,15 @@ import { msalInstance } from "./auth/msalConfig";
 import AuthProvider from "./auth/AuthProvider";
 import type { AuthenticationResult } from "@azure/msal-browser";
 import "./index.css";
+import { bootAppearance } from "./utils/appearanceBoot";
+import { AppearanceProvider } from "./contexts/AppearanceContext";
 import App from "./App";
+
+// Before anything renders. The organisation's theme is a SharePoint read away,
+// so the cached prediction is painted first and corrected by AppearanceProvider
+// when the real one lands — see utils/appearanceBoot for why that ordering
+// matters more than it sounds like it should.
+bootAppearance();
 
 function setActiveAccount(result: AuthenticationResult | null): void {
   if (result?.account) {
@@ -69,7 +77,12 @@ initializeMsal().then(() => {
     <StrictMode>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          {/* Inside AuthProvider because saving the theme needs a delegated
+              SharePoint token; outside App so every screen it renders —
+              including the sign-in and error screens — is already themed. */}
+          <AppearanceProvider>
+            <App />
+          </AppearanceProvider>
         </AuthProvider>
       </BrowserRouter>
     </StrictMode>,

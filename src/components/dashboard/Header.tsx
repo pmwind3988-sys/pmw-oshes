@@ -16,7 +16,7 @@ import {
   Logout as LogoutIcon,
   Menu as MenuIcon,
   PrivacyTip as PrivacyIcon,
-  Wallpaper as WallpaperIcon,
+  Palette as PaletteIcon,
   OpenInNew as OpenInNewIcon,
   AccountTree as AccountTreeIcon,
 } from "@mui/icons-material";
@@ -25,8 +25,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RoleBadge from "./RoleBadge";
 import Logo from "../Logo";
-import BackgroundPicker from "./BackgroundPicker";
-import { useDashboardBackground } from "../../hooks/useDashboardBackground";
+import AppearancePicker from "./AppearancePicker";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { builderUrl } from "../../config/oshes";
 
@@ -64,13 +63,6 @@ export default function Header({
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [profileAnchorEl, setProfileAnchorEl] = useState<null | HTMLElement>(null);
   const [mainMenuAnchorEl, setMainMenuAnchorEl] = useState<null | HTMLElement>(null);
-  const {
-    error: backgroundError,
-    loading: backgroundLoading,
-    save: saveBackground,
-    saving: backgroundSaving,
-    setting: backgroundSetting,
-  } = useDashboardBackground(isAdmin);
   const profileOpen = Boolean(profileAnchorEl);
   const mainMenuOpen = Boolean(mainMenuAnchorEl);
   const menuPaperSx = {
@@ -121,7 +113,7 @@ export default function Header({
     setMainMenuAnchorEl(null);
   };
 
-  const openDashboardBackgroundPicker = (closeMenu: () => void) => {
+  const openAppearancePicker = (closeMenu: () => void) => {
     closeMenu();
     setBgPickerOpen(true);
   };
@@ -233,9 +225,9 @@ export default function Header({
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleMainMenuClose)} sx={menuItemSx}>
-                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Dashboard Background</Typography>
+                  <MenuItem onClick={() => openAppearancePicker(handleMainMenuClose)} sx={menuItemSx}>
+                    <PaletteIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                    <Typography variant="body2">Appearance</Typography>
                   </MenuItem>
                   {builder && (
                     <MenuItem
@@ -281,7 +273,7 @@ export default function Header({
                 ml: 0.5,
                 p: 0.75,
                 borderRadius: "12px",
-                backgroundColor: editorial.white,
+                backgroundColor: editorial.panel,
                 border: `1px solid ${editorial.pmwBlueSoft}`,
                 transition: "background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease",
                 "&:hover": {
@@ -322,9 +314,9 @@ export default function Header({
               {isAdmin && (
                 <>
                   <Divider sx={{ my: 0.5 }} />
-                  <MenuItem onClick={() => openDashboardBackgroundPicker(handleProfileClose)} sx={menuItemSx}>
-                    <WallpaperIcon sx={menuIconSx(editorial.pmwBlueDark)} />
-                    <Typography variant="body2">Dashboard Background</Typography>
+                  <MenuItem onClick={() => openAppearancePicker(handleProfileClose)} sx={menuItemSx}>
+                    <PaletteIcon sx={menuIconSx(editorial.pmwBlueDark)} />
+                    <Typography variant="body2">Appearance</Typography>
                   </MenuItem>
                   <MenuItem onClick={() => navigateFromMenu("/admin/routing", handleProfileClose)} sx={menuItemSx}>
                     <AccountTreeIcon sx={menuIconSx(editorial.pmwBlueDark)} />
@@ -366,17 +358,7 @@ export default function Header({
           </>
         )}
 
-        {isAdmin && (
-          <BackgroundPicker
-            open={bgPickerOpen}
-            onClose={() => setBgPickerOpen(false)}
-            setting={backgroundSetting}
-            loading={backgroundLoading}
-            saving={backgroundSaving}
-            error={backgroundError}
-            onSave={saveBackground}
-          />
-        )}
+        <AppearancePicker open={bgPickerOpen} onClose={() => setBgPickerOpen(false)} isAdmin={isAdmin} />
       </Toolbar>
     </AppBar>
   );

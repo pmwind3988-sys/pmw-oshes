@@ -206,9 +206,9 @@ export function WorkspacePill({
 const TONE_STYLES = {
   neutral: { bg: editorial.paperSoft, fg: editorial.muted },
   info: { bg: editorial.blueWash, fg: editorial.pmwBlueDark },
-  success: { bg: "rgba(16, 124, 16, 0.10)", fg: editorial.success },
-  warning: { bg: editorial.yellowSoft, fg: editorial.warning },
-  error: { bg: "rgba(198, 40, 40, 0.10)", fg: editorial.error },
+  success: { bg: editorial.successWash, fg: editorial.success },
+  warning: { bg: editorial.warningWash, fg: editorial.warning },
+  error: { bg: editorial.errorWash, fg: editorial.error },
 } as const;
 
 export type WorkspaceTone = keyof typeof TONE_STYLES;

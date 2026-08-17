@@ -9,12 +9,12 @@ import {
 import { editorial } from "../../theme/editorial";
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  fullyapproved: { label: "Fully Approved", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
-  approved: { label: "Approved", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
-  confirmed: { label: "Confirmed", color: editorial.success, bg: "rgba(16, 124, 16, 0.08)", dot: editorial.success },
-  rejected: { label: "Rejected", color: editorial.error, bg: "rgba(198, 40, 40, 0.08)", dot: editorial.error },
+  fullyapproved: { label: "Fully Approved", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
+  approved: { label: "Approved", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
+  confirmed: { label: "Confirmed", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
+  rejected: { label: "Rejected", color: editorial.error, bg: editorial.errorWash, dot: editorial.errorFill },
   inprogress: { label: "In Review", color: editorial.pmwBlueDark, bg: editorial.blueWash, dot: editorial.pmwBlue },
-  pending: { label: "Pending", color: editorial.warning, bg: editorial.yellowSoft, dot: editorial.warning },
+  pending: { label: "Pending", color: editorial.warning, bg: editorial.warningWash, dot: editorial.warningFill },
   cancelled: { label: "Cancelled", color: editorial.muted, bg: editorial.paperSoft, dot: editorial.muted },
 } as const;
 
@@ -55,7 +55,11 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       sx={{
         backgroundColor: cfg.bg,
         color: cfg.color,
-        boxShadow: `inset 0 0 0 1px ${cfg.dot}33`,
+        // The ring used to be `${dot}33` — an 8-digit hex built by string
+        // concatenation, which produces `var(--pmw-error)33` now that the
+        // tokens are variables. `color-mix` is the composable form: it takes
+        // the resolved variable and thins it.
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cfg.dot} 26%, transparent)`,
         fontWeight: 800,
         fontSize: "0.75rem",
       }}

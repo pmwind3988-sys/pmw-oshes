@@ -34,7 +34,11 @@ export default function PrivacyNoticePage() {
         </Button>
 
         <Paper sx={{ borderRadius: "18px", overflow: "hidden", border: `1px solid ${editorial.ink}`, boxShadow: "none" }}>
-          <Box sx={{ p: { xs: 3, md: 5 }, backgroundColor: editorial.yellow, color: editorial.ink, borderBottom: `1px solid ${editorial.ink}` }}>
+          {/* The signal yellow is one of the few fills that keeps its hue in
+              every theme, so the text on it is pinned to the on-yellow ink
+              rather than following the theme's — which inverts to near-white
+              on Midnight and vanishes. */}
+          <Box sx={{ p: { xs: 3, md: 5 }, backgroundColor: editorial.yellow, color: editorial.black, borderBottom: `1px solid ${editorial.ink}` }}>
             <Box sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1.5 }}>
               <ShieldIcon />
               <Typography variant="overline" sx={{ letterSpacing: 0, fontWeight: 700 }}>

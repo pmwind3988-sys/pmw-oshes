@@ -149,8 +149,8 @@ function FormCard({
               px: 0.8,
               py: 0.3,
               borderRadius: "999px",
-              color: editorial.white,
-              backgroundColor: editorial.error,
+              color: editorial.onStatus,
+              backgroundColor: editorial.errorFill,
             }}
           >
             {waiting} on you

@@ -23,10 +23,10 @@ const PILL_BASE = {
  */
 function severityColours(tone: SeverityTone) {
   if (tone === "high") {
-    return { color: editorial.white, backgroundColor: editorial.error, borderColor: editorial.error };
+    return { color: editorial.onStatus, backgroundColor: editorial.errorFill, borderColor: editorial.errorFill };
   }
   if (tone === "mid") {
-    return { color: editorial.white, backgroundColor: editorial.warning, borderColor: editorial.warning };
+    return { color: editorial.onStatus, backgroundColor: editorial.warningFill, borderColor: editorial.warningFill };
   }
   return { color: editorial.ink, backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlueSoft };
 }
@@ -39,11 +39,11 @@ export function SeverityPill({ label, tone }: { label: string; tone: SeverityTon
 function statusColours(status: PortalStatus) {
   switch (status) {
     case "Past SLA":
-      return { color: editorial.white, backgroundColor: editorial.error, borderColor: editorial.error };
+      return { color: editorial.onStatus, backgroundColor: editorial.errorFill, borderColor: editorial.errorFill };
     case "In approval":
       return { color: editorial.pmwBlueDark, backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlueSoft };
     case "Returned":
-      return { color: editorial.warning, backgroundColor: editorial.yellowSoft, borderColor: "rgba(177, 92, 0, 0.32)" };
+      return { color: editorial.warning, backgroundColor: editorial.warningWash, borderColor: editorial.warning };
     case "Approved":
       return { color: editorial.ink, backgroundColor: editorial.neutralWash, borderColor: editorial.border };
     // Filed on a form with no approval step: complete, but never signed. Kept
@@ -64,7 +64,7 @@ export function StatusPill({ status }: { status: PortalStatus }) {
 export function ProportionBar({ percent, height = 6 }: { percent: number; height?: number }) {
   const width = percent > 0 ? `${Math.max(percent, 2)}%` : "0%";
   return (
-    <Box sx={{ height, backgroundColor: "rgba(16, 16, 16, 0.06)", borderRadius: 999, overflow: "hidden" }}>
+    <Box sx={{ height, backgroundColor: editorial.neutralWash, borderRadius: 999, overflow: "hidden" }}>
       <Box sx={{ height: "100%", width, backgroundColor: editorial.pmwBlue, transition: "width 0.25s ease" }} />
     </Box>
   );

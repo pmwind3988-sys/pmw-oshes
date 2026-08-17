@@ -129,14 +129,12 @@ spacing:
 
 ## Brand & Style
 
-The design system is **PMW Editorial**, defined in code at `src/theme/editorial.ts` and
-`src/theme/index.ts`. Those files are the source of truth; this document describes them.
-It is shared byte-for-byte with `pmw-hrform` — the two apps are one product visually, and
-a change here that is not also made there is drift, not design.
+The design system is **PMW Editorial**, defined in code at `src/theme/appearance.ts`,
+`src/theme/editorial.ts` and `src/theme/index.ts`. Those files are the source of truth;
+this document describes them.
 
 The tone is calm and editorial rather than dense-industrial: generous whitespace, hairline
-borders, high-contrast near-black text, and blue reserved for action and identity. Light
-theme only — there is no dark palette, and one should not be invented.
+borders, high-contrast text, and colour reserved for action and identity.
 
 **Safety context tempts toward hazard-yellow and alarm-red everywhere. Resist it.** Red
 (`error`) and amber (`warning`) must keep specific meanings — overdue, rejected, high
@@ -144,14 +142,68 @@ severity — or they stop reading as signals. A screen where everything is urgen
 communicates nothing. Severity must also survive greyscale printing, so encode it with
 weight as well as hue.
 
+## The three appearance axes
+
+The palette above is the default, not the only one. An administrator picks three
+independent settings for the whole workspace, stored in the OSHES admin settings list
+alongside the wallpaper and applied through `applyAppearance`:
+
+| Axis | What it decides | Options |
+| --- | --- | --- |
+| **contrast** | ground and ink — light or dark, and how hard the pairing is | Ink on Paper, Black on White, Blue on White, Warm Paper, Midnight, White on Black |
+| **colour** | brand and accent — identity and action only | PMW Blue, Indigo, Teal, Violet, Magenta, Graphite |
+| **font** | heading and body faces | Inter, Microsoft 365, Editorial Serif, Grotesk, IBM Plex |
+
+Two rules make 180 combinations safe without any of them having been reviewed by hand:
+
+1. **Status colour is not themeable.** `success`, `warning` and `error` keep their hue in
+   every theme, and no colour theme offers an amber, green or red accent — a brand in
+   those families would make an ordinary Save button carry the same colour as an overdue
+   approval. Only the *wash* behind a status varies, because it is mixed against the
+   active panel.
+2. **Contrast is computed, not asserted.** `readableOn` walks a colour toward the panel
+   until it clears its WCAG ratio against the surface it will actually sit on. This is
+   what lets a colour and a contrast theme be chosen independently.
+
+**This supersedes the previous "light theme only, and one should not be invented" rule.**
+Dark grounds are now first-class, which imposes one obligation on new code: never write a
+literal colour. Every value must come from `editorial` (which is `var(--pmw-*)` under the
+hood) or from the MUI theme, or it will be a white card on a black page the first time
+someone picks Midnight. In particular:
+
+- `editorial.white` is **text on a saturated fill**, not a surface. Use `editorial.panel`
+  for a white background.
+- `editorial.success` / `.warning` / `.error` are **text**; `.successFill` / `.warningFill`
+  / `.errorFill` are saturated fills with `.onStatus` on top. The pair diverges on dark
+  grounds.
+- Compose transparency with `color-mix(in srgb, <token> N%, transparent)`. String
+  concatenation of a hex alpha suffix (`${token}33`) silently produces `var(--x)33`.
+
+### Sharing with pmw-hrform
+
+`src/theme/appearance.ts` and `src/theme/editorial.ts` have no imports from the rest of the
+app and are meant to be copied into `pmw-hrform` verbatim; `src/theme/index.ts` follows if
+that app's component overrides match. The glue is deliberately outside them —
+`src/utils/appearanceBoot.ts`, `src/contexts/AppearanceContext.tsx` and
+`src/utils/dashboardBackgrounds.ts` are app-specific and each app wires its own. Until that
+port happens the two apps differ, which is known divergence rather than accidental drift.
+
 ## Typography
 
-One family throughout: `"Inter", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif`.
-`editorialFonts.sans`, `.serif` and `.mono` are deliberately identical — headings differ
-from body by weight (700–900), not by face. Segoe UI and Aptos are the Microsoft 365
-system faces, which is why they sit directly behind Inter: this app renders inside
-SharePoint and should not look foreign there. Inter is loaded from Google Fonts in
-`src/index.css`, permitted by the `style-src`/`font-src` entries in the `index.html` CSP.
+The default is one family throughout: `"Inter", "Segoe UI", "Aptos", "Helvetica Neue",
+Arial, sans-serif`, with headings differing from body by weight (700–900) rather than by
+face. Segoe UI and Aptos are the Microsoft 365 system faces, which is why they sit
+directly behind Inter: this app renders inside SharePoint and should not look foreign
+there.
+
+The other font themes split heading from body, so `--pmw-font-heading` and
+`--pmw-font-main` are separate variables and the `h1–h6` rule in `src/index.css` has to
+carry `!important` to beat the universal rule above it. A face is fetched from Google
+Fonts only when its theme is selected — the default pays for nothing else — permitted by
+the `style-src`/`font-src` entries in the `index.html` CSP.
+
+The frontmatter at the top of this file records the **default** theme's values. It is a
+description of one point in the space, not of the whole system.
 
 ## Layout & Spacing
 
@@ -167,15 +219,18 @@ Panels are white on a pale blue-tinted ground. Structural cards use 14px radius,
 menus 12px, small surfaces 8–10px, pills 999px, and **MUI buttons are square (radius 0)** —
 that contrast is intentional, not an oversight.
 
-Elevation is a hairline plus a soft blue shadow rather than grey material elevation:
+Elevation is a hairline plus a soft tinted shadow rather than grey material elevation. In
+the default theme that resolves to:
 
 ```
 border: 1px solid #DDE4EC
 box-shadow: 0 0 0 1px rgba(0,0,0,.06), 0 1px 2px -1px rgba(0,0,0,.06), 0 14px 36px rgba(0,90,158,.08)
 ```
 
-`editorialShadowHover` deepens the same three layers on hover. Use `editorialHairline` for
-dividers and `editorialInkline` only where a deliberate hard edge is wanted.
+The shadow is tinted with the active brand and deepens to near-black on the dark themes,
+where a 6%-black shadow is invisible. `editorialShadowHover` deepens the same three
+layers on hover. Use `editorialHairline` for dividers and `editorialInkline` only where a
+deliberate hard edge is wanted.
 
 ## Note on the previous version
 

@@ -23,6 +23,12 @@ export const ADMIN_PANEL_SETTINGS_COLUMNS: GraphColumnSpec[] = [
   { name: "CustomImageUrl", displayName: "CustomImageUrl", type: "note" },
   { name: "CustomImageSource", displayName: "CustomImageSource", type: "note" },
   { name: "ImageOpacity", displayName: "ImageOpacity", type: "number" },
+  // The three appearance axes. Added after the background columns, so a site
+  // provisioned before them has the rest of the record and simply reads these
+  // as empty — which the API turns into the default theme rather than an error.
+  { name: "ColorTheme", displayName: "ColorTheme", type: "text" },
+  { name: "ContrastTheme", displayName: "ContrastTheme", type: "text" },
+  { name: "FontTheme", displayName: "FontTheme", type: "text" },
   { name: "UpdatedBy", displayName: "UpdatedBy", type: "text" },
   { name: "UpdatedAt", displayName: "UpdatedAt", type: "dateTime" },
 ];
