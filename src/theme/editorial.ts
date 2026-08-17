@@ -130,10 +130,53 @@ export const editorial = {
   /** Text on a saturated status fill. */
   onStatus: v("on-blue", editorialHex.white),
 
+  /**
+   * The chrome around the page — the top bar and the icon rail.
+   *
+   * Dark in every theme, deliberately. It is the frame the workspace sits in,
+   * and a frame that inverts with the page stops being a frame and becomes one
+   * more panel. `shellInk` and `shellMuted` are the only text that may sit on
+   * it; the page's own `ink` will be black-on-navy half the time.
+   */
+  shell: v("shell", "#161B26"),
+  shellRaised: v("shell-raised", "#222937"),
+  shellInk: v("shell-ink", "#FFFFFF"),
+  shellMuted: v("shell-muted", "#9AA4B8"),
+  shellBorder: v("shell-border", "#2C3342"),
+
+  /** The yellow call-to-action. `onCta` is near-black in every theme. */
+  cta: v("cta", "#FFD84D"),
+  ctaHover: v("cta-hover", "#E0BE44"),
+  onCta: v("on-cta", "#101010"),
+
   /** A deliberately inverted panel — the primary CTA on the sign-in screens. */
   inverseSurface: v("inverse-surface", editorialHex.inverseSurface),
   inverseInk: v("inverse-ink", editorialHex.inverseInk),
 } as const;
+
+/**
+ * Categorical series colour, for charts whose series are *categories* — a form
+ * type, a job level, a length-of-service band — where colour only has to tell
+ * one bar from the next.
+ *
+ * This is the one place in the app where colour means nothing, which is exactly
+ * why it gets its own ramp. Reaching for `success` / `warning` / `error` to make
+ * a bar chart look varied is what turns an ordinary chart into a wall of overdue
+ * work, and it is the mistake this exists to prevent. Wraps, so a caller can ask
+ * for `seriesColour(n)` without counting.
+ */
+export const editorialSeries = [
+  v("series-1", "#2F6E64"),
+  v("series-2", "#F2C230"),
+  v("series-3", "#C07FD4"),
+  v("series-4", "#EE8B3C"),
+  v("series-5", "#2C7BE5"),
+  v("series-6", "#5B6BB5"),
+] as const;
+
+export function seriesColour(index: number): string {
+  return editorialSeries[index % editorialSeries.length];
+}
 
 export const editorialShadow = `var(--pmw-shadow, 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 14px 36px rgba(0, 90, 158, 0.08))`;
 export const editorialShadowHover = `var(--pmw-shadow-hover, 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.1), 0 18px 42px rgba(0, 90, 158, 0.12))`;

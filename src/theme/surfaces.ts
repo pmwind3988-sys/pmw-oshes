@@ -26,7 +26,7 @@ export const radius = {
   /** Inputs, menus, nested panels. */
   base: "12px",
   /** Structural cards — the widget. */
-  lg: "14px",
+  lg: "16px",
   /** Pills, bars, avatars. */
   full: "999px",
 } as const;

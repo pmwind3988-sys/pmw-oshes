@@ -233,11 +233,30 @@ what it is, the single number that summarises it, and the way into the list behi
 grid of those cards; and work rows that carry their own action rather than making you open an
 item to find the button.
 
-What was **not** borrowed is its palette. A consumer dashboard can afford teal, pink and
-orange as decoration; this one cannot, because `error`, `warning` and `success` have to keep
-meaning overdue, at risk and signed off (see the rule above, and PRODUCT.md's anti-references).
-So charts take volume from the brand and status colour only from real status, and every chart
-is ruled against a labelled scale rather than floated on the page.
+### Chrome, series and the CTA
+
+Three token groups carry the look, and all three are resolved per theme in `appearance.ts`:
+
+- **`shell`** — the dark bar and icon rail. Deliberately dark in *every* contrast theme,
+  including the light ones. It is the frame the workspace sits in, and a frame that inverts
+  with the page stops reading as a frame and becomes one more panel. Only `shellInk` and
+  `shellMuted` may be used as text on it; the page's own `ink` is black half the time.
+- **`editorialSeries` / `seriesColour(n)`** — six categorical hues (teal, gold, orchid, orange,
+  blue, indigo) for charts whose series are *categories*: a form type, an approver, a
+  length-of-service band. This is the one place in the app where colour means nothing, which is
+  exactly why it needs its own ramp. `markColour(tone, index)` is the policy in one function —
+  a status tone where the mark has one, a series hue where it does not. Reaching for
+  `success`/`warning`/`error` to make a chart look varied is what turns an ordinary bar chart
+  into a wall of overdue work.
+- **`cta`** — the yellow action, via `CtaButton`. **One per surface, at most.** A second yellow
+  button on a screen halves the value of the first, which is why it is a component rather than
+  a colour prop.
+
+None of the six series hues sits in the red or amber families, so a categorical chart can never
+be mistaken for a page full of alerts. Status still means status: `error`, `warning` and
+`success` keep their hue in every theme, and the rule above is unchanged.
+
+Every chart is ruled against a labelled scale rather than floated on the page.
 
 Elevation is a hairline plus a soft tinted shadow rather than grey material elevation. In
 the default theme that resolves to:

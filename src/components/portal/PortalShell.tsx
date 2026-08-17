@@ -1,11 +1,22 @@
 import { useState } from "react";
-import { Avatar, Box, Button, Divider, Drawer, IconButton, Menu, MenuItem, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, Divider, Drawer, IconButton, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
+import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
+import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
+import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
+import type { SvgIconComponent } from "@mui/icons-material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
@@ -17,6 +28,27 @@ import type { PortalNavSection, PortalScreen } from "../../types";
 // the sliver of dimmed page behind it is what tells you the drawer is dismissable.
 const DRAWER_WIDTH = "min(288px, 85vw)";
 const CONTENT_MAX_WIDTH = 1360;
+const RAIL_WIDTH = 68;
+
+/**
+ * One glyph per screen, so the rail can be read at a glance.
+ *
+ * The rail shows icons only; the drawer beside it still carries the words. That
+ * pairing is deliberate — an icon rail on its own is a memory test, and a screen
+ * nobody can name is a screen nobody visits.
+ */
+const SCREEN_ICON: Partial<Record<PortalScreen, SvgIconComponent>> = {
+  home: HomeOutlinedIcon,
+  today: TodayOutlinedIcon,
+  queue: PendingActionsOutlinedIcon,
+  subs: ListAltOutlinedIcon,
+  mine: FolderOutlinedIcon,
+  file: NoteAddOutlinedIcon,
+  cat: CategoryOutlinedIcon,
+  people: GroupOutlinedIcon,
+  audit: HistoryOutlinedIcon,
+  settings: SettingsOutlinedIcon,
+};
 
 /** Two letters from the display name, or one from the email when there is no name yet. */
 function initialsOf(name: string, email: string): string {
@@ -24,6 +56,78 @@ function initialsOf(name: string, email: string): string {
   if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
   return (email.trim()[0] ?? "?").toUpperCase();
+}
+
+/** A square control on the dark bar — search, alerts, the menu. */
+function ShellButton({
+  label,
+  onClick,
+  children,
+  tone = "plain",
+  badge,
+}: {
+  label: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+  tone?: "plain" | "cta";
+  badge?: number;
+}) {
+  return (
+    <Tooltip title={label} enterDelay={400}>
+      <Box
+        component="button"
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        sx={{
+          position: "relative",
+          flex: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 38,
+          height: 38,
+          p: 0,
+          border: "none",
+          borderRadius: radius.md,
+          cursor: "pointer",
+          transition: "background-color 0.16s ease",
+          backgroundColor: tone === "cta" ? editorial.cta : editorial.shellRaised,
+          color: tone === "cta" ? editorial.onCta : editorial.shellInk,
+          "&:hover": {
+            backgroundColor: tone === "cta" ? editorial.ctaHover : editorial.shellBorder,
+          },
+          "& .MuiSvgIcon-root": { fontSize: 19 },
+        }}
+      >
+        {children}
+        {badge !== undefined && badge > 0 && (
+          <Box
+            component="span"
+            sx={{
+              position: "absolute",
+              top: -4,
+              right: -4,
+              minWidth: 18,
+              height: 18,
+              px: 0.5,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: radius.full,
+              backgroundColor: editorial.errorFill,
+              color: editorial.onStatus,
+              fontSize: 10.5,
+              fontWeight: 800,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {badge}
+          </Box>
+        )}
+      </Box>
+    </Tooltip>
+  );
 }
 
 function NavList({
@@ -57,6 +161,7 @@ function NavList({
           )}
           {section.items.map((item) => {
             const active = screen === item.screen;
+            const Icon = SCREEN_ICON[item.screen];
             return (
               <Box
                 key={item.screen}
@@ -70,15 +175,11 @@ function NavList({
                   minHeight: 44,
                   display: "flex",
                   alignItems: "center",
-                  gap: 1,
+                  gap: 1.25,
                   mx: 1,
                   px: 1.5,
                   py: 1,
                   border: "none",
-                  // A rounded pill rather than a full-bleed band with an edge
-                  // rail: the selected item then reads as one object the same
-                  // shape as everything else on the page, instead of as a strip
-                  // of the drawer that happens to be tinted.
                   borderRadius: radius.md,
                   background: active ? editorial.blueWash : "transparent",
                   color: active ? editorial.pmwBlueDark : editorial.ink,
@@ -90,6 +191,7 @@ function NavList({
                   "&:hover": { background: editorial.blueWash },
                 }}
               >
+                {Icon && <Icon sx={{ fontSize: 18, flex: "none", opacity: active ? 1 : 0.7 }} />}
                 <Box component="span" sx={{ flex: 1, fontSize: 13.5 }}>
                   {item.label}
                 </Box>
@@ -122,18 +224,17 @@ function NavList({
 }
 
 /**
- * One header bar over one page, with the nav behind a hamburger.
+ * The workspace frame: a dark bar across the top, an icon rail down the side,
+ * and the page in the light well between them.
  *
- * The sidebar used to be permanent on desktop and a drawer on a phone, which
- * meant two layouts to keep honest and an account block wedged into the bottom
- * of the nav — the one place nobody looks for their own name. Now the nav is a
- * drawer at every width and the account lives where people reach for it: top
- * right, as a profile menu holding the identity, settings and sign out.
+ * The bar is dark in every contrast theme. It is the frame the workspace sits
+ * in, and a frame that inverts with the page stops reading as a frame — which is
+ * also why the account, the alerts and the one CTA live on it rather than in the
+ * page: they belong to the session, not to whatever screen is open.
  *
- * The drawer still carries every page this account can reach, grouped by whose
- * question each one answers. Sections appear only when the account has
- * something in them, so a submitter sees three items and an administrator nine
- * — without either being on a different app, and without a role switch anywhere.
+ * The rail is icons only and appears from `md` up; the drawer behind the
+ * hamburger still carries every destination with its words and its count, at
+ * every width. An icon rail on its own is a memory test.
  */
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const {
@@ -165,6 +266,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     catalogue: catalogue.length,
     audit: audit.length,
   });
+  const railItems = sections.flatMap((section) => section.items).filter((item) => SCREEN_ICON[item.screen]);
 
   const pick = (next: PortalScreen) => {
     setScreen(next);
@@ -189,7 +291,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         // viewport rather than scrolling inside its own box.
         maxWidth: "100%",
         overflowX: "clip",
-        background: editorial.skySoft,
+        background: editorial.appSurface,
         color: editorial.ink,
       }}
     >
@@ -199,23 +301,18 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           display: "flex",
           alignItems: "center",
           gap: { xs: 0.75, sm: 1.25 },
-          px: { xs: 1.25, sm: 2, md: 2.5 },
+          px: { xs: 1.25, sm: 2 },
           py: 1,
           position: "sticky",
           top: 0,
           zIndex: (theme) => theme.zIndex.appBar,
-          backgroundColor: editorial.panel,
-          borderBottom: editorialHairline,
+          backgroundColor: editorial.shell,
+          color: editorial.shellInk,
         }}
       >
-        <IconButton
-          onClick={() => setNavOpen(true)}
-          aria-label="Open portal sections"
-          aria-controls={navOpen ? "portal-nav" : undefined}
-          aria-expanded={navOpen}
-        >
+        <ShellButton label="Open portal sections" onClick={() => setNavOpen(true)}>
           <MenuIcon />
-        </IconButton>
+        </ShellButton>
 
         {/* The wordmark is the way back to Home, which is the page that shows
             every other one — so the shortest route out of anywhere is a click
@@ -226,7 +323,9 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           onClick={() => pick("home")}
           sx={{
             minWidth: 0,
-            display: "block",
+            display: "flex",
+            alignItems: "center",
+            gap: 1.25,
             textAlign: "left",
             border: "none",
             background: "transparent",
@@ -235,54 +334,47 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             px: 0.5,
             py: 0.5,
             cursor: "pointer",
-            "&:hover .portal-wordmark": { color: editorial.pmwBlueDark },
+            "&:hover .portal-wordmark": { opacity: 0.75 },
           }}
         >
-          <Typography className="portal-wordmark" sx={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.2 }} noWrap>
+          <Typography
+            className="portal-wordmark"
+            sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.01em", transition: "opacity 0.16s ease" }}
+            noWrap
+          >
             PMW OSHES
           </Typography>
-          <Typography sx={{ fontSize: 11, color: editorial.muted, fontWeight: 700, lineHeight: 1.2 }} noWrap>
+          <Box
+            component="span"
+            sx={{
+              display: { xs: "none", md: "inline-flex" },
+              alignItems: "center",
+              height: 18,
+              pl: 1.25,
+              borderLeft: `1px solid ${editorial.shellBorder}`,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: editorial.shellMuted,
+              whiteSpace: "nowrap",
+            }}
+          >
             {roleLabel(role)}
-          </Typography>
+          </Box>
         </Box>
 
         <Box sx={{ flex: 1 }} />
 
-        {/* The one count that follows you across every screen. Red rather than
-            the brand outline it used to wear: this is the only thing in the bar
-            that is a queue with your name on it, and it has to out-read the
-            wordmark beside it. */}
+        {/* The one action that is about the session rather than the open screen. */}
+        {access.canFile && (
+          <ShellButton label="File a form" tone="cta" onClick={() => pick("file")}>
+            <NoteAddOutlinedIcon />
+          </ShellButton>
+        )}
+
         {queue.length > 0 && screen !== "queue" && (
-          <Box
-            component="button"
-            type="button"
-            onClick={() => pick("queue")}
-            sx={{
-              flex: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 0.75,
-              minHeight: 36,
-              px: { xs: 1.25, sm: 1.5 },
-              borderRadius: radius.full,
-              border: `1px solid ${editorial.error}`,
-              backgroundColor: editorial.errorWash,
-              color: editorial.error,
-              font: "inherit",
-              fontSize: 12.5,
-              fontWeight: 800,
-              cursor: "pointer",
-              transition: "background-color 0.16s ease",
-              "&:hover": { backgroundColor: editorial.errorFill, color: editorial.onStatus },
-            }}
-          >
-            <Box component="span" sx={{ fontVariantNumeric: "tabular-nums" }}>
-              {queue.length}
-            </Box>
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
-              to sign
-            </Box>
-          </Box>
+          <ShellButton label={`${queue.length} waiting on you`} onClick={() => pick("queue")} badge={queue.length}>
+            <PendingActionsOutlinedIcon />
+          </ShellButton>
         )}
 
         <Box
@@ -298,29 +390,30 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             display: "flex",
             alignItems: "center",
             gap: 1,
-            maxWidth: 260,
+            maxWidth: 240,
             pl: 0.5,
             pr: { xs: 0.5, sm: 1 },
             py: 0.5,
-            border: editorialHairline,
+            border: `1px solid ${editorial.shellBorder}`,
             borderRadius: radius.full,
-            background: profileOpen ? editorial.blueWash : editorial.panel,
+            background: profileOpen ? editorial.shellRaised : "transparent",
             font: "inherit",
             color: "inherit",
             cursor: "pointer",
-            "&:hover": { background: editorial.blueWash, borderColor: editorial.pmwBlue },
+            transition: "background-color 0.16s ease",
+            "&:hover": { background: editorial.shellRaised },
           }}
         >
-          <Avatar sx={{ ...avatarSx, width: 32, height: 32, fontSize: 12.5 }}>{initials}</Avatar>
-          <Box sx={{ display: { xs: "none", sm: "block" }, minWidth: 0, textAlign: "left" }}>
-            <Typography sx={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25 }} noWrap>
+          <Avatar sx={{ ...avatarSx, width: 30, height: 30, fontSize: 12 }}>{initials}</Avatar>
+          <Box sx={{ display: { xs: "none", lg: "block" }, minWidth: 0, textAlign: "left" }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: editorial.shellInk }} noWrap>
               {displayed}
             </Typography>
-            <Typography sx={{ fontSize: 11, color: editorial.muted, lineHeight: 1.25 }} noWrap>
+            <Typography sx={{ fontSize: 11, lineHeight: 1.25, color: editorial.shellMuted }} noWrap>
               {access.readOnly ? "Read only" : roleLabel(role)}
             </Typography>
           </Box>
-          <ExpandMoreIcon sx={{ display: { xs: "none", sm: "block" }, fontSize: 18, color: editorial.muted }} />
+          <ExpandMoreIcon sx={{ display: { xs: "none", lg: "block" }, fontSize: 18, color: editorial.shellMuted }} />
         </Box>
       </Box>
 
@@ -388,7 +481,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             sx={{ alignItems: "center", justifyContent: "space-between", px: 2.5, py: 2, pb: 1.75 }}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontSize: 17, fontWeight: 700 }}>PMW OSHES</Typography>
+              <Typography sx={{ fontSize: 17, fontWeight: 800 }}>PMW OSHES</Typography>
               <Typography sx={{ fontSize: 11, color: editorial.muted, fontWeight: 700 }} noWrap>
                 {roleLabel(role)}
               </Typography>
@@ -423,18 +516,120 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         </Box>
       </Drawer>
 
-      <Box
-        component="main"
-        sx={{
-          flex: 1,
-          width: "100%",
-          maxWidth: CONTENT_MAX_WIDTH,
-          mx: "auto",
-          p: { xs: 2, md: 4 },
-          minWidth: 0,
-        }}
-      >
-        {children}
+      <Box sx={{ display: "flex", flex: 1, minWidth: 0 }}>
+        <Box
+          component="nav"
+          aria-label="Quick navigation"
+          sx={{
+            display: { xs: "none", md: "flex" },
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 0.5,
+            flex: "none",
+            width: RAIL_WIDTH,
+            py: 2,
+            backgroundColor: editorial.panel,
+            borderRight: editorialHairline,
+            position: "sticky",
+            top: 54,
+            alignSelf: "flex-start",
+            maxHeight: "calc(100dvh - 54px)",
+            overflowY: "auto",
+          }}
+        >
+          {railItems.map((item) => {
+            const Icon = SCREEN_ICON[item.screen]!;
+            const active = screen === item.screen;
+            return (
+              <Tooltip key={item.screen} title={item.label} placement="right" enterDelay={300}>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => pick(item.screen)}
+                  aria-label={item.label}
+                  aria-current={active ? "page" : undefined}
+                  sx={{
+                    position: "relative",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 44,
+                    height: 44,
+                    p: 0,
+                    border: "none",
+                    borderRadius: radius.md,
+                    cursor: "pointer",
+                    backgroundColor: active ? editorial.pmwBlue : "transparent",
+                    color: active ? editorial.white : editorial.muted,
+                    transition: "background-color 0.16s ease, color 0.16s ease",
+                    "&:hover": {
+                      backgroundColor: active ? editorial.pmwBlue : editorial.blueWash,
+                      color: active ? editorial.white : editorial.pmwBlueDark,
+                    },
+                    "& .MuiSvgIcon-root": { fontSize: 21 },
+                  }}
+                >
+                  <Icon />
+                  {/* The count rides the glyph, because the rail has no room for
+                      a word and a number that is never shown is a number nobody
+                      acts on. */}
+                  {item.count !== null && item.count > 0 && item.screen === "queue" && (
+                    <Box
+                      component="span"
+                      sx={{
+                        position: "absolute",
+                        top: 4,
+                        right: 4,
+                        width: 8,
+                        height: 8,
+                        borderRadius: radius.full,
+                        backgroundColor: editorial.errorFill,
+                      }}
+                    />
+                  )}
+                </Box>
+              </Tooltip>
+            );
+          })}
+
+          <Box sx={{ flex: 1 }} />
+          <Tooltip title="Privacy notice" placement="right" enterDelay={300}>
+            <Box
+              component="a"
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Privacy notice"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 44,
+                height: 44,
+                borderRadius: radius.md,
+                color: editorial.muted,
+                textDecoration: "none",
+                "&:hover": { backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark },
+              }}
+            >
+              <HelpOutlineIcon sx={{ fontSize: 21 }} />
+            </Box>
+          </Tooltip>
+        </Box>
+
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            width: "100%",
+            maxWidth: CONTENT_MAX_WIDTH,
+            mx: "auto",
+            p: { xs: 2, md: 3.5 },
+            minWidth: 0,
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );

@@ -86,40 +86,52 @@ export function Widget({
             )}
           </Box>
 
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flex: "none" }}>
+          {/* The reference's control cluster: the summarising number, then any
+              quiet controls, then a hairline, then the way in. The rule is what
+              separates "what this card says" from "what you can do with it". */}
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flex: "none" }}>
             {meta}
             {actions}
             {onOpen && (
-              <Tooltip title={openLabel ?? "Open"} enterDelay={300}>
-                <Box
-                  component="button"
-                  type="button"
-                  onClick={onOpen}
-                  aria-label={openLabel ?? "Open"}
-                  sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 30,
-                    height: 30,
-                    p: 0,
-                    flex: "none",
-                    borderRadius: radius.sm,
-                    border: editorialHairline,
-                    backgroundColor: editorial.panel,
-                    color: editorial.muted,
-                    cursor: "pointer",
-                    transition: "color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease",
-                    "&:hover": {
-                      color: editorial.pmwBlueDark,
-                      borderColor: editorial.pmwBlue,
-                      backgroundColor: editorial.blueWash,
-                    },
-                  }}
-                >
-                  <ArrowForwardIcon sx={{ fontSize: 16 }} />
-                </Box>
-              </Tooltip>
+              <>
+                {(meta || actions) && (
+                  <Box
+                    aria-hidden
+                    sx={{ width: "1px", height: 18, mx: 0.5, backgroundColor: editorial.border, flex: "none" }}
+                  />
+                )}
+                <Tooltip title={openLabel ?? "Open"} enterDelay={300}>
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={onOpen}
+                    aria-label={openLabel ?? "Open"}
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 30,
+                      height: 30,
+                      p: 0,
+                      flex: "none",
+                      border: "none",
+                      borderRadius: radius.sm,
+                      backgroundColor: "transparent",
+                      color: editorial.softMuted,
+                      cursor: "pointer",
+                      transition: "color 0.16s ease, background-color 0.16s ease, transform 0.16s ease",
+                      "&:hover": {
+                        color: editorial.pmwBlueDark,
+                        backgroundColor: editorial.blueWash,
+                        transform: "translateX(2px)",
+                      },
+                      "@media (prefers-reduced-motion: reduce)": { "&:hover": { transform: "none" } },
+                    }}
+                  >
+                    <ArrowForwardIcon sx={{ fontSize: 17 }} />
+                  </Box>
+                </Tooltip>
+              </>
             )}
           </Stack>
         </Stack>
@@ -295,6 +307,64 @@ export function SectionLabel({ children, sx }: { children: ReactNode; sx?: SxPro
 export function WidgetEmpty({ children }: { children: ReactNode }) {
   return (
     <Typography sx={{ fontSize: 13, color: editorial.muted, py: 1.25, lineHeight: 1.5 }}>{children}</Typography>
+  );
+}
+
+/**
+ * The yellow call-to-action.
+ *
+ * One per surface, at most. Yellow is the loudest thing on the page and it is
+ * spent on the single action the card exists to make possible — signing the item
+ * in front of you, filing the form. A second yellow button on the same screen
+ * halves the value of the first, which is the whole reason it is a separate
+ * component rather than a colour prop anyone can reach for.
+ *
+ * Square-cornered like every other MUI button here (DESIGN.md), and its ink is
+ * near-black in every theme because the fill never changes.
+ */
+export function CtaButton({
+  children,
+  onClick,
+  startIcon,
+  fullWidth = false,
+  size = "medium",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  startIcon?: ReactNode;
+  fullWidth?: boolean;
+  size?: "small" | "medium";
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onClick}
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 0.75,
+        width: fullWidth ? "100%" : "auto",
+        minHeight: size === "small" ? 32 : 40,
+        px: size === "small" ? 1.5 : 2.25,
+        border: "none",
+        borderRadius: radius.sm,
+        backgroundColor: editorial.cta,
+        color: editorial.onCta,
+        font: "inherit",
+        fontSize: size === "small" ? 12.5 : 13.5,
+        fontWeight: 800,
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        transition: "background-color 0.16s ease",
+        "&:hover": { backgroundColor: editorial.ctaHover },
+        "& .MuiSvgIcon-root": { fontSize: size === "small" ? 16 : 18 },
+      }}
+    >
+      {startIcon}
+      {children}
+    </Box>
   );
 }
 

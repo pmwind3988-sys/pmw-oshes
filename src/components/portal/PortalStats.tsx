@@ -1,5 +1,5 @@
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial, editorialHairline, seriesColour } from "../../theme/editorial";
 import { gridline, liftSx, radius } from "../../theme/surfaces";
 import type { DayPoint, StatBucket } from "../../utils/portalStats";
 
@@ -31,6 +31,20 @@ const TONE_COLOUR: Record<StatBucket["tone"], string> = {
 
 export function toneColour(tone: StatBucket["tone"]): string {
   return TONE_COLOUR[tone];
+}
+
+/**
+ * The colour a mark should take: its status hue where it *has* one, and a
+ * categorical hue from the series ramp where it does not.
+ *
+ * This is the whole colour policy of the charts in one function. A form type, an
+ * approver, a length-of-service band means nothing in particular — it just needs
+ * to be told apart from its neighbour, so it draws from the series ramp. A
+ * bucket that really is overdue or approved keeps red or green, because there
+ * those hues are the information rather than decoration.
+ */
+export function markColour(tone: StatBucket["tone"] | undefined, index: number): string {
+  return tone ? TONE_COLOUR[tone] : seriesColour(index);
 }
 
 /**
@@ -359,7 +373,7 @@ export function IntakeChart({
                       background: "none",
                       p: 0,
                       cursor: pressable ? "pointer" : "default",
-                      "&:hover .intake-bar": pressable ? { backgroundColor: editorial.pmwBlueDark } : undefined,
+                      "&:hover .intake-bar": pressable ? { filter: "brightness(0.88)" } : undefined,
                     }}
                   >
                     <Box
@@ -370,14 +384,16 @@ export function IntakeChart({
                         // as a continuous fortnight rather than a gap in the data.
                         height: day.count === 0 ? 2 : `${Math.max((day.count / top) * 100, 3)}%`,
                         borderRadius: `${radius.sm} ${radius.sm} 0 0`,
+                        // One hue for the fortnight, with today picked out in the
+                        // second series colour rather than by opacity: a bar that
+                        // is merely darker reads as "more", which today is not.
                         backgroundColor:
                           day.count === 0
                             ? editorial.border
                             : day.isToday
-                              ? editorial.pmwBlueDark
-                              : editorial.pmwBlue,
-                        opacity: day.count === 0 || day.isToday ? 1 : 0.78,
-                        transition: "height 0.2s ease, background-color 0.16s ease",
+                              ? seriesColour(1)
+                              : seriesColour(0),
+                        transition: "height 0.2s ease, filter 0.16s ease",
                       }}
                     />
                   </Box>
@@ -415,6 +431,10 @@ export interface BarRow {
   value: number;
   /** Right of the label — an age, a share, whatever the value does not say. */
   hint?: string;
+  /**
+   * Set only where the row *means* something — overdue, approved. Left unset,
+   * the row takes a categorical hue from the series ramp by its position.
+   */
   tone?: StatBucket["tone"];
 }
 
@@ -463,8 +483,8 @@ export function BarRows({
         ))}
 
         <Stack spacing={1.5} sx={{ position: "relative" }}>
-          {rows.map((row) => {
-            const accent = toneColour(row.tone ?? "ink");
+          {rows.map((row, index) => {
+            const accent = markColour(row.tone, index);
             const pressable = Boolean(onPick);
             return (
               <Box
@@ -483,7 +503,7 @@ export function BarRows({
                   font: "inherit",
                   color: "inherit",
                   cursor: pressable ? "pointer" : "default",
-                  "&:hover .bar-row-fill": pressable ? { opacity: 1 } : undefined,
+                  "&:hover .bar-row-fill": pressable ? { filter: "brightness(0.9)" } : undefined,
                 }}
               >
                 <Stack
@@ -517,8 +537,7 @@ export function BarRows({
                       width: row.value > 0 ? `${Math.max((row.value / top) * 100, 1.5)}%` : "0%",
                       borderRadius: radius.full,
                       backgroundColor: accent,
-                      opacity: 0.85,
-                      transition: "width 0.25s ease, opacity 0.16s ease",
+                      transition: "width 0.25s ease, filter 0.16s ease",
                     }}
                   />
                 </Box>
@@ -560,7 +579,8 @@ export interface GaugeSegment<Id extends string = string> {
   id: Id;
   label: string;
   count: number;
-  tone: StatBucket["tone"];
+  /** Unset takes a categorical hue from the series ramp by position. */
+  tone?: StatBucket["tone"];
   /** A quieter second line under the legend entry — "+2 arriving today". */
   hint?: string;
 }
@@ -636,7 +656,7 @@ export function DonutGauge<Id extends string = string>({
               strokeDasharray={`${GAUGE_SWEEP} ${GAUGE_CIRCUMFERENCE}`}
               style={{ stroke: editorial.neutralWash }}
             />
-            {arcs.map(({ segment, length, offset: start }) => (
+            {arcs.map(({ segment, length, offset: start }, index) => (
               <circle
                 key={segment.id}
                 cx={GAUGE_SIZE / 2}
@@ -647,7 +667,7 @@ export function DonutGauge<Id extends string = string>({
                 strokeLinecap="round"
                 strokeDasharray={`${length} ${GAUGE_CIRCUMFERENCE}`}
                 strokeDashoffset={-start}
-                style={{ stroke: toneColour(segment.tone), transition: "stroke-dasharray 0.3s ease" }}
+                style={{ stroke: markColour(segment.tone, index), transition: "stroke-dasharray 0.3s ease" }}
               />
             ))}
           </g>
@@ -673,7 +693,7 @@ export function DonutGauge<Id extends string = string>({
         direction="row"
         sx={{ flexWrap: "wrap", justifyContent: "center", gap: 1.5, width: "100%" }}
       >
-        {segments.map((segment) => {
+        {segments.map((segment, index) => {
           const pressable = Boolean(onPick) && segment.count > 0;
           return (
             <Box
@@ -700,7 +720,7 @@ export function DonutGauge<Id extends string = string>({
                     height: 9,
                     flex: "none",
                     borderRadius: "2px",
-                    backgroundColor: toneColour(segment.tone),
+                    backgroundColor: markColour(segment.tone, index),
                   }}
                 />
                 <Typography sx={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>

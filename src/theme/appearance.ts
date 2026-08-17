@@ -455,6 +455,48 @@ const STATUS = {
   yellow: "#FFF546",
 } as const;
 
+/**
+ * The chrome: a dark bar and rail that stay dark in every theme.
+ *
+ * The shell is deliberately *not* derived from the contrast theme. It is the
+ * frame around the page, and a frame that inverts with the page is not a frame
+ * — it is another panel. Holding it constant is what lets the workspace read as
+ * one object on Ink on Paper and on Midnight alike; only its hairline moves, so
+ * the seam against a dark canvas does not disappear.
+ */
+const SHELL = {
+  surface: "#161B26",
+  raised: "#222937",
+  ink: "#FFFFFF",
+  muted: "#9AA4B8",
+} as const;
+
+/**
+ * The categorical chart palette.
+ *
+ * Six hues for series that are *categories* — a form type, a length-of-service
+ * band, a job level — where the only thing colour has to do is tell one bar from
+ * the next. This is the one place in the app where colour carries no meaning,
+ * which is exactly why it needs its own ramp: borrowing the status tokens for it
+ * is what makes an ordinary bar chart look like a wall of overdue work.
+ *
+ * Ordered by how well they separate, so a two-series chart takes the first two
+ * and gets teal against gold rather than two neighbouring purples. None of them
+ * sits in the red or amber families reserved for `error` and `warning`, and the
+ * teal leads because it is the one that stays legible smallest.
+ */
+const SERIES = [
+  "#2F6E64", // deep teal
+  "#F2C230", // gold
+  "#C07FD4", // orchid
+  "#EE8B3C", // orange
+  "#2C7BE5", // blue
+  "#5B6BB5", // indigo
+] as const;
+
+/** The CTA fill — the reference's yellow button. Ink on it is always near-black. */
+const CTA = "#FFD84D";
+
 export interface ResolvedAppearance {
   setting: AppearanceSetting;
   color: ColorTheme;
@@ -504,6 +546,28 @@ export interface ResolvedAppearance {
   errorInk: string;
   yellow: string;
   onYellow: string;
+
+  /**
+   * The chrome around the page: the top bar and the icon rail. Dark in every
+   * theme — see the note on SHELL.
+   */
+  shell: string;
+  shellRaised: string;
+  shellInk: string;
+  shellMuted: string;
+  shellBorder: string;
+
+  /**
+   * Categorical series colour, for charts where the series are *categories* and
+   * colour carries no meaning. Indexed and wrapping, so a caller asks for
+   * `series[n]` without knowing how many hues there are.
+   */
+  series: string[];
+
+  /** The yellow call-to-action, with near-black ink on it in every theme. */
+  cta: string;
+  ctaHover: string;
+  onCta: string;
 
   /** A hard inverted surface — the primary CTA on the sign-in screens. */
   inverseSurface: string;
@@ -599,6 +663,25 @@ export function resolveAppearance(setting: AppearanceSetting): ResolvedAppearanc
     yellow: STATUS.yellow,
     onYellow: "#101010",
 
+    shell: SHELL.surface,
+    shellRaised: SHELL.raised,
+    shellInk: SHELL.ink,
+    shellMuted: SHELL.muted,
+    // Lifted off the shell itself rather than taken from the page border, so the
+    // divisions inside the bar stay visible while the bar's own outer edge does
+    // not draw a light line across a dark page.
+    shellBorder: mix(SHELL.ink, SHELL.surface, 0.86),
+
+    // On a dark ground the same six hues are muddied by the panel behind them,
+    // so each is lifted toward white until it separates again. The order — and
+    // therefore which series gets which hue — is identical in both, so a chart
+    // does not re-colour itself when the workspace theme changes.
+    series: SERIES.map((hue) => (dark ? mix(hue, "#FFFFFF", 0.24) : hue)),
+
+    cta: CTA,
+    ctaHover: mix(CTA, "#000000", 0.12),
+    onCta: "#101010",
+
     inverseSurface: ink,
     inverseInk: panel,
 
@@ -682,6 +765,23 @@ export function appearanceCssVars(r: ResolvedAppearance): Record<string, string>
     "--pmw-error-ink": r.errorInk,
     "--pmw-yellow": r.yellow,
     "--pmw-on-yellow": r.onYellow,
+
+    "--pmw-shell": r.shell,
+    "--pmw-shell-raised": r.shellRaised,
+    "--pmw-shell-ink": r.shellInk,
+    "--pmw-shell-muted": r.shellMuted,
+    "--pmw-shell-border": r.shellBorder,
+
+    "--pmw-series-1": r.series[0],
+    "--pmw-series-2": r.series[1],
+    "--pmw-series-3": r.series[2],
+    "--pmw-series-4": r.series[3],
+    "--pmw-series-5": r.series[4],
+    "--pmw-series-6": r.series[5],
+
+    "--pmw-cta": r.cta,
+    "--pmw-cta-hover": r.ctaHover,
+    "--pmw-on-cta": r.onCta,
 
     "--pmw-inverse-surface": r.inverseSurface,
     "--pmw-inverse-ink": r.inverseInk,

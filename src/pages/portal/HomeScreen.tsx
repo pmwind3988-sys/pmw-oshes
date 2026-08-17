@@ -7,6 +7,7 @@ import { editorial } from "../../theme/editorial";
 import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import {
+  CtaButton,
   PageHeader,
   SectionLabel,
   TaskRow,
@@ -311,7 +312,7 @@ export default function HomeScreen() {
         meta={formatTodayDate()}
         actions={
           has("file") && access.canFile ? (
-            <Button variant="contained" onClick={() => setScreen("file")} sx={{ minHeight: 40 }}>
+            <Button variant="outlined" onClick={() => setScreen("file")} sx={{ minHeight: 40 }}>
               File a form
             </Button>
           ) : undefined
@@ -397,14 +398,9 @@ export default function HomeScreen() {
                     timestamp={record.waitNote || `waiting ${record.ageOnLayerLabel}`}
                     onOpen={() => openDrawer(recordKey(record))}
                     action={
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => openDrawer(recordKey(record))}
-                        sx={{ minHeight: 32 }}
-                      >
+                      <CtaButton size="small" onClick={() => openDrawer(recordKey(record))}>
                         Review
-                      </Button>
+                      </CtaButton>
                     }
                   />
                 ))}

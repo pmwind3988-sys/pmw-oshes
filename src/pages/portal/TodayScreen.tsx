@@ -58,7 +58,10 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
         label: `${person.name} · ${person.role}`,
         value: person.open,
         hint: person.worstLabel,
-        tone: person.breached > 0 ? ("alert" as const) : ("ink" as const),
+        // Only a breach earns the alert hue. Everyone else is a category, not a
+        // problem, and colouring them all brand-blue made the panel read as one
+        // undifferentiated block.
+        tone: person.breached > 0 ? ("alert" as const) : undefined,
       })),
     [people],
   );
