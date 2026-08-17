@@ -4,7 +4,7 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { ProportionBar, SeverityPill } from "../../components/portal/PortalPills";
-import { bottlenecks, recordKey, severeRecords, stuckRecords } from "../../utils/portalRecords";
+import { anySla, bottlenecks, recordKey, severeRecords, stuckRecords, waitingLongest } from "../../utils/portalRecords";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
 import { nudgeApprover } from "../../utils/portalActions";
@@ -51,7 +51,13 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   const [reassignTarget, setReassignTarget] = useState<PortalRecord | null>(null);
 
   const severe = useMemo(() => severeRecords(records), [records]);
+  // Where no form declares an SLA, "stuck" cannot mean "breached" — so the
+  // panel reports the longest waits instead, which is the honest version of
+  // the same question and the only one the data can answer.
+  const slaInUse = useMemo(() => anySla(catalogue), [catalogue]);
   const stuck = useMemo(() => stuckRecords(records), [records]);
+  const longest = useMemo(() => waitingLongest(records), [records]);
+  const waiting = slaInUse ? stuck : longest;
   const people = useMemo(() => bottlenecks(records), [records]);
   const filedToday = useMemo(() => records.filter((record) => record.hoursSinceFiled <= 24).length, [records]);
 
@@ -127,16 +133,20 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   const stuckPanel = (
     <Box sx={PANEL_SX} key="stuck">
       <PanelHeading
-        title="Stuck approvals"
+        title={slaInUse ? "Stuck approvals" : "Longest waits"}
         caption="oldest first · age measured on the current layer only"
         right={
-          <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-            {stuck.length} past SLA
-          </Typography>
+          slaInUse ? (
+            <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+              {stuck.length} past SLA
+            </Typography>
+          ) : undefined
         }
       />
-      {stuck.length === 0 ? (
-        <EmptyLine>Nothing is past its SLA right now.</EmptyLine>
+      {waiting.length === 0 ? (
+        <EmptyLine>
+          {slaInUse ? "Nothing is past its SLA right now." : "Nothing is waiting on an approver right now."}
+        </EmptyLine>
       ) : (
         <Box sx={{ overflowX: "auto" }}>
           <Box component="table" sx={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 13 }}>
@@ -151,7 +161,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
               </Box>
             </Box>
             <Box component="tbody">
-              {stuck.map((record) => (
+              {waiting.map((record) => (
                 <Box component="tr" key={recordKey(record)} sx={{ "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" } }}>
                   <Box component="td">
                     <Box
@@ -174,7 +184,11 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                   <Box component="td" sx={{ fontVariantNumeric: "tabular-nums" }}>{record.layerLabel}</Box>
                   <Box component="td">
                     <Typography sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{record.ageOnLayerLabel}</Typography>
-                    <Typography sx={{ fontSize: 11, color: editorial.error }}>{record.slaNote}</Typography>
+                    {record.slaNote && (
+                      <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
+                        {record.slaNote}
+                      </Typography>
+                    )}
                   </Box>
                   {showChase && (
                     <Box component="td" sx={{ textAlign: "right" }}>
@@ -211,7 +225,8 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
             Today
           </Typography>
           <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.5 }}>
-            {formatTodayDate()} · {filedToday} filed in the last 24 h · {stuck.length} approvals past SLA
+            {formatTodayDate()} · {filedToday} filed in the last 24 h
+            {slaInUse ? ` · ${stuck.length} approvals past SLA` : ""}
           </Typography>
         </Box>
         {access.canExport && (
@@ -290,7 +305,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                       </Stack>
                       <ProportionBar percent={person.barPercent} />
                       <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 0.5 }}>
-                        {person.open} open · {person.breached} past SLA
+                        {person.open} open{slaInUse ? ` · ${person.breached} past SLA` : ""}
                       </Typography>
                     </Box>
                   ))}

@@ -40,6 +40,7 @@ function entry(layers: LayerConfigItem[]): CatalogueEntry {
     workflow,
     hasWorkflow: workflow.hasWorkflow,
     slaDays: 3,
+    hasSla: workflow.hasWorkflow,
     visibility,
     isPublic: visibility.isPublic,
     severityCapture: "none",

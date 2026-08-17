@@ -7,6 +7,7 @@ import type {
   PortalRecord,
   PortalScreen,
   SharePointClient,
+  StatFilter,
   Submission,
   SurveyJson,
 } from "../../types";
@@ -68,6 +69,8 @@ export default function PortalContainer({
   const [drawerRef, setDrawerRef] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState("");
   const [screen, setScreenState] = useState<PortalScreen | null>(null);
+  const [focusForm, setFocusForm] = useState<string | null>(null);
+  const [focusStatus, setFocusStatus] = useState<StatFilter | null>(null);
   const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
     typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
   );
@@ -205,7 +208,15 @@ export default function PortalContainer({
     surveyJsonByForm,
     refresh: onRefresh,
     screen: activeScreen,
-    setScreen: (next: PortalScreen) => setScreenState(next),
+    setScreen: (next: PortalScreen, formScope: string | null = null, statusScope: StatFilter | null = null) => {
+      setScreenState(next);
+      setFocusForm(formScope);
+      setFocusStatus(statusScope);
+    },
+    // A form hub with no form is the form picker, so a stale scope can never
+    // strand the screen on a form this account can no longer see.
+    focusForm: focusForm && catalogue.some((entry) => entry.listTitle === focusForm) ? focusForm : null,
+    focusStatus,
     prefs,
     setPrefs,
     drawerRef,

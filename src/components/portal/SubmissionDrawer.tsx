@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -9,6 +9,8 @@ import {
   Drawer,
   IconButton,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
@@ -19,131 +21,83 @@ import { usePortal } from "../../contexts/PortalContext";
 import { normalizeEmail } from "../../utils/portalPeople";
 import { cancelSubmission, nudgeApprover, returnForInformation, signLayer } from "../../utils/portalActions";
 import { downloadRecordPdf } from "../../utils/portalPdf";
-import type { PortalRecord } from "../../types";
 import ReassignDialog from "./ReassignDialog";
 import { recordKey } from "../../utils/portalRecords";
+import { SeverityPill, StatusPill } from "./PortalPills";
+import { AnswersTab, ApprovalsTab, OverviewTab, TimelineTab } from "./RecordDetail";
 
-function FieldGrid({ record }: { record: PortalRecord }) {
-  const fields = [
-    { label: "Filed", value: record.filedLabel },
-    { label: "Source", value: record.source },
-    { label: "Location", value: record.location || "Not given" },
-    { label: "Reported by", value: record.submitter },
-    { label: "Severity", value: record.severity || "Not captured on this form" },
-    { label: "Photos", value: record.photos === 0 ? "None" : `${record.photos} attached` },
-  ];
+type TabId = "overview" | "answers" | "approvals" | "timeline";
 
+const TABS: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "answers", label: "Answers" },
+  { id: "approvals", label: "Approvals" },
+  { id: "timeline", label: "Status timeline" },
+];
+
+/**
+ * A small key figure in the header — the SLA state, or the wait.
+ *
+ * Rendered only when there is something true to put in it. The reference design
+ * this follows carries a "Resolution SLA — Breached" card in the top right,
+ * which is exactly right for a form that has an SLA and exactly wrong for one
+ * that does not: an invented deadline reported as breached is worse than no
+ * deadline reported at all.
+ */
+function HeaderStat({ label, value, tone = "ink" }: { label: string; value: string; tone?: "ink" | "alert" | "positive" }) {
+  const colour = tone === "alert" ? editorial.error : tone === "positive" ? editorial.success : editorial.ink;
   return (
     <Box
       sx={{
-        display: "grid",
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gap: 1.75,
-        py: 2,
-        my: 2,
-        borderTop: editorialHairline,
-        borderBottom: editorialHairline,
+        px: 1.5,
+        py: 0.9,
+        borderRadius: "12px",
+        border: `1px solid ${tone === "alert" ? editorial.error : editorial.border}`,
+        backgroundColor: tone === "alert" ? "rgba(198, 40, 40, 0.06)" : editorial.paper,
+        flex: "none",
       }}
     >
-      {fields.map((field) => (
-        <Box key={field.label}>
-          <Typography sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: editorial.muted, fontWeight: 800 }}>
-            {field.label}
-          </Typography>
-          <Typography sx={{ fontSize: 13.5 }}>{field.value}</Typography>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-function ApprovalChain({ record }: { record: PortalRecord }) {
-  // A form with no chain gets a sentence, not an empty timeline that reads as
-  // "the approvals have not loaded".
-  if (!record.hasWorkflow) {
-    return (
-      <Box>
-        <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 0.5 }}>Approval chain</Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted }}>
-          This form has no approval or evaluation step. It was filed straight to the record and needs no signature.
-        </Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Box>
-      <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1.5 }}>
-        {record.workflowKind === "evaluation" ? "Evaluation" : "Approval chain"}
+      <Typography sx={{ fontSize: 10.5, color: editorial.muted, fontWeight: 700, lineHeight: 1.3 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: colour, lineHeight: 1.3, whiteSpace: "nowrap" }}>
+        {value}
       </Typography>
-      <Stack>
-        {record.chain.map((step, index) => {
-          const last = index === record.chain.length - 1;
-          const filled = step.state === "signed";
-          const ringed = step.state !== "pending";
-          return (
-            <Stack key={`${step.layerNumber}-${step.roleLabel}`} direction="row" spacing={1.5} sx={{ alignItems: "stretch" }}>
-              <Stack sx={{ alignItems: "center", flex: "none", width: 12 }}>
-                <Box
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    mt: 0.5,
-                    flex: "none",
-                    border: `1px solid ${ringed ? editorial.pmwBlue : editorial.border}`,
-                    backgroundColor: filled ? editorial.pmwBlue : "transparent",
-                  }}
-                />
-                {!last && <Box sx={{ flex: 1, width: "1px", backgroundColor: editorial.border, my: 0.5 }} />}
-              </Stack>
-              <Box sx={{ pb: last ? 0 : 2, minWidth: 0, flex: 1 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", flexWrap: "wrap" }}>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>{step.who}</Typography>
-                  <Typography sx={{ fontSize: 11, color: editorial.muted }}>{step.roleLabel}</Typography>
-                  <Typography
-                    sx={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: step.state === "current" ? editorial.pmwBlueDark : editorial.muted,
-                    }}
-                  >
-                    {step.statusText}
-                  </Typography>
-                </Stack>
-                <Typography sx={{ fontSize: 11, color: editorial.muted }}>{step.subText}</Typography>
-                {step.note && (
-                  <Typography
-                    sx={{
-                      fontSize: 12,
-                      mt: 0.75,
-                      pl: 1.25,
-                      borderLeft: `2px solid ${editorial.border}`,
-                      color: editorial.ink,
-                    }}
-                  >
-                    {step.note}
-                  </Typography>
-                )}
-              </Box>
-            </Stack>
-          );
-        })}
-      </Stack>
     </Box>
   );
 }
 
 /**
- * Submission detail drawer.
+ * Submission detail.
  *
- * Actions are gated twice over: by role, and by whether the current approval
+ * Restructured from one long scroll into a record page with tabs: the facts
+ * first, then the answers, the route, and the trail. The old drawer put six
+ * fields and the whole approval chain in a single column and left the form's
+ * actual answers out entirely — so the one thing a reviewer needed in order to
+ * sign was the one thing the reviewing screen did not show.
+ *
+ * Actions stay gated twice over: by role, and by whether the current approval
  * layer belongs to you. You cannot chase yourself, and an audit account never
  * renders an action at all.
  */
 export default function SubmissionDrawer() {
   const portal = usePortal();
-  const { records, drawerRef, closeDrawer, access, userEmail, userName, spClient, applyPatch, appendAudit, toast, nudged, markNudged, surveyJsonByForm } = portal;
+  const {
+    records,
+    drawerRef,
+    closeDrawer,
+    access,
+    userEmail,
+    userName,
+    spClient,
+    applyPatch,
+    appendAudit,
+    toast,
+    nudged,
+    markNudged,
+    surveyJsonByForm,
+    audit,
+  } = portal;
 
+  const [tab, setTab] = useState<TabId>("overview");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -152,6 +106,12 @@ export default function SubmissionDrawer() {
 
   const record = records.find((item) => recordKey(item) === drawerRef) ?? null;
   const open = Boolean(record);
+
+  // Opening a different record starts at the top of it. Landing on "Answers"
+  // because that is where you left the previous one is disorienting.
+  useEffect(() => {
+    if (drawerRef) setTab("overview");
+  }, [drawerRef]);
 
   const email = normalizeEmail(userEmail);
   const readOnly = access.readOnly;
@@ -169,6 +129,11 @@ export default function SubmissionDrawer() {
     Boolean(record) &&
     !record!.done &&
     (access.isAdmin || (record!.submitterEmail === email && record!.at === 0));
+
+  const trail = useMemo(
+    () => (record ? audit.filter((entry) => entry.reference === record.reference) : []),
+    [audit, record],
+  );
 
   const actor = { spClient, actorName: userName || userEmail, actorEmail: userEmail };
 
@@ -250,6 +215,7 @@ export default function SubmissionDrawer() {
   };
 
   const cancelLabel = record && record.submitterEmail === email ? "Withdraw" : "Cancel submission";
+  const hasActions = canSign || canChaseThis || canCancel;
 
   return (
     <>
@@ -262,112 +228,183 @@ export default function SubmissionDrawer() {
           backdrop: { sx: { backgroundColor: "rgba(16, 16, 16, 0.42)" } },
           paper: {
             sx: {
-              width: "min(580px, 94vw)",
-              p: 2.5,
+              // Wider than the old drawer because the content is now two columns
+              // on anything but a phone, where it takes the full width instead.
+              width: { xs: "100vw", sm: "min(760px, 94vw)" },
+              display: "flex",
+              flexDirection: "column",
+              backgroundColor: editorial.appSurface,
               "@media (prefers-reduced-motion: reduce)": { transition: "none !important" },
             },
           },
         }}
       >
         {record && (
-          <Box>
-            <Stack direction="row" spacing={2} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-              <Box sx={{ minWidth: 0 }}>
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                  <ReferenceTag value={record.reference} size="md" />
-                  <Typography sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: editorial.muted, fontWeight: 800 }}>
-                    {record.formName}
-                  </Typography>
-                </Stack>
-                <Typography component="h2" sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, mt: 0.5 }}>
-                  {record.subject}
-                </Typography>
-                <Typography
-                  sx={{
-                    fontSize: 12,
-                    mt: 0.5,
-                    color: record.overdue ? editorial.error : editorial.muted,
-                    fontWeight: record.overdue ? 800 : 400,
-                  }}
-                >
-                  {record.done || record.returned || !record.hasWorkflow
-                    ? record.status
-                    : `${record.stage} · ${record.slaNote}`}
-                </Typography>
-              </Box>
-              <IconButton onClick={closeDrawer} aria-label="Close">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-
-            <FieldGrid record={record} />
-            <ApprovalChain record={record} />
-
-            {canSign && (
-              <Box sx={{ mt: 2.5 }}>
-                <TextField
-                  label={record.workflowKind === "evaluation" || record.chain[record.at]?.type === "evaluation"
-                    ? "Evaluation note"
-                    : "Note for the record"}
-                  placeholder="Optional for approval, required if you return it"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  multiline
-                  minRows={3}
-                  fullWidth
-                />
-              </Box>
-            )}
-
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, mt: 2.5, alignItems: "center" }}>
-              {canSign && (
-                <>
-                  <Button variant="contained" onClick={() => void handleSign()} disabled={busy} sx={{ minHeight: 40 }}>
-                    {record.chain[record.at]?.type === "evaluation" ? "Evaluate and release" : "Sign this layer"}
-                  </Button>
-                  <Button variant="outlined" onClick={() => void handleReturn()} disabled={busy} sx={{ minHeight: 40 }}>
-                    Return for more information
-                  </Button>
-                </>
-              )}
-
-              {canChaseThis && (
-                <>
-                  <Button
-                    variant="outlined"
-                    onClick={() => void handleNudge()}
-                    disabled={busy || Boolean(nudged[record.reference])}
-                    sx={{ minHeight: 40 }}
+          <>
+            <Box
+              sx={{
+                flex: "none",
+                px: { xs: 2, sm: 3 },
+                pt: { xs: 2, sm: 2.5 },
+                backgroundColor: editorial.panel,
+                borderBottom: editorialHairline,
+              }}
+            >
+              <Stack direction="row" spacing={2} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
+                    <ReferenceTag value={record.reference} size="md" />
+                    <SeverityPill label={record.severity} tone={record.tone} />
+                    <StatusPill status={record.status} />
+                  </Stack>
+                  <Typography
+                    component="h2"
+                    sx={{ fontSize: { xs: 21, sm: 26 }, fontWeight: 700, lineHeight: 1.2, mt: 0.75 }}
                   >
-                    {nudged[record.reference] ? "Nudged" : "Nudge approver"}
-                  </Button>
-                  <Button variant="outlined" onClick={() => setReassignOpen(true)} disabled={busy} sx={{ minHeight: 40 }}>
-                    Reassign layer
-                  </Button>
-                </>
+                    {record.subject}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.4 }}>
+                    {record.formName} · {record.stage}
+                  </Typography>
+                </Box>
+
+                <Stack direction="row" spacing={1} sx={{ flex: "none", alignItems: "flex-start" }}>
+                  {/* Only a record whose form declared an SLA carries one here. */}
+                  {record.hasSla && !record.done && !record.returned && (
+                    <HeaderStat
+                      label={`${record.slaDays}-day SLA`}
+                      value={record.overdue ? "Breached" : "On target"}
+                      tone={record.overdue ? "alert" : "positive"}
+                    />
+                  )}
+                  <IconButton onClick={closeDrawer} aria-label="Close" sx={{ mt: -0.5 }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              </Stack>
+
+              <Tabs
+                value={tab}
+                onChange={(_, next: TabId) => setTab(next)}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                sx={{ mt: 1.5, minHeight: 42, "& .MuiTab-root": { minHeight: 42, fontSize: 13, fontWeight: 700 } }}
+              >
+                {TABS.map((entry) => (
+                  <Tab
+                    key={entry.id}
+                    value={entry.id}
+                    label={
+                      entry.id === "timeline" && trail.length > 0 ? `${entry.label} (${trail.length})` : entry.label
+                    }
+                  />
+                ))}
+              </Tabs>
+            </Box>
+
+            <Box sx={{ flex: 1, overflowY: "auto", px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 2.5 } }}>
+              <Box
+                sx={{
+                  backgroundColor: editorial.panel,
+                  border: editorialHairline,
+                  borderRadius: "14px",
+                  p: { xs: 1.75, sm: 2.5 },
+                }}
+              >
+                {tab === "overview" && <OverviewTab record={record} />}
+                {tab === "answers" && (
+                  <AnswersTab record={record} surveyJson={surveyJsonByForm[record.listTitle] ?? null} />
+                )}
+                {tab === "approvals" && <ApprovalsTab record={record} youEmail={email} />}
+                {tab === "timeline" && <TimelineTab entries={trail} />}
+              </Box>
+
+              {canSign && (
+                <Box sx={{ mt: 2 }}>
+                  <TextField
+                    label={
+                      record.workflowKind === "evaluation" || record.chain[record.at]?.type === "evaluation"
+                        ? "Evaluation note"
+                        : "Note for the record"
+                    }
+                    placeholder="Optional for approval, required if you return it"
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    multiline
+                    minRows={3}
+                    fullWidth
+                    sx={{ backgroundColor: editorial.panel }}
+                  />
+                </Box>
               )}
 
-              <Button variant="outlined" onClick={() => void handlePdf()} sx={{ minHeight: 40 }}>
-                Download PDF
-              </Button>
+              {readOnly && (
+                <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 2 }}>
+                  Audit accounts cannot sign, chase or cancel. Everything above is a record of what others did.
+                </Typography>
+              )}
+            </Box>
 
-              {canCancel && (
+            {/* The action bar is pinned: on a long record the button you came to
+                press must not be a scroll away from the evidence you read. */}
+            <Box
+              sx={{
+                flex: "none",
+                px: { xs: 2, sm: 3 },
+                py: 1.5,
+                backgroundColor: editorial.panel,
+                borderTop: editorialHairline,
+              }}
+            >
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, alignItems: "center" }}>
+                {canSign && (
+                  <>
+                    <Button variant="contained" onClick={() => void handleSign()} disabled={busy} sx={{ minHeight: 40 }}>
+                      {record.chain[record.at]?.type === "evaluation" ? "Evaluate and release" : "Sign this layer"}
+                    </Button>
+                    <Button variant="outlined" onClick={() => void handleReturn()} disabled={busy} sx={{ minHeight: 40 }}>
+                      Return for more information
+                    </Button>
+                  </>
+                )}
+
+                {canChaseThis && (
+                  <>
+                    <Button
+                      variant="outlined"
+                      onClick={() => void handleNudge()}
+                      disabled={busy || Boolean(nudged[record.reference])}
+                      sx={{ minHeight: 40 }}
+                    >
+                      {nudged[record.reference] ? "Nudged" : "Nudge approver"}
+                    </Button>
+                    <Button variant="outlined" onClick={() => setReassignOpen(true)} disabled={busy} sx={{ minHeight: 40 }}>
+                      Reassign layer
+                    </Button>
+                  </>
+                )}
+
                 <Button
-                  onClick={() => setCancelOpen(true)}
-                  disabled={busy}
-                  sx={{ minHeight: 40, ml: "auto", color: editorial.muted }}
+                  variant={hasActions ? "text" : "outlined"}
+                  onClick={() => void handlePdf()}
+                  sx={{ minHeight: 40 }}
                 >
-                  {cancelLabel}
+                  Download PDF
                 </Button>
-              )}
-            </Stack>
 
-            {readOnly && (
-              <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 2, pt: 2, borderTop: editorialHairline }}>
-                Audit accounts cannot sign, chase or cancel. Everything above is a record of what others did.
-              </Typography>
-            )}
-          </Box>
+                {canCancel && (
+                  <Button
+                    onClick={() => setCancelOpen(true)}
+                    disabled={busy}
+                    sx={{ minHeight: 40, ml: "auto", color: editorial.muted }}
+                  >
+                    {cancelLabel}
+                  </Button>
+                )}
+              </Stack>
+            </Box>
+          </>
         )}
       </Drawer>
 
@@ -403,5 +440,3 @@ export default function SubmissionDrawer() {
     </>
   );
 }
-
-export { FieldGrid, ApprovalChain };

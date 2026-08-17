@@ -1,6 +1,5 @@
 import { Box, Button, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
-import { PORTAL_SLA_DEFAULT_DAYS } from "../../config/oshes";
 import { usePortal } from "../../contexts/PortalContext";
 import { severityCaptureLabel } from "../../utils/portalCatalogue";
 import { saveCatalogueSettings } from "../../utils/portalCatalogueWrite";
@@ -261,9 +260,10 @@ export default function CatalogueScreen() {
       </Box>
 
       <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 3, maxWidth: "62ch" }}>
-        SLA per layer is what makes “overdue” computable per form type instead of one global constant; forms with a
-        chain but no SLA set fall back to {PORTAL_SLA_DEFAULT_DAYS} working days. Forms with no approval step are never
-        overdue, because there is nothing for them to be waiting on.
+        An SLA is opt-in. Leave the box empty and that form has no deadline at all: it is never “past SLA”, and no
+        screen shows it an SLA badge, target or breach. There is no global default — one used to apply three working
+        days to every form, which meant forms nobody had ever given a deadline still turned red on day four. Forms
+        with no approval step are never offered one, because there is nothing for them to be waiting on.
       </Typography>
 
       <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>

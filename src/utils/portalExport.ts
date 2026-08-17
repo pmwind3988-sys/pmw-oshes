@@ -66,7 +66,9 @@ export function exportRecordsCsv(records: PortalRecord[]): number {
         record.severity,
         record.submitter,
         record.ageOnLayerLabel,
-        record.slaDays,
+        // Blank, not zero: a spreadsheet column of noughts reads as a target
+        // of nought rather than as a form with no target.
+        record.hasSla ? record.slaDays : "",
         history,
       ]
         .map(csvCell)

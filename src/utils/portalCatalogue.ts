@@ -1,4 +1,3 @@
-import { PORTAL_SLA_DEFAULT_DAYS } from "../config/oshes";
 import type {
   CatalogueEntry,
   FormVisibility,
@@ -24,13 +23,21 @@ export function deriveCode(listTitle: string, config: LayerConfig | null | undef
   return deriveFormAcronym(listTitle);
 }
 
-/** SLA for a specific layer: the layer's own, then the form's, then the global fallback. */
+/**
+ * SLA for a specific layer: the layer's own, then the form's, then none.
+ *
+ * Zero means *this form has no SLA*, not "zero days". There is deliberately no
+ * global fallback any more: one made every form breachable against a number
+ * nobody had set, so forms that never declared an SLA still showed a red
+ * "Past SLA" the moment they passed three days. An SLA is now opt-in, and a
+ * form without one is simply never late.
+ */
 export function layerSlaDays(config: LayerConfig | null | undefined, layer: LayerConfigItem | undefined): number {
   const fromLayer = Number(layer?.slaDays);
   if (Number.isFinite(fromLayer) && fromLayer > 0) return fromLayer;
   const fromForm = Number(config?.slaDays);
   if (Number.isFinite(fromForm) && fromForm > 0) return fromForm;
-  return PORTAL_SLA_DEFAULT_DAYS;
+  return 0;
 }
 
 export function severityCaptureOf(config: LayerConfig | null | undefined): SeverityCapture {
@@ -100,6 +107,8 @@ export function buildCatalogue({
         visibility?.[listTitle]
         ?? resolveFormVisibility({ layerConfigIsPublic: config?.isPublic ?? null });
 
+      const slaDays = layerSlaDays(config, layers[0]);
+
       return {
         listTitle,
         code: deriveCode(listTitle, config),
@@ -109,7 +118,11 @@ export function buildCatalogue({
         layers,
         workflow,
         hasWorkflow: workflow.hasWorkflow,
-        slaDays: layerSlaDays(config, layers[0]),
+        slaDays,
+        // A deadline needs both something to wait on and a number to wait
+        // against. Missing either, every SLA control and badge for this form
+        // is not rendered at all — an absent SLA is not a breached one.
+        hasSla: workflow.hasWorkflow && slaDays > 0,
         visibility: formVisibility,
         isPublic: formVisibility.isPublic,
         severityCapture: severityCaptureOf(config),

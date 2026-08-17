@@ -38,6 +38,8 @@ export interface PortalAccess {
 /** The pages the portal can show. Which ones an account may reach comes from `PortalAccess`. */
 export type PortalScreen =
   | "home"
+  /** One form type's workspace: file a new one, or open either list of them. */
+  | "form"
   | "queue"
   | "mine"
   | "file"
@@ -104,6 +106,17 @@ export type PortalStatus =
   /** Filed on a form with no approval step. Complete on arrival, and never overdue. */
   | "Recorded";
 
+/**
+ * A saved narrowing of the records table, and the thing every dashboard number
+ * stands for.
+ *
+ * Counts and filters share one vocabulary on purpose: a tile that says "3 past
+ * SLA" hands this value to the table, so the list that opens is by construction
+ * the list that was counted. "open" is anything with a chain still moving
+ * through it; the rest are literal statuses.
+ */
+export type StatFilter = "all" | "open" | PortalStatus;
+
 /** One step of a record's approval chain, ready to render as a timeline. */
 export interface PortalChainStep {
   layerNumber: number;
@@ -161,11 +174,16 @@ export interface PortalRecord {
   currentRole: string;
   currentAssignee: string;
   currentAssigneeEmail: string;
+  /** Working days the current layer may sit. Zero when this form declared no SLA. */
   slaDays: number;
+  /** Whether this record has a deadline at all. False means it can never be overdue. */
+  hasSla: boolean;
   overdue: boolean;
   hoursOverdue: number;
-  /** "within a 3-day SLA" / "2 d 4 h past a 3-day SLA" / "no approval step to wait on" */
+  /** "within a 3-day SLA" / "2 d 4 h past a 3-day SLA". Empty when there is no SLA. */
   slaNote: string;
+  /** What to say about the wait: the SLA note, or the plain age when there is no SLA. */
+  waitNote: string;
   status: PortalStatus;
   /** "Layer 2 of 3", or "No approval step" when there is no chain. */
   layerLabel: string;
@@ -189,7 +207,10 @@ export interface CatalogueEntry {
   workflow: WorkflowShape;
   /** Shorthand for `workflow.hasWorkflow` — the check most call sites want. */
   hasWorkflow: boolean;
+  /** Working days a layer may sit. Zero means this form declared no SLA at all. */
   slaDays: number;
+  /** Whether this form has a deadline to miss. False hides every SLA control for it. */
+  hasSla: boolean;
   /** Whether the link opens for an anonymous visitor, and whether that was intended. */
   visibility: FormVisibility;
   /** Shorthand for `visibility.isPublic`. */

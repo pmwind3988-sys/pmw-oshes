@@ -138,7 +138,6 @@ set in the Vercel project as well as locally.
 | `VITE_SP_SITE_URL` | **The OSHES site.** No trailing slash |
 | `VITE_OSHES_ADMIN_GROUP` | Exact group name from step A2 |
 | `VITE_OSHES_AUDITOR_GROUP` | Exact group name, or blank |
-| `VITE_OSHES_SLA_DEFAULT_DAYS` | Default `3` |
 
 > `VITE_SP_SITE_URL` is the single variable that decides which SharePoint site
 > this deployment reads and writes. Check it twice.
@@ -318,7 +317,7 @@ rather than failing:
 |---|---|
 | `Audit Trail` list | Trail is inferred from filings and signatures; in-session actions still display |
 | `Master Form.IsPublic` column | Catalogue cannot persist the public flag |
-| `LayerConfig.slaDays` | Falls back to `VITE_OSHES_SLA_DEFAULT_DAYS` |
+| `LayerConfig.slaDays` | That form has no SLA: never overdue, and no SLA UI is rendered for it |
 | `Returned` on `FormStatus` | Return-to-submitter falls back to another status |
 
 ---

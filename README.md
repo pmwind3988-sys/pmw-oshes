@@ -26,7 +26,6 @@ The primary SharePoint configuration variables are:
 VITE_SP_SITE_URL
 VITE_OSHES_ADMIN_GROUP
 VITE_OSHES_AUDITOR_GROUP
-VITE_OSHES_SLA_DEFAULT_DAYS
 ```
 
 `VITE_OSHES_AUDITOR_GROUP` names a read-only Entra/SharePoint group; members see every record and the audit trail and can take no action.

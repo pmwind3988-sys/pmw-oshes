@@ -5,7 +5,6 @@ interface ImportMetaEnv {
   readonly VITE_DEPARTMENT_NAME?: string;
   readonly VITE_OSHES_ADMIN_GROUP?: string;
   readonly VITE_OSHES_AUDITOR_GROUP?: string;
-  readonly VITE_OSHES_SLA_DEFAULT_DAYS?: string;
   /** Mailbox workflow email is sent from. */
   readonly VITE_OSHES_FORM_EMAIL_FROM_ADDRESS?: string;
   readonly VITE_EMAIL_FROM_ADDRESS?: string;

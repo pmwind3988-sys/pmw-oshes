@@ -7,6 +7,7 @@ import type {
   PortalRole,
   PortalScreen,
   SharePointClient,
+  StatFilter,
   SurveyJson,
 } from "../types";
 import type { PeopleDirectory } from "../utils/portalPeople";
@@ -38,7 +39,19 @@ export interface PortalContextValue {
   refresh: () => void;
 
   screen: PortalScreen;
-  setScreen: (screen: PortalScreen) => void;
+  /**
+   * Go to a screen, optionally scoped to one form type.
+   *
+   * The scope is an argument rather than separate state a caller has to
+   * remember to clear: every navigation states what it is scoped to, so a nav
+   * click ("All submissions") cannot inherit the form filter left behind by a
+   * form hub door ("All Permit to Work").
+   */
+  setScreen: (screen: PortalScreen, formScope?: string | null, statusScope?: StatFilter | null) => void;
+  /** List title the current screen is scoped to, or null for every form. */
+  focusForm: string | null;
+  /** Status the records table should open on — what the pressed statistic counted. */
+  focusStatus: StatFilter | null;
 
   /** Per-browser preferences: landing page, table density, whether settled rows show. */
   prefs: PortalPrefs;

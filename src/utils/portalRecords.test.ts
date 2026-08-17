@@ -25,6 +25,7 @@ function entry(overrides: Partial<CatalogueEntry> = {}): CatalogueEntry {
   ];
   const workflow = describeWorkflow(layers);
   const visibility = resolveFormVisibility({ masterFormIsPublic: true });
+  const slaDays = overrides.slaDays ?? 3;
   return {
     listTitle: "Incident Report",
     code: "INC",
@@ -34,7 +35,8 @@ function entry(overrides: Partial<CatalogueEntry> = {}): CatalogueEntry {
     layers,
     workflow,
     hasWorkflow: workflow.hasWorkflow,
-    slaDays: 3,
+    slaDays,
+    hasSla: workflow.hasWorkflow && slaDays > 0,
     visibility,
     isPublic: visibility.isPublic,
     severityCapture: "required",
@@ -232,8 +234,56 @@ describe("recordMatchesQuery", () => {
     );
 
     expect(record.overdue).toBe(false);
+    expect(record.hasSla).toBe(false);
     expect(record.slaDays).toBe(0);
-    expect(record.slaNote).toBe("no approval step to wait on");
+    // No SLA means no SLA sentence. The screens fall back to `waitNote`, which
+    // for a form with no chain is nothing at all — there is no wait.
+    expect(record.slaNote).toBe("");
+    expect(record.waitNote).toBe("");
+  });
+
+  it("never marks a form that declared no SLA as past one", () => {
+    const record = toPortalRecord(
+      submission({ submittedAt: "2020-01-01T00:00:00.000Z" }),
+      entry({ slaDays: 0 }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.hasWorkflow).toBe(true);
+    expect(record.hasSla).toBe(false);
+    expect(record.overdue).toBe(false);
+    expect(record.hoursOverdue).toBe(0);
+    expect(record.status).toBe("In approval");
+    expect(record.slaNote).toBe("");
+  });
+
+  it("reports the plain age on a chain with no SLA, rather than nothing", () => {
+    const record = toPortalRecord(
+      submission({ submittedAt: "2026-07-29T15:00:00.000Z" }),
+      entry({ slaDays: 0 }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.waitNote).toBe("on this layer 1 d");
+  });
+
+  it("keeps the SLA where the form actually set one", () => {
+    const record = toPortalRecord(
+      submission({ submittedAt: "2026-07-30T09:00:00.000Z" }),
+      entry({ slaDays: 3 }),
+      {},
+      {},
+      NOW,
+    );
+
+    expect(record.hasSla).toBe(true);
+    expect(record.slaDays).toBe(3);
+    expect(record.slaNote).toBe("within a 3-day SLA");
+    expect(record.waitNote).toBe("within a 3-day SLA");
   });
 
   it("still reports a closed outcome on a form with no layers", () => {

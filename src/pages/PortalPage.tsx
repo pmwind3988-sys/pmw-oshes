@@ -3,6 +3,7 @@ import { usePortal } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
 import SubmissionDrawer from "../components/portal/SubmissionDrawer";
 import HomeScreen from "./portal/HomeScreen";
+import FormHubScreen from "./portal/FormHubScreen";
 import TodayScreen from "./portal/TodayScreen";
 import QueueScreen from "./portal/QueueScreen";
 import RecordsScreen from "./portal/RecordsScreen";
@@ -13,8 +14,10 @@ import AuditScreen from "./portal/AuditScreen";
 import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
-  const { screen } = usePortal();
+  const { screen, focusForm, focusStatus } = usePortal();
   switch (screen) {
+    case "form":
+      return <FormHubScreen />;
     case "today":
       return <TodayScreen />;
     case "queue":
@@ -30,10 +33,16 @@ function ScreenBody() {
     case "settings":
       return <SettingsScreen />;
     // Two framings of one table: what you filed, and everything you may see.
+    //
+    // Keyed on the scope it was opened with, so arriving from a form hub door
+    // or a pressed statistic remounts the table with those filters seeded.
+    // Without the key React reuses the mounted instance and keeps the filter
+    // state from wherever you were last — which is how "All Permit to Work"
+    // used to open showing the previous form.
     case "mine":
-      return <RecordsScreen scope="mine" />;
+      return <RecordsScreen key={`mine-${focusForm}-${focusStatus}`} scope="mine" />;
     case "subs":
-      return <RecordsScreen scope="all" />;
+      return <RecordsScreen key={`all-${focusForm}-${focusStatus}`} scope="all" />;
     case "home":
     default:
       return <HomeScreen />;

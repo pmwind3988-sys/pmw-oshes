@@ -12,6 +12,7 @@ export type {
   PortalScreen,
   PortalStatus,
   SeverityTone,
+  StatFilter,
   WorkflowKind,
   WorkflowShape,
 } from "./portal";
@@ -169,7 +170,8 @@ export interface BaseLayer {
   notifyOnComplete?: boolean;
   /**
    * Working days this layer is allowed before it counts as overdue.
-   * Unset layers fall back to LayerConfig.slaDays, then PORTAL_SLA_DEFAULT_DAYS.
+   * Unset layers fall back to LayerConfig.slaDays, and then to no SLA at all —
+   * there is no global default, so a form nobody gave a deadline has none.
    */
   slaDays?: number;
   /** Approval role this layer points at (a layer points at a role, not a person). */

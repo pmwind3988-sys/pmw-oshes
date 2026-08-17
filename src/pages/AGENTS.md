@@ -7,6 +7,8 @@
 |------|------|-------|
 | Admin dashboard | `AdminHomePage.tsx` | Route `/adminhomepage` and catch-all. Props: ~25 from `App.tsx` (prop-drilling). |
 | Role-scoped portal | `PortalPage.tsx` + `portal/` | Route `/portal`. Screens are selected by the derived `PortalRole`; see `src/utils/portalRole.ts`. |
+| Dashboard (portal landing) | `portal/HomeScreen.tsx` | Interactive statistics + one card per form type. Every number is a button that opens the rows it counted. |
+| One form's workspace | `portal/FormHubScreen.tsx` | Screen `"form"`, scoped by `focusForm`. The three doors (file a new one / all of them / yours) plus that form's flow and statistics. Reached from Home, in no nav section. |
 | Public QR report flow | `PublicReportPage.tsx` | Routes `/report` and `/track`. Signed out, strictly linear: poster → form → reference. |
 | Public form renderer | `DynamicFormPage.tsx` | Route `/form/:formId`. Auth gate bypassed for public forms. SurveyJS model + theme + submission handler with LayerConfig-based layer resolution. Uses `onCompleting` (prevents auto-complete) + `useEffect` on `submitStatus` to trigger `doSubmitForm()`. `onComplete` is intentionally NOT registered. |
 | Evaluator interface | `EvaluationPage.tsx` | Routes `/eval/:token` (public) and `/eval/:formSlug/:responseId/:layerNumber` (365). Auth gate, layer action (approve/signature/checkbox/reject/confirm). |

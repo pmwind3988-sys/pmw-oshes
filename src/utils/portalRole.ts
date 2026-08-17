@@ -228,9 +228,15 @@ export function portalNav(access: PortalAccess, counts: PortalNavCounts): Portal
  */
 const ANY_COUNTS: PortalNavCounts = { queue: 1, allRecords: 1, myRecords: 0, catalogue: 0, audit: 0 };
 
-/** Screens this account may reach — keeps deep links and saved preferences honest. */
+/**
+ * Screens this account may reach — keeps deep links and saved preferences honest.
+ *
+ * The form hub is reachable by everyone and appears in no nav section: it is
+ * the page Home opens when you pick a form type, and it shows only that form's
+ * own doors. Each door is gated where it leads, not here.
+ */
 export function allowedScreens(access: PortalAccess): PortalScreen[] {
-  return portalNav(access, ANY_COUNTS).map((item) => item.screen);
+  return [...portalNav(access, ANY_COUNTS).map((item) => item.screen), "form"];
 }
 
 /**

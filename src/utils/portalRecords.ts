@@ -227,13 +227,16 @@ export function toPortalRecord(
     : Number(currentLayerConfig?.slaDays) > 0
       ? Number(currentLayerConfig?.slaDays)
       : entry.slaDays;
+  // No number, no deadline. A form nobody gave an SLA is not overdue on day
+  // four — it has no fourth day to be late by.
+  const hasSla = hasWorkflow && slaDays > 0;
 
   const statusPreview = (submission.formStatus ?? "").toLowerCase();
   const done = /complete|approved|closed|cancel|withdraw|reject/.test(statusPreview);
   const returned = /return/.test(statusPreview);
 
-  const hoursOverdue = hasWorkflow ? hoursOnLayer - slaDays * 24 : 0;
-  const overdue = hasWorkflow && !done && !returned && hoursOverdue > 0;
+  const hoursOverdue = hasSla ? hoursOnLayer - slaDays * 24 : 0;
+  const overdue = hasSla && !done && !returned && hoursOverdue > 0;
   const status = resolveStatus(submission, overdue, hasWorkflow);
 
   const chain: PortalChainStep[] = layers.map((layer, index) => {
@@ -305,13 +308,24 @@ export function toPortalRecord(
     currentAssignee: settled ? "" : currentStep?.who ?? "",
     currentAssigneeEmail: settled ? "" : currentStep?.email ?? "",
     slaDays,
+    hasSla,
     overdue,
     hoursOverdue: Math.max(0, hoursOverdue),
-    slaNote: !hasWorkflow
-      ? "no approval step to wait on"
+    slaNote: !hasSla
+      ? ""
       : overdue
         ? `${formatHours(hoursOverdue)} past a ${slaDays}-day SLA`
         : `within a ${slaDays}-day SLA`,
+    // What a screen says about the wait when it is not specifically reporting
+    // an SLA. Without an SLA the honest line is how long it has actually sat,
+    // which is information; "no SLA" is not.
+    waitNote: settled || !hasWorkflow
+      ? ""
+      : hasSla
+        ? overdue
+          ? `${formatHours(hoursOverdue)} past a ${slaDays}-day SLA`
+          : `within a ${slaDays}-day SLA`
+        : `on this layer ${formatHours(hoursOnLayer)}`,
     status,
     layerLabel: hasWorkflow ? `Layer ${at + 1} of ${totalLayers}` : "No approval step",
     stage: done
@@ -345,6 +359,26 @@ export function severeRecords(records: PortalRecord[]): PortalRecord[] {
 /** Past SLA, oldest first. Age is measured on the current layer only. */
 export function stuckRecords(records: PortalRecord[]): PortalRecord[] {
   return records.filter((record) => record.overdue).sort((a, b) => b.hoursOnLayer - a.hoursOnLayer);
+}
+
+/**
+ * Whether anything in view has an SLA at all.
+ *
+ * Screens ask this before rendering an SLA column, filter, stat or panel: a
+ * deployment where no form declares one should not carry the vocabulary of a
+ * feature it does not use. It reads the catalogue rather than the records so
+ * the answer does not flip as rows are filtered away.
+ */
+export function anySla(source: { hasSla: boolean }[]): boolean {
+  return source.some((item) => item.hasSla);
+}
+
+/** The longest-waiting open items, worst first — with or without an SLA. */
+export function waitingLongest(records: PortalRecord[], limit = 6): PortalRecord[] {
+  return records
+    .filter((record) => record.hasWorkflow && !record.done && !record.returned)
+    .sort((a, b) => b.hoursOnLayer - a.hoursOnLayer)
+    .slice(0, limit);
 }
 
 export interface BottleneckRow {

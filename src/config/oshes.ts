@@ -39,13 +39,6 @@ if (!OSHES_APP.adminGroup) {
 }
 
 /**
- * Working days a layer may sit before it counts as overdue, when neither the
- * layer nor its form type sets an SLA. Open question with the team: whether
- * this counts working days or calendar days — the copy says working days.
- */
-export const PORTAL_SLA_DEFAULT_DAYS = Number(env("VITE_OSHES_SLA_DEFAULT_DAYS", "3")) || 3;
-
-/**
  * Deep link to the pmw-hrform form builder, pointed at the OSHES site.
  *
  * Forms are authored in one place for both products. Rather than embed that
