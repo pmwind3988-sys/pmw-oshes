@@ -219,6 +219,26 @@ Panels are white on a pale blue-tinted ground. Structural cards use 14px radius,
 menus 12px, small surfaces 8–10px, pills 999px, and **MUI buttons are square (radius 0)** —
 that contrast is intentional, not an oversight.
 
+Those radii live in code as `radius` in `src/theme/surfaces.ts`, alongside `panelSx`, `liftSx`
+and the `gridline` every chart is ruled with. Import them; do not retype a pixel value. They
+are not in `editorial.ts` because that file is copied byte-for-byte into pmw-hrform and holds
+colour only.
+
+### The widget
+
+One card shape carries every panel in both halves of the app — `Widget` in
+`src/components/Widget.tsx`, with `WidgetGrid`, `PageHeader`, `DataTable` and `TaskRow` beside
+it. The composition is borrowed from a widget-grid HR dashboard: a card whose header states
+what it is, the single number that summarises it, and the way into the list behind it; an even
+grid of those cards; and work rows that carry their own action rather than making you open an
+item to find the button.
+
+What was **not** borrowed is its palette. A consumer dashboard can afford teal, pink and
+orange as decoration; this one cannot, because `error`, `warning` and `success` have to keep
+meaning overdue, at risk and signed off (see the rule above, and PRODUCT.md's anti-references).
+So charts take volume from the brand and status colour only from real status, and every chart
+is ruled against a labelled scale rather than floated on the page.
+
 Elevation is a hairline plus a soft tinted shadow rather than grey material elevation. In
 the default theme that resolves to:
 

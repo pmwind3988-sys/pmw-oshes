@@ -37,6 +37,18 @@ App.tsx → DashboardProvider (context: submissions, filters, listMetaMap)
 - **The field catalogue comes from published SurveyJSON** (`src/utils/formFieldCatalog.ts`), keyed by question name, and is widened by `mergeObservedValues` — a SharePoint-backed dropdown carries no `choices` in the published JSON, so its options are recovered from the answers on record.
 - **Answers must actually be loaded to filter on them.** The dashboard has them in `submissionData`; `ResponseViewer` reads `RawJSON`; `ApprovalDashboard`'s list queries select workflow columns only, so it fetches answers lazily (no `$select`, per form) the first time a form type is picked, and holds field conditions back until they land.
 
+## Shared card language
+This folder and the portal draw from the same primitives — `src/components/Widget.tsx` and
+`src/theme/surfaces.ts`. `StatsRow`, `ListSummaryCards`, `ListHeader` and `EmptyState` were
+rebuilt on them; `AdminHomePage` wears the same `PageHeader` as every portal screen. See
+`src/components/portal/AGENTS.md` for the full list.
+
+**No literal colours.** These files used to carry `rgba(255,255,255,0.94)` panels, `#FFF3E0`
+banners and `` `${stat.accent}26` `` — the last of which silently produced `var(--pmw-success)26`
+and rendered as nothing once the tokens became CSS variables. Compose transparency with
+`color-mix(in srgb, <token> N%, transparent)`, and take radii from `radius`, or the admin half
+of the app breaks the moment somebody picks Midnight.
+
 ## Conventions
 - **Responsive**: desktop table (`ListHeader` + `SubmissionRow` grid) vs mobile stacked cards
 - **Modal pattern**: `DetailModal` receives `submissionData` object; formats dates, users, lookups via `formatFieldValue()`
