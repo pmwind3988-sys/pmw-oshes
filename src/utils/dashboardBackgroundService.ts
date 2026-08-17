@@ -7,6 +7,18 @@ const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
 interface DashboardAppearanceResponse {
   setting: unknown;
+  /**
+   * Set when the save succeeded but something the admin chose did not stick —
+   * today, a settings list with no theme columns on a deployment that may not
+   * create them. A 200 with a caveat rather than an error, because the part
+   * that could be written was.
+   */
+  warning?: string;
+}
+
+export interface SavedAppearance {
+  setting: DashboardAppearanceSetting;
+  warning: string;
 }
 
 function apiHeaders(extra: Record<string, string> = {}): Record<string, string> {
@@ -60,7 +72,7 @@ export async function saveDashboardAppearance(
   instance: IPublicClientApplication,
   accounts: AccountInfo[],
   setting: DashboardAppearanceSetting,
-): Promise<DashboardAppearanceSetting> {
+): Promise<SavedAppearance> {
   const token = await acquireSharePointToken(instance, accounts);
   const postSetting = () =>
     fetch("/api/dashboard-background", {
@@ -87,5 +99,10 @@ export async function saveDashboardAppearance(
   }
 
   const data = (await response.json()) as DashboardAppearanceResponse;
-  return normalizeDashboardAppearance(data.setting);
+  // The returned record is what the list actually holds, which is not always
+  // what was sent — see the theme-column fallback in api/dashboard-background.
+  return {
+    setting: normalizeDashboardAppearance(data.setting),
+    warning: typeof data.warning === "string" ? data.warning : "",
+  };
 }

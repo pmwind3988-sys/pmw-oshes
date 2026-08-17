@@ -373,61 +373,114 @@ async function readSetting(token: string): Promise<DashboardBackgroundSetting> {
   }
 }
 
+/** The columns this list has always had. A site provisioned before the
+ *  appearance work has exactly these, and nothing can remove them. */
+const THEME_COLUMNS = ["ColorTheme", "ContrastTheme", "FontTheme"] as const;
+
+const MISSING_COLUMNS_HINT =
+  `Add three "single line of text" columns named ${THEME_COLUMNS.join(", ")} to the "${SETTINGS_LIST}" list. ` +
+  "The system app is allowed to write list items but not to alter list schema, so it cannot create them itself " +
+  "(granting it the `manage` role on the site would also work, but hand-adding three columns is the smaller change).";
+
+/** Graph's phrasing when a field has no matching column: `Field 'X' is not recognized`. */
+function namesAnUnknownColumn(message: string): boolean {
+  return THEME_COLUMNS.some((column) => message.includes(`'${column}' is not recognized`));
+}
+
+interface UpsertResult {
+  setting: DashboardBackgroundSetting;
+  /** False when the list could not hold the theme, so the caller can say so. */
+  themePersisted: boolean;
+}
+
+/**
+ * Write the record, degrading to the columns the list actually has.
+ *
+ * The three theme columns are created by `ensureSettingsList` on sites where
+ * the system app may alter schema. Where it may not — `Sites.Selected` with the
+ * `write` role, which is what SETUP.md provisions — the columns never appear and
+ * Graph rejects the whole item for one unrecognised field.
+ *
+ * Failing the entire save there would be a regression: choosing a wallpaper
+ * worked before the theme existed and must keep working. So the write retries
+ * without the theme fields, and reports that it did. What it must *not* do is
+ * report success for a theme it did not store — the returned record carries the
+ * theme that is genuinely on the list, so the picker snaps back to the truth
+ * and the warning explains why.
+ */
 async function upsertSetting(
   token: string,
   setting: DashboardBackgroundSetting,
   updatedBy: string,
-): Promise<DashboardBackgroundSetting> {
+): Promise<UpsertResult> {
   await ensureSettingsList(token);
   const updatedAt = new Date().toISOString();
-  const fields = {
+  const legacyFields = {
     Title: SETTING_TITLE,
     BackgroundId: setting.backgroundId,
     CustomImageUrl: setting.customImageUrl,
     CustomImageSource: setting.customImageSource,
     ImageOpacity: setting.imageOpacity,
+    UpdatedBy: updatedBy,
+    UpdatedAt: updatedAt,
+  };
+  const fields = {
+    ...legacyFields,
     ColorTheme: setting.colorThemeId,
     ContrastTheme: setting.contrastThemeId,
     FontTheme: setting.fontThemeId,
-    UpdatedBy: updatedBy,
-    UpdatedAt: updatedAt,
   };
 
   const items = await queryListItems(token, SETTINGS_LIST, { top: 50 });
   const existing = items.find((item) => String(item.fields.Title || "") === SETTING_TITLE);
 
-  try {
+  const write = async (payload: Record<string, unknown>): Promise<void> => {
     if (existing) {
-      await updateListItemFields(token, SETTINGS_LIST, existing.id, fields);
+      await updateListItemFields(token, SETTINGS_LIST, existing.id, payload);
     } else {
-      await createListItem(token, SETTINGS_LIST, fields);
+      await createListItem(token, SETTINGS_LIST, payload);
     }
+  };
+
+  try {
+    await write(fields);
+    return { setting: { ...setting, updatedBy, updatedAt }, themePersisted: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // Graph answers 400 for a field the list has no column for. Since the three
-    // theme columns are the only recent additions, that is overwhelmingly what
-    // a 400 here means — and "Graph PATCH fields 400: invalidRequest" on its own
-    // does not say so.
-    const likelyMissingColumns = message.includes("400");
-    logWarn("api:dashboard-background", likelyMissingColumns
-      ? "The settings list is missing the appearance columns"
-      : "Could not write the appearance record", {
+    if (!namesAnUnknownColumn(message)) {
+      logWarn("api:dashboard-background", "Could not write the appearance record", {
+        build: BUILD,
+        list: SETTINGS_LIST,
+        itemId: existing ? existing.id : "(new item)",
+        errorMessage: message,
+        fix: "Check that the system app may write to this list.",
+      });
+      throw error;
+    }
+
+    logWarn("api:dashboard-background", "Saving the background only — the list has no theme columns", {
       build: BUILD,
       list: SETTINGS_LIST,
-      itemId: existing ? existing.id : "(new item)",
       errorMessage: message,
-      fix: likelyMissingColumns
-        ? `Add single-line text columns named ColorTheme, ContrastTheme and FontTheme to the "${SETTINGS_LIST}" list, or grant the system app permission to alter it so they can be created automatically.`
-        : "Check that the system app may write to this list.",
+      fix: MISSING_COLUMNS_HINT,
     });
-    throw error;
-  }
 
-  return {
-    ...setting,
-    updatedBy,
-    updatedAt,
-  };
+    await write(legacyFields);
+    return {
+      // The theme already on the list, not the one that was asked for. Reporting
+      // the requested theme here would show it as saved and then lose it on the
+      // next poll, which is the one outcome worse than an error.
+      setting: {
+        ...setting,
+        colorThemeId: normalizeSetting(existing?.fields).colorThemeId,
+        contrastThemeId: normalizeSetting(existing?.fields).contrastThemeId,
+        fontThemeId: normalizeSetting(existing?.fields).fontThemeId,
+        updatedBy,
+        updatedAt,
+      },
+      themePersisted: false,
+    };
+  }
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
@@ -494,8 +547,16 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     stage = "writing the appearance record";
-    const savedSetting = await upsertSetting(token, requestedSetting, updatedBy);
-    return res.status(200).json({ setting: savedSetting } as unknown as Record<string, unknown>);
+    const { setting: savedSetting, themePersisted } = await upsertSetting(token, requestedSetting, updatedBy);
+    return res.status(200).json({
+      setting: savedSetting,
+      build: BUILD,
+      // Present only when something the admin asked for did not stick. The
+      // picker shows it verbatim, so it has to name the fix, not the symptom.
+      ...(themePersisted ? {} : {
+        warning: `The background was saved, but the colour, contrast and typeface were not. ${MISSING_COLUMNS_HINT}`,
+      }),
+    } as unknown as Record<string, unknown>);
   } catch (error) {
     logError("api:dashboard-background", `Appearance request failed while ${stage}`, error);
     return res.status(500).json({

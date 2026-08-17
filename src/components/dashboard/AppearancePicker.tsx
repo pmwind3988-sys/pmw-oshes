@@ -238,12 +238,15 @@ export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
     }
 
     try {
-      await save({
+      const { warning } = await save({
         ...draft,
         customImageUrl: draft.backgroundId === "custom" ? normalizeImageUrl(draft.customImageUrl) || "" : "",
         customImageSource: draft.backgroundId === "custom" ? draft.customImageSource.trim() : "",
       });
-      onClose();
+      // A partial save keeps the dialog open. Closing on it would hide the one
+      // message explaining why the theme just reverted, and the admin would be
+      // left watching their choice undo itself for no stated reason.
+      if (!warning) onClose();
     } catch {
       /* surfaced by the provider's error state */
     }

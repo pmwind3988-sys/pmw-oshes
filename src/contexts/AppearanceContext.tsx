@@ -21,6 +21,7 @@ import {
 import {
   fetchDashboardAppearance,
   saveDashboardAppearance,
+  type SavedAppearance,
 } from "../utils/dashboardBackgroundService";
 
 /* ---------------------------------------------------------------------------
@@ -65,7 +66,8 @@ interface AppearanceContextValue {
   error: string;
   /** Paint a candidate without persisting it — how the picker previews live. */
   preview: (setting: DashboardAppearanceSetting | null) => void;
-  save: (setting: DashboardAppearanceSetting) => Promise<DashboardAppearanceSetting>;
+  /** Resolves with what the server actually stored, plus any caveat about it. */
+  save: (setting: DashboardAppearanceSetting) => Promise<SavedAppearance>;
 }
 
 const AppearanceContext = createContext<AppearanceContextValue | null>(null);
@@ -142,16 +144,20 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
     applyEverything(candidate ?? setting);
   }, [setting]);
 
-  const save = useCallback(async (next: DashboardAppearanceSetting): Promise<DashboardAppearanceSetting> => {
+  const save = useCallback(async (next: DashboardAppearanceSetting): Promise<SavedAppearance> => {
     setSaving(true);
     try {
-      const saved = await saveDashboardAppearance(instance, accounts, next);
+      const { setting: saved, warning } = await saveDashboardAppearance(instance, accounts, next);
       setSetting(saved);
       setPreviewSetting(null);
       cacheAppearance(saved);
       applyEverything(saved);
-      setError("");
-      return saved;
+      // A partial save reports through the same channel as a failure, because
+      // to the admin it is one: something they chose is not in effect. `saved`
+      // is what the server actually holds, so the screen already agrees with
+      // the message.
+      setError(warning);
+      return { setting: saved, warning };
     } catch (err) {
       setError(errorMessage(err));
       throw err;
