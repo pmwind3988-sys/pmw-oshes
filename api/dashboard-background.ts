@@ -40,6 +40,19 @@ interface SharePointUser {
 }
 
 const SP_SITE_URL = (process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, "");
+
+/**
+ * The commit this function was built from, stamped onto every line it logs.
+ *
+ * Vercel sets VERCEL_GIT_COMMIT_SHA on every deployment. Without it there is no
+ * way to tell a log line produced by the running build from one produced by a
+ * build three deploys ago — the console shows both, the text is all that
+ * distinguishes them, and reasoning about which is which from message wording
+ * alone wastes an enormous amount of time. A log line that names its own commit
+ * ends that argument in one glance.
+ */
+const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "local";
+
 /**
  * The SharePoint group whose members may change the appearance.
  *
@@ -246,6 +259,7 @@ async function delegatedSharePointGet<T>(accessToken: string, path: string): Pro
 async function verifyAdmin(accessToken: string): Promise<string | null> {
   if (!ADMIN_GROUP) {
     logWarn("api:dashboard-background", "No admin group configured — refusing every appearance save", {
+      build: BUILD,
       fix: "Set VITE_OSHES_ADMIN_GROUP to the SharePoint group title, matching the browser's value.",
     });
     return null;
@@ -260,6 +274,7 @@ async function verifyAdmin(accessToken: string): Promise<string | null> {
   } catch (error) {
     // The site itself, or the delegated token. Not about the group.
     logWarn("api:dashboard-background", "Could not read the signed-in SharePoint user", {
+      build: BUILD,
       site: SP_SITE_URL,
       errorMessage: error instanceof Error ? error.message : String(error),
       fix: "Check VITE_SP_SITE_URL and that the user's token carries AllSites.Manage for that site.",
@@ -282,6 +297,7 @@ async function verifyAdmin(accessToken: string): Promise<string | null> {
     logWarn("api:dashboard-background", missingGroup
       ? "Admin group not found on this site — no account can be verified"
       : "Could not read admin group membership", {
+      build: BUILD,
       adminGroup: ADMIN_GROUP,
       site: SP_SITE_URL,
       errorMessage: message,
@@ -310,6 +326,7 @@ async function verifyAdmin(accessToken: string): Promise<string | null> {
     // The ordinary, correct denial: configuration is fine, this account simply
     // is not a member. Logged distinctly so it is never mistaken for the above.
     logWarn("api:dashboard-background", "Account is not in the admin group", {
+      build: BUILD,
       adminGroup: ADMIN_GROUP,
       memberCount: (members.value || []).length,
     });
@@ -334,6 +351,7 @@ async function ensureSettingsList(token: string): Promise<void> {
     await ensureAdminPanelSettingsList(token, SETTINGS_LIST);
   } catch (error) {
     logWarn("api:dashboard-background", "Could not ensure the settings list schema — writing anyway", {
+      build: BUILD,
       list: SETTINGS_LIST,
       errorMessage: error instanceof Error ? error.message : String(error),
       fix: `If the write below also fails, add text columns ColorTheme, ContrastTheme and FontTheme to the "${SETTINGS_LIST}" list by hand.`,
@@ -348,6 +366,7 @@ async function readSetting(token: string): Promise<DashboardBackgroundSetting> {
     return normalizeSetting(settingItem?.fields);
   } catch (error) {
     logWarn("api:dashboard-background", "Using default dashboard background", {
+      build: BUILD,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
     return DEFAULT_SETTING;
@@ -393,6 +412,7 @@ async function upsertSetting(
     logWarn("api:dashboard-background", likelyMissingColumns
       ? "The settings list is missing the appearance columns"
       : "Could not write the appearance record", {
+      build: BUILD,
       list: SETTINGS_LIST,
       itemId: existing ? existing.id : "(new item)",
       errorMessage: message,
@@ -413,6 +433,10 @@ async function upsertSetting(
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
   res.setHeader("Cache-Control", "no-store");
+  // On every response, including the failures. Answers "which build served
+  // this?" from the Network tab, without a dashboard visit and without having
+  // to infer it from the wording of a log line.
+  res.setHeader("X-Build", BUILD);
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -431,7 +455,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (req.method === "GET") {
       stage = "reading the appearance record";
       const setting = await readSetting(token);
-      return res.status(200).json({ setting } as unknown as Record<string, unknown>);
+      // `adminGroup` is echoed so a GET answers, in one request, both which
+      // build is live and which group it will check a save against — the two
+      // facts this route has been unable to state about itself.
+      return res.status(200).json({
+        setting,
+        build: BUILD,
+        adminGroup: ADMIN_GROUP || null,
+      } as unknown as Record<string, unknown>);
     }
 
     if (req.method !== "POST") {
