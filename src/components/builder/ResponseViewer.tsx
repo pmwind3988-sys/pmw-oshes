@@ -23,6 +23,9 @@ import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { rowsToHtml, getDynamicMatrixFields } from "../../utils/matrixData";
 import { getSelectedCompany } from "../../utils/companySelection";
+import { buildFormResponseExport } from "../../utils/formResponseExport";
+import { downloadCsv } from "../../utils/csv";
+import { responseAnswerFields } from "../../utils/responseSystemFields";
 import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import {
@@ -60,27 +63,8 @@ interface SubmissionItem {
 interface FormConfig {
   Title: string;
   NumberOfApprovalLayer?: number;
-}
-
-const SYSTEM_FIELDS = new Set([
-  "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
-  "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
-  "Author", "Editor", "Created", "Modified", "ContentType", "PermMask", "PdfUrl",
-  "L1_Status", "L1_Email", "L1_SignedAt", "L1_Rejection", "L1_Signature",
-  "L2_Status", "L2_Email", "L2_SignedAt", "L2_Rejection", "L2_Signature",
-  "L3_Status", "L3_Email", "L3_SignedAt", "L3_Rejection", "L3_Signature",
-  "SelectedBranch",
-]);
-
-function extractResponseFields(item: Record<string, unknown>): Record<string, unknown> {
-  const data: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item)) {
-    if (!SYSTEM_FIELDS.has(key) && value !== null && value !== undefined) {
-      data[key] = value;
-    }
-  }
-  return data;
+  /** Layer sequence JSON from `Master Form`, read for layer names on export. */
+  LayerConfig?: string;
 }
 
 export default function ResponseViewer() {
@@ -94,13 +78,15 @@ export default function ResponseViewer() {
   const [adminChecked, setAdminChecked] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
-  const [, setFormConfig] = useState<FormConfig | null>(null);
+  const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionItem | null>(null);
   const [selectedResponseData, setSelectedResponseData] = useState<Record<string, unknown> | null>(null);
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
   const [matrixLoading, setMatrixLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<{ tone: "success" | "warning" | "error"; message: string } | null>(null);
 
   // Admin access check (defense-in-depth)
   useEffect(() => {
@@ -174,7 +160,7 @@ export default function ResponseViewer() {
         token,
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(formTitle || "")}')/items(${item.Id})`
       ) as Record<string, unknown>;
-      setSelectedResponseData(extractResponseFields(fullItem));
+      setSelectedResponseData(responseAnswerFields(fullItem));
 
       const versionData = await spGet(
         token,
@@ -236,27 +222,39 @@ export default function ResponseViewer() {
     }
   };
 
-  // Export to CSV
-  const handleExportCSV = () => {
-    const headers = ["ID", "Submitted By", "Submitted At", "Status", "Form Status", "Current Layer", "Version"];
-    const rows = filteredSubmissions.map((s) => [
-      s.Id,
-      s.SubmittedBy,
-      s.SubmittedAt,
-      s.Status,
-      s.FormStatus || "",
-      s.CurrentLayer ?? s.CurrentApprovalLayer,
-      s.FormVersion,
-    ]);
+  /**
+   * Export the filtered submissions in full.
+   *
+   * This used to write the seven columns of the list on the left, which meant
+   * the export of a twenty-question form carried none of the answers. The whole
+   * record is re-read instead — see `formResponseExport.ts` for why the screen's
+   * own data is not enough to build the file from.
+   */
+  const handleExportCSV = async () => {
+    if (!token || !formTitle || exporting) return;
 
-    const csv = [headers.join(","), ...rows.map((r) => r.map((v) => `"${v}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${formTitle}-submissions.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setExporting(true);
+    setExportNotice(null);
+    try {
+      const result = await buildFormResponseExport({
+        token,
+        formTitle,
+        ids: filteredSubmissions.map((item) => item.Id),
+        layerConfig: formConfig?.LayerConfig,
+      });
+      downloadCsv(result.csv, result.fileName);
+      setExportNotice({
+        tone: result.warnings.length > 0 ? "warning" : "success",
+        message: [
+          `Exported ${result.rowCount} submission${result.rowCount === 1 ? "" : "s"} with every answer, approval decision and timestamp in Malaysian time.`,
+          ...result.warnings,
+        ].join(" "),
+      });
+    } catch (e) {
+      setExportNotice({ tone: "error", message: `Export failed: ${(e as Error).message}` });
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Filter submissions
@@ -352,8 +350,14 @@ export default function ResponseViewer() {
               <MenuItem value="Approved">Approved</MenuItem>
               <MenuItem value="Rejected">Rejected</MenuItem>
             </TextField>
-            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleExportCSV} sx={{ minHeight: 40 }}>
-              Export CSV
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+              disabled={exporting || filteredSubmissions.length === 0}
+              sx={{ minHeight: 40 }}
+            >
+              {exporting ? "Preparing CSV..." : "Export CSV"}
             </Button>
           </>
         }
@@ -362,6 +366,12 @@ export default function ResponseViewer() {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      )}
+
+      {exportNotice && (
+        <Alert severity={exportNotice.tone === "success" ? "success" : exportNotice.tone} onClose={() => setExportNotice(null)} sx={{ mb: 2 }}>
+          {exportNotice.message}
         </Alert>
       )}
 

@@ -12,7 +12,7 @@
 |------|------|-------|
 | Approval workspace | `ApprovalDashboard.tsx` | Routes `/admin/submissions` and `/admin/approvals`. Admin-only. Per-item layer reassignment written to `WorkflowAssignmentData`; `L{n}_Email` remains authoritative |
 | Per-item reassignment UI | `WorkflowAssignmentEditor.tsx` | Layer picker + reason, used by `ApprovalDashboard` |
-| Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders submissions with SurveyJS read-only, matrix data, PDF generation |
+| Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders submissions read-only through the native engine, plus matrix tables and a link to the stored PDF. **Export CSV** goes through `formResponseExport.ts` → `formResponseCsv.ts`; it re-reads the list because the seven columns this screen loads are not the export |
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results. Used by `DetailModal` and `EvaluationPage` |
 | Read-only submission preview | `ReadOnlySubmissionPreview.tsx` | Used by `EvaluationPage` so a reviewer sees what was submitted |
 | Layer progress derivation | `approvalDashboardLayerProgress.ts` | Pure — has unit tests |

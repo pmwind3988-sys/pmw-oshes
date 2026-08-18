@@ -26,59 +26,15 @@ import {
   collectFormVersions,
   collectPublishProfiles,
 } from "../utils/submissionFilters";
-import { csvCell, downloadCsv } from "../utils/csv";
+import { downloadCsv } from "../utils/csv";
+import { buildDashboardSubmissionCsv } from "../utils/dashboardResponseCsv";
+import { malaysiaDateStamp } from "../utils/malaysiaTime";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow, editorialShadowHover } from "../theme/editorial";
 import { panelSx, radius } from "../theme/surfaces";
 
-const EXPORT_BASE_COLUMNS = [
-  "Reference",
-  "Form",
-  "Category",
-  "Title",
-  "Submitted By",
-  "Submitter Email",
-  "Submitted At",
-  "Modified At",
-  "Status",
-  "Current Layer",
-  "Total Layers",
-  "Selected Branch",
-] as const;
-
-function buildSubmissionCsv(rows: Submission[], listMetaMap: Record<string, { category: string }>): string {
-  const fieldKeys = Array.from(
-    rows.reduce((keys, row) => {
-      Object.keys(row.submissionData).forEach((key) => keys.add(key));
-      return keys;
-    }, new Set<string>()),
-  ).sort((a, b) => a.localeCompare(b));
-  const columns = [...EXPORT_BASE_COLUMNS, ...fieldKeys];
-  const lines = [columns.map(csvCell).join(",")];
-
-  for (const row of rows) {
-    const baseValues: Record<(typeof EXPORT_BASE_COLUMNS)[number], unknown> = {
-      Reference: row.submissionId,
-      Form: row.listTitle,
-      Category: listMetaMap[row.listTitle]?.category ?? "",
-      Title: row.title,
-      "Submitted By": row.submitterName || row.createdByName || row.submittedByEmail,
-      "Submitter Email": row.submittedByEmail || row.createdByEmail,
-      "Submitted At": row.submittedAt,
-      "Modified At": row.modifiedAt,
-      Status: row.formStatus,
-      "Current Layer": row.currentLayer ?? "",
-      "Total Layers": row.totalLayers,
-      "Selected Branch": row.selectedBranch ?? "",
-    };
-    lines.push([
-      ...EXPORT_BASE_COLUMNS.map((column) => csvCell(baseValues[column])),
-      ...fieldKeys.map((key) => csvCell(row.submissionData[key])),
-    ].join(","));
-  }
-
-  return lines.join("\r\n");
-}
+/** Site origin, so an exported attachment link still opens from a saved file. */
+const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 export default function AdminHomePage() {
   const {
@@ -155,10 +111,11 @@ export default function AdminHomePage() {
   };
 
   const handleExportCsv = () => {
-    const csv = buildSubmissionCsv(exportRows, listMetaMap);
-    const datePart = new Date().toISOString().slice(0, 10);
+    const csv = buildDashboardSubmissionCsv(exportRows, listMetaMap, { siteUrl: SP_SITE_URL });
     const scopePart = exportScope === "all" ? "all" : "filtered";
-    downloadCsv(csv, `pmw-hr-submissions-${scopePart}-${datePart}.csv`);
+    // The Malaysian date, not the UTC one: an export at nine in the evening was
+    // named after tomorrow.
+    downloadCsv(csv, `pmw-hr-submissions-${scopePart}-${malaysiaDateStamp()}.csv`);
     setExportOpen(false);
   };
 
@@ -428,7 +385,8 @@ export default function AdminHomePage() {
               Export dashboard submissions
             </Typography>
             <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700, textWrap: "pretty" }}>
-              CSV opens in Excel and includes submitted form fields.
+              CSV opens in Excel with every submitted answer, the approval trail per layer, and all
+              times in Malaysian time.
             </Typography>
           </Box>
         </DialogTitle>
