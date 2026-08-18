@@ -1,10 +1,14 @@
-import { Box } from "@mui/material";
+import { Box, type SxProps, type Theme } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import { editorial } from "../../theme/editorial";
 
 /**
  * The sign-in screen's left column: a purely visual idle animation, no words.
  * Everything is CSS on plain boxes — nothing here needs exporting as an asset.
+ *
+ * `sx` reaches the outer frame so the same composition can be dropped behind the
+ * card on a phone, where there is no column to give it and the vertical margin
+ * the desktop layout wants would only crop it.
  *
  * Held static under `prefers-reduced-motion`; the composition still reads.
  */
@@ -44,9 +48,12 @@ const FRAMES = [
 
 const reduceMotion = "@media (prefers-reduced-motion: reduce)";
 
-export default function IdleAnimationPanel() {
+export default function IdleAnimationPanel({ sx }: { sx?: SxProps<Theme> }) {
   return (
-    <Box sx={{ position: "relative", flex: 1, my: 5, overflow: "hidden" }} aria-hidden>
+    <Box
+      aria-hidden
+      sx={[{ position: "relative", flex: 1, my: 5, overflow: "hidden" }, ...(Array.isArray(sx) ? sx : [sx])]}
+    >
       {/* Hairline grid, drifting one cell so the loop is seamless. */}
       <Box
         sx={{
