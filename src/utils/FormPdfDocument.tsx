@@ -6,7 +6,8 @@ import { COMPANY, companyContactLines, type CompanyProfile } from "../config/com
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
-import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSignatureField, parseMaybeJson } from "./pdfImageSources";
+import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSignatureField } from "./pdfImageSources";
+import { isChoiceField, readTicks, shouldListChoices } from "./pdfChoiceMatching";
 import { chainProgress, isAwaitingLayer } from "./pdfLayerProgress";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 import type { DocumentControlHeader, PdfConfig } from "../types";
@@ -188,7 +189,15 @@ const S = StyleSheet.create({
   sigImage: { maxWidth: 116, maxHeight: 34, objectFit: "contain" },
   sigRule: { borderBottomWidth: 0.8, borderBottomColor: C.text, marginTop: 2 },
   sigCaption: { fontSize: 6, color: C.muted, textAlign: "center", marginTop: 2 },
+  // The routing address under a signature: present, findable, and visibly not
+  // part of the claim the signature makes.
+  sigReference: { fontSize: 5, color: C.muted, textAlign: "center", marginTop: 1 },
   sigMissing: { fontSize: 6, color: C.muted, fontStyle: "italic", textAlign: "center" },
+
+  // One layer's evidence, set as a band across its card rather than scattered
+  // down the page in whichever row happened to hold each picture.
+  visualStrip: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 7, paddingTop: 6, paddingBottom: 2 },
+  visualTile: { width: 118, flexShrink: 0, marginRight: 10, marginBottom: 4 },
 
   // ── Field rows ──
   fieldRow: { flexDirection: "row", paddingVertical: 3.5, paddingHorizontal: 5, borderBottomWidth: 0.4, borderBottomColor: C.borderLight, alignItems: "flex-start" },
@@ -196,6 +205,9 @@ const S = StyleSheet.create({
   fieldIndex: { width: "7%", fontSize: 7.5, color: C.muted },
   fieldLabel: { width: "40%", fontSize: 7.5, color: C.text, paddingRight: 8, lineHeight: 1.3 },
   fieldValue: { width: "53%", fontSize: 7.5, color: C.text, fontWeight: "bold", lineHeight: 1.3 },
+  // A question the form asked and nobody answered. Set apart from a real
+  // answer, because "nothing was said" is itself a fact about the record.
+  fieldValueMuted: { width: "53%", fontSize: 7.5, color: C.muted, fontStyle: "italic", lineHeight: 1.3 },
   imageGrid: { width: "53%", flexDirection: "row", flexWrap: "wrap" },
 
   // ── Tick list ──
@@ -229,6 +241,7 @@ const S = StyleSheet.create({
   evalSubRow: { flexDirection: "row", paddingVertical: 2.5, paddingHorizontal: 7, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   evalSubLabel: { width: "40%", fontSize: 7, color: C.muted, paddingRight: 6, lineHeight: 1.25 },
   evalSubValue: { width: "53%", fontSize: 7, color: C.text, lineHeight: 1.25 },
+  evalSubRef: { width: "53%", fontSize: 6.5, color: C.muted, fontStyle: "italic", lineHeight: 1.25 },
   paperEvalRow: { flexDirection: "row", paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   paperEvalLabel: { width: "30%", fontSize: 10, color: C.text, paddingRight: 10, lineHeight: 1.35 },
   paperFieldBox: { width: "66%" },
@@ -309,6 +322,33 @@ function fallbackPdfLabel(key: string): string {
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim() || key;
+}
+
+/**
+ * Columns that are how the record is filed, not what it says.
+ *
+ * Printing every stored column is what makes the document complete; printing
+ * SharePoint's own plumbing alongside it is what would make it unreadable. The
+ * list is deliberately about bookkeeping only - anything an author could have
+ * asked on a form stays.
+ */
+const BOOKKEEPING_COLUMNS = new Set([
+  "Id", "ID", "GUID", "Title", "ContentType", "ContentTypeId", "Attachments", "AuthorId", "EditorId",
+  "Author", "Editor", "Created", "Modified", "FileSystemObjectType", "ServerRedirectedEmbedUri",
+  "ServerRedirectedEmbedUrl", "ComplianceAssetId", "PermMask", "OData__UIVersionString", "OData__ColorTag",
+  "PdfUrl", "RawJSON", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer", "EvaluationData",
+  "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule", "PublishKey", "FormID", "FormId",
+  "FormVersion", "SubmittedBy", "SubmittedAt", "Submitted_x0020_By", "SelectedBranch", "Selected_x0020_Branch",
+  "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
+]);
+
+function isBookkeepingColumn(key: string): boolean {
+  return BOOKKEEPING_COLUMNS.has(key)
+    || key === REFERENCE_NO_FIELD
+    || key.startsWith("odata.")
+    || key.startsWith("OData__")
+    // `L1_Status`, `L2_Signature`, … - the approval chain, printed as its own table.
+    || /^L\d+_/.test(key);
 }
 
 function docControlCells(
@@ -424,93 +464,9 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function optionText(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return "";
-}
-
-function choiceOption(choice: unknown): { value: string; label: string } | null {
-  if (typeof choice === "string" || typeof choice === "number" || typeof choice === "boolean") {
-    const value = String(choice);
-    return { value, label: value };
-  }
-  if (!isRecord(choice)) return null;
-  const rawValue = choice.value ?? choice.itemValue ?? choice.id ?? choice.name;
-  const value = optionText(rawValue);
-  if (!value) return null;
-  const label = optionText(choice.text) || optionText(choice.title) || optionText(choice.label) || value;
-  return { value, label };
-}
-
-/** Comparable form of one answer or one option: case and spacing carry no meaning. */
-function matchKey(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-interface AnswerSelection {
-  /** Every spelling of every entry, ready to compare against an option. */
-  keys: Set<string>;
-  /** What each entry reads as. An empty string is an entry that carried no text. */
-  texts: string[];
-  /** How many entries the stored answer actually had. */
-  entries: number;
-}
-
-/**
- * What an answer selected, in whatever shape it was stored.
- *
- * A tick can arrive as an array of strings, as a JSON array in a text column, as
- * SharePoint's `;#`-delimited multi-value string, or as an array of option
- * objects. All four are the same claim, so all four are read the same way, and
- * an entry is matched on its value *or* its label — which of the two a column
- * ends up holding is not something the printed page should depend on.
- */
-function selectedAnswer(value: unknown): AnswerSelection {
-  const keys = new Set<string>();
-  const texts: string[] = [];
-  if (isEmptyPdfValue(value)) return { keys, texts, entries: 0 };
-
-  const parsed = typeof value === "string" ? parseMaybeJson(value) ?? value : value;
-  const entries = Array.isArray(parsed)
-    ? parsed
-    // ";#" is SharePoint's multi-value separator; a single value carries none.
-    : typeof parsed === "string" && parsed.includes(";#")
-      ? parsed.split(";#").filter((part) => part.trim() !== "")
-      : [parsed];
-
-  for (const entry of entries) {
-    const spellings = typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean"
-      ? [String(entry)]
-      : isRecord(entry)
-        ? [entry.value, entry.text, entry.title, entry.label, entry.Value, entry.Title, entry.LookupValue]
-            .map(optionText)
-            .filter((text) => text !== "")
-        : [];
-    texts.push(spellings[0] ?? "");
-    for (const spelling of spellings) {
-      if (spelling.trim() !== "") keys.add(matchKey(spelling));
-    }
-  }
-
-  return { keys, texts, entries: entries.length };
-}
-
-function choiceOptionsForField(field: FormSubmissionField): { value: string; label: string }[] {
-  const type = field.type.toLowerCase();
-  if (type === "boolean" || type === "consent") {
-    return [
-      { value: "true", label: field.labelTrue || "Yes" },
-      { value: "false", label: field.labelFalse || "No" },
-    ];
-  }
-  return (field.choices ?? []).map(choiceOption).filter((option): option is { value: string; label: string } => option !== null);
-}
-
-function shouldRenderTickboxes(field: FormSubmissionField): boolean {
-  const type = field.type.toLowerCase();
-  return ["boolean", "consent", "dropdown", "radiogroup", "checkbox", "tagbox", "buttongroup"].includes(type)
-    || ((field.choices?.length ?? 0) > 0 && ["", "text"].includes(type));
+/** A blank answer, for a question the record shows but nobody filled in. */
+function isBlankField(field: FormSubmissionField): boolean {
+  return isEmptyPdfValue(field.value) || (Array.isArray(field.value) && field.value.length === 0);
 }
 
 function isLongTextField(field: FormSubmissionField): boolean {
@@ -536,56 +492,26 @@ function renderPaperLines(field: FormSubmissionField) {
 }
 
 /** Which options an answer ticked, plus anything it said that no option covers. */
-function tickedOptions(field: FormSubmissionField): {
-  options: { value: string; label: string; ticked: boolean }[];
-  extras: string[];
-  unreadable: boolean;
-} {
-  const options = choiceOptionsForField(field);
-  const answer = selectedAnswer(field.value);
-  const type = field.type.toLowerCase();
-
-  if (type === "boolean" || type === "consent") {
-    const spoken = matchKey(String(field.value));
-    if (spoken === "yes" || spoken === "checked") answer.keys.add("true");
-    if (spoken === "no" || spoken === "unchecked") answer.keys.add("false");
-  }
-
-  const matched = new Set<string>();
-  const marked = options.map((option) => {
-    const ticked = answer.keys.has(matchKey(option.value)) || answer.keys.has(matchKey(option.label));
-    if (ticked) {
-      matched.add(matchKey(option.value));
-      matched.add(matchKey(option.label));
-    }
-    return { ...option, ticked };
-  });
-
-  return {
-    options: marked,
-    // An answer naming something the option list does not have is still an
-    // answer — a fill-in choice, or a list edited after the form was filed.
-    extras: answer.texts.filter((text) => text.trim() !== "" && !matched.has(matchKey(text))),
-    // Entries were stored and not one of them carried any text: the labels were
-    // lost before they reached the record, and an untouched list of boxes would
-    // report that as "nothing was ticked".
-    unreadable: answer.entries > 0 && answer.texts.every((text) => text.trim() === ""),
-  };
+/**
+ * The note under a tick list whose entries could not be matched to a box.
+ *
+ * A record that silently prints an untouched list for a question somebody
+ * ticked is a false statement about a permit, so the count is printed instead
+ * — small, beneath the boxes, as a reference mark rather than an alarm.
+ */
+function unresolvedTickNote(unresolved: number): string {
+  return `${unresolved} ${unresolved === 1 ? "tick was" : "ticks were"} stored against this item with no label the record could match.`;
 }
 
-function unreadableTickNote(field: FormSubmissionField): string {
-  const count = selectedAnswer(field.value).entries;
-  return `${count} ${count === 1 ? "item was" : "items were"} ticked, but no label was stored with them.`;
-}
-
+/** The full-size boxes, for the blank form somebody fills in by hand. */
 function renderTickboxOptions(field: FormSubmissionField) {
-  const { options, extras, unreadable } = tickedOptions(field);
+  const { options, extras, unresolved } = readTicks(field);
   if (options.length === 0) return renderPaperLines(field);
   return (
     <View style={S.paperFieldBox}>
       <View style={S.paperOptionGroup}>
-        {options.map((option) => (
-          <View key={`${field.key}-${option.value}`} style={S.paperOption}>
+        {options.map((option, index) => (
+          <View key={`${field.key}-${index}-${option.value}`} style={S.paperOption}>
             <View style={S.paperOptionBox}>
               {option.ticked ? <Text style={S.paperOptionMark}>X</Text> : null}
             </View>
@@ -594,38 +520,19 @@ function renderTickboxOptions(field: FormSubmissionField) {
         ))}
       </View>
       {extras.length > 0 ? <Text style={S.paperOptionLabel}>Also: {extras.join(", ")}</Text> : null}
-      {unreadable ? <Text style={S.tickNote}>{unreadableTickNote(field)}</Text> : null}
+      {unresolved > 0 ? <Text style={S.tickNote}>{unresolvedTickNote(unresolved)}</Text> : null}
     </View>
   );
 }
 
-/**
- * Whether to print this field as its list of options rather than as a sentence.
- *
- * A "(TICK)" panel on a permit is a column of boxes on the paper form it
- * replaces, and it has to stay one on the printed record: a reader checking a
- * permit needs to see the controls that were *not* taken as much as the ones
- * that were. A single-answer question stays a sentence — one tick among two
- * reads worse than the word "Yes" — and so does a very long option list, where
- * forty empty boxes would bury the answer instead of showing it.
- */
-function shouldListChoices(field: FormSubmissionField): boolean {
-  const type = field.type.toLowerCase();
-  const options = choiceOptionsForField(field);
-  if (options.length === 0 || options.length > 24) return false;
-  if (["checkbox", "tagbox", "multiselect", "checkboxgroup"].includes(type)) return true;
-  // Whatever the type is called, an answer holding several values is a tick list.
-  return selectedAnswer(field.value).entries > 1;
-}
-
 /** The compact tick list, for one row of the data table. */
 function renderChoiceList(field: FormSubmissionField) {
-  const { options, extras, unreadable } = tickedOptions(field);
+  const { options, extras, unresolved } = readTicks(field);
   return (
     <View style={S.tickBox}>
       <View style={S.tickGroup}>
-        {options.map((option) => (
-          <View key={`${field.key}-${option.value}`} style={S.tickOption}>
+        {options.map((option, index) => (
+          <View key={`${field.key}-${index}-${option.value}`} style={S.tickOption}>
             <View style={S.tickSquare}>
               {option.ticked ? <Text style={S.tickMark}>X</Text> : null}
             </View>
@@ -634,13 +541,13 @@ function renderChoiceList(field: FormSubmissionField) {
         ))}
       </View>
       {extras.length > 0 ? <Text style={S.tickExtra}>Also: {extras.join(", ")}</Text> : null}
-      {unreadable ? <Text style={S.tickNote}>{unreadableTickNote(field)}</Text> : null}
+      {unresolved > 0 ? <Text style={S.tickNote}>{unresolvedTickNote(unresolved)}</Text> : null}
     </View>
   );
 }
 
 function renderPaperFieldValue(field: FormSubmissionField) {
-  if (shouldRenderTickboxes(field)) return renderTickboxOptions(field);
+  if (isChoiceField(field)) return renderTickboxOptions(field);
   return renderPaperLines(field);
 }
 
@@ -716,6 +623,10 @@ function evaluationFieldsForLayer(layer: PdfLayerResult, includeEmpty: boolean):
       fallbackSectionTitle: "Evaluation",
       formatFallbackLabel: fallbackPdfLabel,
       includeAdditionalFields: true,
+      // The evaluator's own questions are held to the same standard as the
+      // form's: one that was put to them and left blank is part of what the
+      // layer says, and dropping it shortens the evaluation on the page.
+      includeUnansweredFields: true,
     }).flatMap((section) => section.fields);
   }
 
@@ -750,13 +661,18 @@ function renderImageSources(sources: string[]) {
 }
 
 /**
- * A signature well: the ink, the rule it sits on, and who it belongs to.
+ * A signature well: the ink, the rule it sits on, and what it belongs to.
  *
  * The rule is drawn whether or not there is ink. An approver who signed on
  * paper, or whose stored image could not be fetched, leaves a line to sign
  * rather than a blank the reader has to interpret.
+ *
+ * The caption names the person or the question, never the routing address: an
+ * email under a signature is bookkeeping about how the form was delivered, not
+ * a claim about who signed. It is still printed - beneath the caption, at
+ * reference size - because the record has to say where the request went.
  */
-function SignatureWell({ signature, caption }: { signature?: string; caption: string }) {
+function SignatureWell({ signature, caption, reference }: { signature?: string; caption: string; reference?: string }) {
   const ink = (signature ?? "").trim();
   return (
     <View style={S.sigWell} wrap={false}>
@@ -769,10 +685,109 @@ function SignatureWell({ signature, caption }: { signature?: string; caption: st
       </View>
       <View style={S.sigRule} />
       <Text style={S.sigCaption}>{caption}</Text>
+      {reference ? <Text style={S.sigReference}>{reference}</Text> : null}
     </View>
   );
 }
 
+/** One picture a layer holds, ready to be set beside the others it holds. */
+interface LayerVisual {
+  id: string;
+  kind: "signature" | "image";
+  caption: string;
+  /** The routing detail behind it, set small under the caption. */
+  reference?: string;
+  /** The evaluation answer it came from, when it came from one. */
+  fieldKey?: string;
+  sources: string[];
+}
+
+/**
+ * Every signature and picture belonging to one layer, gathered in one place.
+ *
+ * A layer's ink used to mean exactly one thing: whatever sat in its
+ * `L{n}_Signature` column. Everything else the layer collected - a second
+ * signature asked for inside the evaluation, a photograph of the isolated
+ * valve, a scan of the paper permit - was left to whichever table row happened
+ * to hold it, so the pictures that show the layer acted were scattered down the
+ * page away from the layer that took them. They are one layer's evidence, so
+ * they are set together under that layer.
+ */
+function layerVisuals(layer: PdfLayerResult, evaluationFields: FormSubmissionField[]): LayerVisual[] {
+  const visuals: LayerVisual[] = [];
+  const person = (layer.confirmerName || "").trim();
+  const email = (layer.confirmerEmail || layer.email || "").trim();
+
+  const ink = (layer.signature || "").trim();
+  if (ink) {
+    visuals.push({
+      id: `layer-${layer.layerNumber}-signature`,
+      kind: "signature",
+      caption: person || (layer.type === "evaluation" ? "Evaluator" : "Approver"),
+      ...(email ? { reference: email } : {}),
+      sources: [ink],
+    });
+  }
+
+  for (const field of evaluationFields) {
+    const sources = collectImageSources(field.value);
+    if (sources.length === 0) continue;
+    visuals.push({
+      id: `layer-${layer.layerNumber}-${field.key}`,
+      kind: isSignatureField(field) ? "signature" : "image",
+      caption: field.label,
+      fieldKey: field.key,
+      sources,
+    });
+  }
+
+  return visuals;
+}
+
+/** How an answer already drawn in the layer's strip is referred to in its row. */
+function shownAboveNote(visual: LayerVisual): string {
+  if (visual.kind === "signature") return "Signed — shown under Signatures & attachments";
+  const count = visual.sources.length;
+  return `${count} ${count === 1 ? "picture" : "pictures"} — shown under Signatures & attachments`;
+}
+
+/**
+ * The layer's evidence, set as one band.
+ *
+ * Every picture gets its own tile. A "+2 more" against a thumbnail is the same
+ * omission this whole block exists to undo: the two that were not drawn are
+ * exactly the two nobody can check.
+ */
+function renderLayerVisuals(visuals: LayerVisual[]) {
+  return (
+    <View style={S.visualStrip}>
+      {visuals.flatMap((visual) => (
+        visual.kind === "signature"
+          ? [(
+            <SignatureWell
+              key={visual.id}
+              signature={visual.sources[0]}
+              caption={visual.caption}
+              {...(visual.reference ? { reference: visual.reference } : {})}
+            />
+          )]
+          : visual.sources.map((source, index) => (
+            <View key={`${visual.id}-${index}`} style={S.visualTile} wrap={false}>
+              <View style={S.imageFrame}>
+                {isEmbeddableImage(source)
+                  ? <Image style={S.imagePreview} src={source} />
+                  : <Text style={S.imageMissing}>Image stored with the record{"\n"}(not embedded)</Text>}
+              </View>
+              <Text style={S.sigCaption}>
+                {visual.caption}{visual.sources.length > 1 ? ` (${index + 1} of ${visual.sources.length})` : ""}
+              </Text>
+              {imageCaption(source) ? <Text style={S.sigReference}>{imageCaption(source)}</Text> : null}
+            </View>
+          ))
+      ))}
+    </View>
+  );
+}
 
 /**
  * One question and its answer, as a numbered row of the data table.
@@ -784,16 +799,25 @@ function FieldRow({ field, index, striped }: { field: FormSubmissionField; index
   const imageSources = collectImageSources(field.value);
   const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
   const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
+  const blank = isBlankField(field);
 
   return (
     <View style={[S.fieldRow, striped ? S.fieldRowAlt : {}]} wrap={false}>
       <Text style={S.fieldIndex}>{index}</Text>
       <Text style={S.fieldLabel}>{field.label}</Text>
       {isSignatureField(field)
-        ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
+        // An empty well is indistinguishable from ink that failed to load, so a
+        // signature nobody gave is said in words rather than drawn as a rule.
+        ? blank
+          ? <Text style={S.fieldValueMuted}>Not signed</Text>
+          : <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
         : imageSources.length > 0
           ? renderImageSources(imageSources)
-          : ticks || measure || <Text style={S.fieldValue}>{fmtVal(field.value, field) || "—"}</Text>}
+          : ticks || measure || (
+            blank
+              ? <Text style={S.fieldValueMuted}>No answer recorded</Text>
+              : <Text style={S.fieldValue}>{fmtVal(field.value, field) || "—"}</Text>
+          )}
     </View>
   );
 }
@@ -823,15 +847,16 @@ function LayerDetailCard({
   const evaluationFields = showEvaluationDetails && layer.type === "evaluation"
     ? evaluationFieldsForLayer(layer, includeEmptyEvaluationFields)
     : [];
-  const who = layer.confirmerName || layer.confirmerEmail || layer.email || "";
-  // An evaluation that asked for a signature has already collected one, in its
-  // own answers below. Drawing the layer's well as well put an empty rule under
-  // the signatory's name a centimetre above their actual signature, which reads
-  // as ink that failed to load rather than as ink that was never asked for.
-  const signedInAnswers = evaluationFields.some(
-    (field) => isSignatureField(field) && collectImageSources(field.value).length > 0,
+  const person = (layer.confirmerName || "").trim();
+  const email = (layer.confirmerEmail || layer.email || "").trim();
+  const actionedBy = person || email || "—";
+  const visuals = includeEmptyEvaluationFields || !showSignature ? [] : layerVisuals(layer, evaluationFields);
+  const visualByFieldKey = new Map(
+    visuals.filter((visual) => visual.fieldKey).map((visual) => [visual.fieldKey as string, visual] as const),
   );
-  const drawSignature = showSignature && !(signedInAnswers && !(layer.signature ?? "").trim());
+  // A layer that collected no picture at all still gets a rule to sign on: it
+  // may have been approved on paper, or its stored ink may have gone missing.
+  const drawEmptyWell = showSignature && visuals.length === 0;
 
   return (
     <View style={S.layerCard} wrap={false}>
@@ -845,12 +870,26 @@ function LayerDetailCard({
       <View style={S.layerCardBody}>
         <View style={S.layerCardFacts}>
           <Text style={S.sigLabel}>Actioned by</Text>
-          <Text style={S.sigName}>{who || "—"}</Text>
+          <Text style={S.sigName}>{actionedBy}</Text>
           <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}</Text>
+          {/* The routing address, kept as a reference mark rather than as the
+              name on the decision. */}
+          {person && email ? <Text style={S.sigDetail}>{email}</Text> : null}
           {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
         </View>
-        {drawSignature ? <SignatureWell signature={layer.signature} caption={who || "Signature"} /> : null}
+        {drawEmptyWell
+          ? <SignatureWell caption={person || "Signature"} {...(email ? { reference: email } : {})} />
+          : null}
       </View>
+
+      {visuals.length > 0 && (
+        <View>
+          <View style={S.dataGroupRow}>
+            <Text style={S.dataGroupText}>Signatures &amp; attachments</Text>
+          </View>
+          {renderLayerVisuals(visuals)}
+        </View>
+      )}
 
       {evaluationFields.length > 0 && (
         <View>
@@ -858,19 +897,17 @@ function LayerDetailCard({
             <Text style={S.dataGroupText}>Evaluation responses</Text>
           </View>
           {evaluationFields.map((field, index) => {
-            const imageSources = collectImageSources(field.value);
             const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
             const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
+            const drawnAbove = visualByFieldKey.get(field.key);
             return (
               <View key={`${field.key}-${index}`} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
                 <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
                 {includeEmptyEvaluationFields
                   ? renderPaperFieldValue(field)
-                  : isSignatureField(field)
-                    ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
-                    : imageSources.length > 0
-                      ? renderImageSources(imageSources)
-                      : ticks || measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
+                  : drawnAbove
+                    ? <Text style={S.evalSubRef}>{shownAboveNote(drawnAbove)}</Text>
+                    : ticks || measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
               </View>
             );
           })}
@@ -880,10 +917,19 @@ function LayerDetailCard({
   );
 }
 
+
 export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader, company }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Main Page",
-    includeAdditionalFields: false,
+    // The document is the record of the form, so it carries the whole form: the
+    // questions nobody answered as well as the ones somebody did, and any
+    // column stored against the item that the published survey no longer
+    // mentions. A record that silently drops both reads as a shorter form than
+    // the one that was actually signed.
+    includeAdditionalFields: true,
+    includeUnansweredFields: true,
+    formatFallbackLabel: fallbackPdfLabel,
+    shouldIncludeField: (key) => !isBookkeepingColumn(key),
   });
   const layoutConfig = pdfConfig?.enabled === false ? undefined : pdfConfig;
   const title = layoutConfig?.title?.trim() || surveyJson?.title || meta.formTitle;

@@ -323,16 +323,37 @@ describe("a question that was answered by ticking boxes", () => {
     // which reads as a broken renderer rather than as missing data.
     const text = flatText(await renderPdf(ticked(["", "", ""])));
     expect(text).not.toContain(", ,");
-    expect(text).toContain("3 ITEMS WERE TICKED, BUT NO LABEL WAS STORED WITH THEM.");
+    expect(text).toContain("3 TICKS WERE STORED AGAINST THIS ITEM WITH NO LABEL THE RECORD COULD MATCH.");
   });
 
-  it("says nothing at all about a question nobody answered", async () => {
-    // An unanswered question is left off the page entirely, as it always was.
-    // What matters here is that it does not arrive as a row of empty boxes with
-    // a note attached, which would report silence as a fault.
+  it("matches a tick stored in the shape of a column name", async () => {
+    // A tick that went through a data schema comes back spelled as the schema
+    // spells it. It is the same tick, and the reader is owed the same box.
+    const text = flatText(await renderPdf(ticked(["Working_x0020_at_x0020_Height", "confinedSpace"])));
+    expect(text).toContain("WORKING AT HEIGHT");
+    // Neither spelling should have fallen through to the fill-in line.
+    expect(text).not.toContain("ALSO:");
+  });
+
+  it("reads a tick stored as a map of every option to true or false", async () => {
+    const text = flatText(await renderPdf(ticked({ "Hot Work": true, "Working at Height": false, "Confined Space": true })));
+    expect(text).not.toContain("ALSO:");
+    expect(text).not.toContain("WITH NO LABEL");
+  });
+
+  it("reads the generated option values a form writes when the author typed only labels", async () => {
+    const text = flatText(await renderPdf(ticked(["item1", "item3"])));
+    expect(text).not.toContain("ALSO: ITEM1");
+    expect(text).not.toContain("WITH NO LABEL");
+  });
+
+  it("prints the boxes of a question nobody answered, and claims no ticks for it", async () => {
+    // The record carries the whole form, so an untouched tick panel is on the
+    // page as an untouched tick panel - what it must not do is report silence
+    // as a fault, or as ticks it could not read.
     const text = flatText(await renderPdf(ticked([])));
-    expect(text).not.toContain("HOT WORK");
-    expect(text).not.toContain("WERE TICKED, BUT NO LABEL");
+    expect(text).toContain("HOT WORK");
+    expect(text).not.toContain("WITH NO LABEL");
   });
 
   it("keeps an answer the option list does not cover", async () => {
@@ -389,9 +410,107 @@ describe("an evaluation that signed inside its own answers", () => {
         signature: WIDE_PNG,
       }],
     });
-    // Once in the chain table, once in the card's facts, once as the caption
-    // under the ink — the last of those is the one being guarded.
+    // Once in the chain table, once in the card's facts, once as the reference
+    // mark under the ink — the last of those is the one being guarded.
     expect(occurrences(flatText(await renderPdf(data)), "HAFIZ@EXAMPLE.COM")).toBe(3);
+  });
+
+  it("gathers every picture the layer collected under that layer", async () => {
+    const data = baseData({
+      layerResults: [{
+        layerNumber: 2,
+        type: "evaluation",
+        status: "Confirmed",
+        email: "ashraf@example.com",
+        signedAt: "2026-08-18T10:42:00",
+        confirmerName: "Muhammad Ashraf",
+        signature: WIDE_PNG,
+        evaluationFields: { AreaSig: WIDE_PNG, SitePhoto: WIDE_PNG, Safe: "Yes" },
+        evaluationSurveyElements: [
+          { type: "signaturepad", name: "AreaSig", title: "Working Area Inspected" },
+          { type: "file", name: "SitePhoto", title: "Site Photograph" },
+          { type: "text", name: "Safe", title: "Working area has been checked" },
+        ],
+      }],
+    });
+    const text = flatText(await renderPdf(data));
+    // The layer's own ink, the signature asked for inside the evaluation and
+    // the photograph are one layer's evidence, so they are set together.
+    expect(text).toContain("SIGNATURES & ATTACHMENTS");
+    expect(text).toContain("SITE PHOTOGRAPH");
+    // …and the answer rows point at them rather than drawing them twice.
+    expect(text).toContain("SHOWN UNDER SIGNATURES & ATTACHMENTS");
+  });
+
+  it("names the person on the signature and keeps the address as a reference", async () => {
+    const data = baseData({
+      layerResults: [{
+        layerNumber: 1,
+        type: "approval",
+        status: "Approved",
+        email: "hafiz@example.com",
+        signedAt: "2026-08-18T10:42:00",
+        confirmerName: "Hafiz bin Omar",
+        signature: WIDE_PNG,
+      }],
+    });
+    const placed = placedText(await renderPdf(data));
+    const name = placed.filter((item) => item.text.includes("Hafiz bin Omar"));
+    const address = placed.filter((item) => item.text.includes("hafiz@example.com"));
+    // The name is on the decision and under the ink; the routing address is
+    // still recorded, but it is no longer what the signature is captioned with.
+    expect(name.length).toBeGreaterThanOrEqual(2);
+    expect(address.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("a record of the whole form, not only the parts that were filled in", () => {
+  const partlyFilled = (responseData: Record<string, unknown>): PdfFormData => baseData({
+    surveyJson: {
+      title: "Permit To Work",
+      pages: [{
+        name: "page1",
+        elements: [
+          { type: "text", name: "Location", title: "Location of Work" },
+          { type: "text", name: "Hazards", title: "Hazards Identified" },
+          { type: "signaturepad", name: "ReqSig", title: "Requester Signature" },
+        ],
+      }],
+    },
+    responseData,
+  });
+
+  it("prints a question nobody answered rather than leaving it off the page", async () => {
+    const text = flatText(await renderPdf(partlyFilled({ Location: "Bay 3" })));
+    expect(text).toContain("HAZARDS IDENTIFIED");
+    expect(text).toContain("NO ANSWER RECORDED");
+  });
+
+  it("says a signature was not given rather than drawing an empty rule for it", async () => {
+    // An empty well is indistinguishable from ink that failed to load, and the
+    // difference between those two is the whole point of the page.
+    const text = flatText(await renderPdf(partlyFilled({ Location: "Bay 3" })));
+    expect(text).toContain("NOT SIGNED");
+  });
+
+  it("keeps a stored answer the published survey no longer asks about", async () => {
+    // A form edited after this record was filed leaves answers behind that no
+    // element claims. They were still given, so they are still printed.
+    const text = flatText(await renderPdf(partlyFilled({ Location: "Bay 3", Supervisor_x0020_Notes: "Isolated at 08:40" })));
+    expect(text).toContain("ISOLATED AT 08:40");
+    expect(text).toContain("SUPERVISOR NOTES");
+  });
+
+  it("leaves the plumbing off the page", async () => {
+    const text = flatText(await renderPdf(partlyFilled({
+      Location: "Bay 3",
+      PdfUrl: "https://tenant.sharepoint.com/sites/hr/Form%20PDFs/x.pdf",
+      L1_Status: "Approved",
+      ContentType: "Item",
+    })));
+    expect(text).not.toContain("PDFURL");
+    expect(text).not.toContain("L1 STATUS");
+    expect(text).not.toContain("CONTENTTYPE");
   });
 });
 

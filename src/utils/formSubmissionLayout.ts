@@ -36,6 +36,16 @@ interface BuildFormSubmissionSectionsOptions {
   fallbackSectionTitle?: string;
   formatFallbackLabel?: (key: string) => string;
   includeAdditionalFields?: boolean;
+  /**
+   * Keep a question nobody answered.
+   *
+   * A submission record is a record of what was *asked* as much as of what was
+   * said back: a permit whose unanswered items are simply absent reads as a
+   * shorter form than the one that was signed, and the reader has no way to
+   * tell a question that was skipped from one that was never on the page.
+   * Callers that print a record pass this; callers that summarise it do not.
+   */
+  includeUnansweredFields?: boolean;
   shouldIncludeField?: (key: string, value: unknown, element?: SurveyElement) => boolean;
 }
 
@@ -237,8 +247,19 @@ function openSection(
   return section;
 }
 
+/**
+ * Companion columns: a second copy of an answer that already has a row.
+ *
+ * `_Response` and `_Html` hold the rendered form of a matrix the table above
+ * has already drawn, so listing them again prints the same answer twice - once
+ * as a table and once as a wall of markup.
+ */
 function shouldSkipAdditionalKey(key: string): boolean {
-  return key.endsWith("_Json") || key.endsWith("_RowIds") || key.endsWith("_childRows");
+  return key.endsWith("_Json")
+    || key.endsWith("_RowIds")
+    || key.endsWith("_childRows")
+    || key.endsWith("_Response")
+    || key.endsWith("_Html");
 }
 
 export function buildFormSubmissionSections(
@@ -250,6 +271,7 @@ export function buildFormSubmissionSections(
   const usedKeys = new Set<string>();
   const fallbackSectionTitle = options.fallbackSectionTitle ?? "Submitted answers";
   const includeAdditionalFields = options.includeAdditionalFields ?? true;
+  const includeUnansweredFields = options.includeUnansweredFields ?? false;
   const formatFallbackLabel = options.formatFallbackLabel ?? ((key: string) => key);
   const responseKeyLookup = buildResponseKeyLookup(responseData);
 
@@ -281,7 +303,7 @@ export function buildFormSubmissionSections(
       if (!key || LAYOUT_TYPES.has(type) || isManagedCompanyQuestion(element)) continue;
 
       const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
-      if (!hasDisplayValue(value)) continue;
+      if (!hasDisplayValue(value) && !includeUnansweredFields) continue;
       if (options.shouldIncludeField && !options.shouldIncludeField(key, value, element)) continue;
 
       usedKeys.add(key);
