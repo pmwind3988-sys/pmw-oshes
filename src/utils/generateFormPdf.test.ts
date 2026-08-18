@@ -24,6 +24,48 @@ describe("PDF image hydration", () => {
       "https://tenant.sharepoint.com/sites/hr",
     )).toBe("/sites/hr/Signature%20Images/signed.png");
   });
+
+  it("does not mistake a typed answer for a picture", () => {
+    // `new URL("Hot Work", origin)` resolves, and its origin matches the site,
+    // so every plain-text answer on the form used to be classified as an image
+    // on our own tenant. Hydration then fetched it, got a 404, and wrote the
+    // answer back as an empty string - which is how a signed permit reached the
+    // page with its ticks unlabelled and its text fields blank.
+    const site = "https://tenant.sharepoint.com/sites/hr";
+    for (const answer of ["Hot Work", "Bay 3, compressor house", "Muhammad Ashraf Bin Azahari", "Yes", "3"]) {
+      expect(__test__.isSharePointSource(answer, site)).toBe(false);
+      expect(__test__.imageSourceFromString(answer, site)).toBe("");
+    }
+  });
+
+  it("still recognizes the addresses a picture really arrives as", () => {
+    const site = "https://tenant.sharepoint.com/sites/hr";
+    expect(__test__.isSharePointSource("/sites/hr/Signature%20Images/a.png", site)).toBe(true);
+    expect(__test__.isSharePointSource("https://tenant.sharepoint.com/sites/hr/x/a.png", site)).toBe(true);
+    expect(__test__.isSharePointSource("https://elsewhere.example.com/a.png", site)).toBe(false);
+  });
+});
+
+describe("what hydration hands back", () => {
+  /** Hydration with nothing reachable: every fetch fails. */
+  const hydrate = (value: unknown) => __test__.hydrateImageValue("token", value, new Map());
+
+  it("leaves a typed answer exactly as it was stored", async () => {
+    expect(await hydrate("Bay 3, compressor house")).toBe("Bay 3, compressor house");
+    expect(await hydrate(["Hot Work", "Confined Space"])).toEqual(["Hot Work", "Confined Space"]);
+  });
+
+  it("keeps the address of a picture it could not fetch", async () => {
+    // Blanking it reaches the page as an answer nobody gave. Keeping it lets the
+    // document draw the labelled placeholder it has for exactly this case.
+    const missing = "https://tenant.sharepoint.com/sites/hr/Signature%20Images/missing.png";
+    expect(await hydrate(missing)).toBe(missing);
+  });
+
+  it("leaves a data URI alone", async () => {
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    expect(await hydrate(png)).toBe(png);
+  });
 });
 
 describe("image type sniffing", () => {

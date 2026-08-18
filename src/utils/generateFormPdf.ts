@@ -150,14 +150,26 @@ function isImageSource(value: string): boolean {
   return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
 }
 
+/**
+ * Whether this string addresses a file on our own SharePoint site.
+ *
+ * The candidate has to already look like an address. This used to resolve it
+ * against the site origin as a *relative* URL, and `new URL("Hot Work", origin)`
+ * succeeds - it yields `https://…/Hot%20Work`, whose origin matches, so every
+ * plain-text answer on the form was classified as a picture. Hydration then
+ * fetched it, got a 404, and wrote the answer back as an empty string: a permit
+ * reached the page with its ticks unlabelled and its text fields blank, and the
+ * document could only report them as questions nobody had answered.
+ */
 function isSharePointSource(value: string, siteUrl = SP_SITE_URL): boolean {
   const trimmed = value.trim();
   if (!trimmed || trimmed.startsWith("data:")) return false;
   if (/^\/(sites|teams)\//i.test(trimmed)) return true;
+  // Anything that is not already absolute is prose, not a path we serve.
+  if (!/^https?:\/\//i.test(trimmed)) return false;
   try {
     const site = new URL(siteUrl);
-    const candidate = new URL(trimmed, site.origin);
-    return candidate.origin.toLowerCase() === site.origin.toLowerCase();
+    return new URL(trimmed).origin.toLowerCase() === site.origin.toLowerCase();
   } catch {
     return false;
   }
@@ -404,7 +416,11 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
     const parsed = parseMaybeJson(value);
     if (parsed !== null) return hydrateImageValue(token, parsed, cache);
     const source = imageSourceFromString(value);
-    return source ? imageSourceToDataUrl(token, source, cache) : value;
+    if (!source) return value;
+    // A picture that could not be fetched keeps its address. Blanking it here
+    // would reach the page as an answer nobody gave; keeping it lets the
+    // document draw the labelled placeholder it has for exactly this case.
+    return (await imageSourceToDataUrl(token, source, cache)) || value;
   }
 
   if (Array.isArray(value)) {
@@ -418,7 +434,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
     const raw = next[key];
     if (typeof raw === "string") {
       const source = imageSourceFromString(raw);
-      if (source) next[key] = await imageSourceToDataUrl(token, source, cache);
+      if (source) next[key] = (await imageSourceToDataUrl(token, source, cache)) || raw;
     }
   }
 
@@ -427,7 +443,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
     const combined = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
     if (isImageSource(combined) || isSharePointSource(combined)) {
-      next.url = await imageSourceToDataUrl(token, combined, cache);
+      next.url = (await imageSourceToDataUrl(token, combined, cache)) || combined;
     }
   }
 
@@ -576,6 +592,8 @@ export async function generateAndStorePdf(
 }
 
 export const __test__ = {
+  hydrateImageValue,
+  isSharePointSource,
   imageSourceFromString,
   sharePointServerRelativePath,
   sniffImageMimeType,
