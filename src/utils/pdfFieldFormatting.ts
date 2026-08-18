@@ -143,7 +143,14 @@ export function formatPdfFieldValue(value: unknown, field: PdfFieldFormatContext
 
   if (typeof normalized === "boolean") return normalized ? "Yes" : "No";
   if (Array.isArray(normalized)) {
-    return normalized.map((entry) => formatPdfFieldValue(entry, field)).join(", ");
+    // Empty entries are dropped rather than joined. A three-item answer whose
+    // values did not survive submission printed as ", ," — punctuation standing
+    // in for an answer, which reads as a rendering fault rather than as missing
+    // data. Nothing at all is the honest version of nothing at all.
+    return normalized
+      .map((entry) => formatPdfFieldValue(entry, field))
+      .filter((entry) => entry.trim() !== "")
+      .join(", ");
   }
   const choiceOptions = field.type === "rating" && field.rateValues?.length ? field.rateValues : field.choices;
   if (choiceOptions?.length) {

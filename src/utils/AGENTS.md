@@ -53,6 +53,30 @@ Builder path:
 - `FormBuilderEngine.ts`: pure logic, no side effects, no React imports
 - **OData**: `odata=nometadata` — responses use `data.value` not `data.d.results`
 
+## What the printed page may claim
+`FormPdfDocument.tsx` is a record that gets filed and shown to auditors, so every mark on it
+has to be something the data supports:
+
+- **A "(TICK)" question prints as its boxes, not as a sentence.** `shouldListChoices()` sends
+  multi-answer and multi-select fields to `renderChoiceList()`, which draws every option with a
+  bordered box and an `X` — the controls that were *not* taken matter as much as the ones that
+  were. A tick is matched on the option's value **or** its label, through `selectedAnswer()`,
+  because a form submits values and a SharePoint multi-value column hands back `;#`-joined
+  labels. Single-answer questions stay sentences, and lists past 24 options do too.
+- **Punctuation is never an answer.** Empty entries are dropped before joining, so a three-tick
+  answer whose labels did not survive submission can no longer print as `, ,`. When every entry
+  is blank the page says so in as many words — that state means the labels were lost upstream
+  (choices authored with empty values), and the fix is in the form, not here.
+- **One signature well per signature.** A layer whose evaluation answers already carry ink does
+  not also get the layer's own empty rule: an unfilled well is indistinguishable from ink that
+  failed to load. The rule is still drawn for a layer that signs on the layer itself, including
+  one signed on paper.
+- **Composition:** mark top left, address ranged right beside it, then the document band — what
+  the document *is* (title, reference, date, form, version) on the left, who filed it and its
+  status on the right. A filed permit is looked up by its number, not by whose name is on it.
+  Positions are asserted in `FormPdfDocument.test.tsx` via `placedText()`, which runs the PDF's
+  own transform stack, because "on the left" is a claim about the page and not about the JSX.
+
 ## SP Column Type Mapping
 `FormBuilderEngine.ts` `getSpColumnKind()` and `formBuilderSP.ts` `ensureColumns()` map SurveyJS types to SharePoint `FieldTypeKind`:
 - 2 = Text, 3 = Note, 4 = DateTime, 6 = Choice, 8 = Boolean, 9 = Number, 15 = MultiChoice, 11 = Image

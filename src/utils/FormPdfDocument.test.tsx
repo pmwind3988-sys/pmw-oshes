@@ -97,6 +97,44 @@ function occurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+/**
+ * Where each string was drawn, by running the content stream's transform stack.
+ *
+ * Composition is a claim about position, so it is checked as one. The `q`/`Q`
+ * pairs push and pop the graphics state and every `1 0 0 1 x y cm` translates
+ * within it, which is enough to say whether the reference leads on the left and
+ * the submitter sits on the right.
+ */
+function placedText(raw: string): { x: number; y: number; text: string }[] {
+  const placed: { x: number; y: number; text: string }[] = [];
+  for (const content of contentStreams(raw)) {
+    if (!content.includes("BT")) continue;
+    let x = 0;
+    let y = 0;
+    const stack: { x: number; y: number }[] = [];
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed === "q") { stack.push({ x, y }); continue; }
+      if (trimmed === "Q") { const popped = stack.pop(); if (popped) { x = popped.x; y = popped.y; } continue; }
+      const move = trimmed.match(/^1 0 0 1 ([\d.-]+) ([\d.-]+) cm$/);
+      if (move) { x += Number(move[1]); y += Number(move[2]); continue; }
+      const draw = trimmed.match(/^\[(.*)\]\s*TJ$/);
+      if (!draw) continue;
+      let text = "";
+      for (const [, hex] of draw[1].matchAll(/<([0-9a-fA-F]*)>/g)) text += Buffer.from(hex, "hex").toString("latin1");
+      if (text.trim()) placed.push({ x, y, text });
+    }
+  }
+  return placed;
+}
+
+/** Where a string starts, by the first draw that carries it. */
+function xOf(raw: string, needle: string): number {
+  const hit = placedText(raw).find((item) => item.text.includes(needle));
+  if (!hit) throw new Error(`"${needle}" was not drawn on the page`);
+  return hit.x;
+}
+
 /** The `w 0 0 h x y cm` transforms applied immediately before each image draw. */
 function drawnImageBoxes(raw: string): { width: number; height: number }[] {
   const boxes: { width: number; height: number }[] = [];
@@ -249,6 +287,140 @@ describe("a record printed before its chain has finished", () => {
     // Printing an unsigned evaluation for someone to fill in by hand is the
     // whole point of that setting, so its cards survive the filter above.
     expect(occurrences(flatText(await renderPdf(paper)), "ACTIONED BY")).toBe(3);
+  });
+});
+
+describe("a question that was answered by ticking boxes", () => {
+  const ticked = (value: unknown, choices: unknown[] = ["Hot Work", "Working at Height", "Confined Space"]): PdfFormData =>
+    baseData({
+      surveyJson: {
+        title: "Permit To Work",
+        pages: [{ name: "page1", elements: [{ type: "checkbox", name: "Nature", title: "Nature of Work", choices }] }],
+      },
+      responseData: { Nature: value },
+    });
+
+  it("prints the options as boxes, ticking the ones that were chosen", async () => {
+    const text = flatText(await renderPdf(ticked(["Hot Work", "Confined Space"])));
+    // Every option is on the page, chosen or not: a reader checking a permit
+    // needs to see the work that was ruled out as much as the work allowed.
+    expect(text).toContain("HOT WORK");
+    expect(text).toContain("WORKING AT HEIGHT");
+    expect(text).toContain("CONFINED SPACE");
+  });
+
+  it("matches a tick against the option's label as well as its value", async () => {
+    // SharePoint hands multi-value columns back as one ";#"-delimited string,
+    // and what it holds is the label, not the value the form submitted.
+    const choices = [{ value: "helmet", text: "Safety Helmet" }, { value: "gloves", text: "Gloves" }];
+    const text = flatText(await renderPdf(ticked("Safety Helmet;#Gloves", choices)));
+    expect(text).toContain("SAFETY HELMET");
+    expect(text).toContain("GLOVES");
+  });
+
+  it("never prints an answer as bare punctuation", async () => {
+    // Three ticks whose labels did not survive submission printed as ", ,",
+    // which reads as a broken renderer rather than as missing data.
+    const text = flatText(await renderPdf(ticked(["", "", ""])));
+    expect(text).not.toContain(", ,");
+    expect(text).toContain("3 ITEMS WERE TICKED, BUT NO LABEL WAS STORED WITH THEM.");
+  });
+
+  it("says nothing at all about a question nobody answered", async () => {
+    // An unanswered question is left off the page entirely, as it always was.
+    // What matters here is that it does not arrive as a row of empty boxes with
+    // a note attached, which would report silence as a fault.
+    const text = flatText(await renderPdf(ticked([])));
+    expect(text).not.toContain("HOT WORK");
+    expect(text).not.toContain("WERE TICKED, BUT NO LABEL");
+  });
+
+  it("keeps an answer the option list does not cover", async () => {
+    const text = flatText(await renderPdf(ticked(["Hot Work", "Rope access"])));
+    expect(text).toContain("ALSO: ROPE ACCESS");
+  });
+
+  it("leaves a one-answer question as a sentence", async () => {
+    const data = baseData({
+      surveyJson: {
+        title: "Permit To Work",
+        pages: [{ name: "page1", elements: [{ type: "radiogroup", name: "Shift", title: "Shift", choices: ["Day", "Night"] }] }],
+      },
+      responseData: { Shift: "Day" },
+    });
+    const text = flatText(await renderPdf(data));
+    expect(text).toContain("DAY");
+    // "Night" would only appear as the unticked half of a two-box list.
+    expect(text).not.toContain("NIGHT");
+  });
+});
+
+describe("an evaluation that signed inside its own answers", () => {
+  const evaluated = (): PdfFormData => baseData({
+    layerResults: [{
+      layerNumber: 1,
+      type: "evaluation",
+      status: "Confirmed",
+      email: "ashraf@example.com",
+      signedAt: "2026-08-18T10:42:00",
+      confirmerName: "Muhammad Ashraf",
+      evaluationFields: { AreaSig: WIDE_PNG },
+      evaluationSurveyElements: [{ type: "signaturepad", name: "AreaSig", title: "Working Area Inspected (Signature)" }],
+    }],
+  });
+
+  it("does not draw a second, empty signature rule above the real one", async () => {
+    const text = flatText(await renderPdf(evaluated()));
+    // The layer card used to print the signatory's name under an empty rule a
+    // centimetre above their actual signature, which reads as ink that failed
+    // to load rather than as ink that was never asked for.
+    expect(occurrences(text, "MUHAMMAD ASHRAF")).toBe(1);
+    expect(text).toContain("WORKING AREA INSPECTED (SIGNATURE)");
+  });
+
+  it("still draws the well for a layer that signs on the layer itself", async () => {
+    const data = baseData({
+      layerResults: [{
+        layerNumber: 1,
+        type: "approval",
+        status: "Approved",
+        email: "hafiz@example.com",
+        signedAt: "2026-08-18T10:42:00",
+        signature: WIDE_PNG,
+      }],
+    });
+    // Once in the chain table, once in the card's facts, once as the caption
+    // under the ink — the last of those is the one being guarded.
+    expect(occurrences(flatText(await renderPdf(data)), "HAFIZ@EXAMPLE.COM")).toBe(3);
+  });
+});
+
+describe("the letterhead and the document band", () => {
+  it("leads with the mark on the left and ranges the address to the right margin", async () => {
+    const raw = await renderPdf(baseData());
+    const logo = drawnImageBoxes(raw)[0]!;
+    // A4 is 595pt wide with a 34pt margin, so anything past the middle is
+    // ranged right rather than merely sitting somewhere on the page.
+    expect(logo.width).toBeGreaterThan(0);
+    expect(xOf(raw, "Lot 133077")).toBeGreaterThan(297);
+  });
+
+  it("leads the band with what the document is, and puts who filed it on the right", async () => {
+    const raw = await renderPdf(baseData({
+      meta: { ...baseData().meta, referenceNo: "PTW-180826-0015" },
+      company: {
+        name: "PMW INDUSTRIES SDN. BHD.",
+        addressLines: ["Lot 133077, Jalan Lahat,"],
+        phone: "",
+        fax: "",
+        sstNo: "",
+        logoUrl: WIDE_PNG,
+      },
+    }));
+    // A filed permit is looked up by its number, not by whose name is on it.
+    expect(xOf(raw, "PTW-180826-0015")).toBeLessThan(297);
+    expect(xOf(raw, "Submitted By".toUpperCase())).toBeGreaterThan(297);
+    expect(xOf(raw, "ahmad@example.com")).toBeGreaterThan(297);
   });
 });
 

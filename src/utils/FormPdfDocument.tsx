@@ -94,39 +94,44 @@ const S = StyleSheet.create({
   page: { paddingTop: 34, paddingHorizontal: 34, paddingBottom: 56, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
 
   // ── Letterhead ──
-  // Name and address on the left, mark on the right, one heavy rule beneath the
-  // pair. The rule is what makes the block read as stationery rather than as a
-  // first row of content.
+  // Mark first at the top left, the address following it across to the right
+  // margin, one heavy rule beneath the pair. The rule is what makes the block
+  // read as stationery rather than as a first row of content.
   letterhead: { flexDirection: "row", alignItems: "flex-start", marginBottom: 9 },
-  letterheadLeft: { flexGrow: 1, flexShrink: 1, paddingRight: 14 },
-  // Centred across the full measure, above the address and the mark, the way
+  letterheadAddress: { flexGrow: 1, flexShrink: 1, paddingLeft: 14, alignItems: "flex-end" },
+  // Centred across the full measure, above the mark and the address, the way
   // the company's own stationery sets it.
   companyName: { fontSize: 13, fontWeight: "bold", color: C.text, textAlign: "center", marginBottom: 6, letterSpacing: 0.2 },
-  companyLine: { fontSize: 8, color: C.text, lineHeight: 1.35 },
-  companyContact: { fontSize: 8, color: C.text, lineHeight: 1.35 },
+  // Set to the right margin: the mark holds the left, so ranging the address
+  // right is what makes the two read as one band rather than as a heap in the
+  // top corner with half the page empty beside it.
+  companyLine: { fontSize: 8, color: C.text, lineHeight: 1.35, textAlign: "right" },
+  companyContact: { fontSize: 8, color: C.text, lineHeight: 1.35, textAlign: "right" },
   // No width, only a height and a ceiling. react-pdf measures the raster and
   // derives the width from its own aspect ratio, so one number resizes the mark
   // for any page size or density and it is never stretched to fit a box.
-  logoBox: { flexShrink: 0, alignItems: "flex-end", justifyContent: "flex-start" },
+  logoBox: { flexShrink: 0, alignItems: "flex-start", justifyContent: "flex-start" },
   logoFallback: { fontSize: 15, fontWeight: "bold", color: C.primary, letterSpacing: 1 },
   rule: { height: 2, backgroundColor: C.primary, marginBottom: 9 },
 
-  // ── Document band: who/what on the left, the document's own facts on the right ──
+  // ── Document band: what the document is on the left, who filed it on the right ──
+  // The title and its reference lead, because that is what the page is looked up
+  // by: a filed permit is found by its number, not by whose name is on it.
   docBand: { flexDirection: "row", alignItems: "flex-start", marginBottom: 11 },
-  docBandLeft: { width: "50%", paddingRight: 14 },
-  docBandRight: { width: "50%" },
-  bandLabel: { fontSize: 7, color: C.muted, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 3 },
-  bandHeadline: { fontSize: 11, fontWeight: "bold", color: C.primary, marginBottom: 2 },
-  bandLine: { fontSize: 8, color: C.text, lineHeight: 1.35 },
+  docBandLeft: { width: "58%", paddingRight: 16 },
+  docBandRight: { width: "42%", alignItems: "flex-end" },
+  bandLabel: { fontSize: 7, color: C.muted, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 3, textAlign: "right" },
+  bandHeadline: { fontSize: 11, fontWeight: "bold", color: C.primary, marginBottom: 2, textAlign: "right" },
+  bandLine: { fontSize: 8, color: C.text, lineHeight: 1.35, textAlign: "right" },
   // The reference is the one thing read back over the phone and filed by hand,
   // so it is set at the size of the quotation number it replaces.
-  docTitle: { fontSize: 13, fontWeight: "bold", color: C.text, textAlign: "right", marginBottom: 5, lineHeight: 1.15 },
+  docTitle: { fontSize: 13, fontWeight: "bold", color: C.text, marginBottom: 5, lineHeight: 1.15 },
   metaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 1.5 },
   metaLabel: { fontSize: 8, color: C.muted },
   metaValue: { fontSize: 8, color: C.text, fontWeight: "bold", textAlign: "right" },
 
   // Status badge
-  badge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, fontSize: 8, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, borderWidth: 1 },
+  badge: { alignSelf: "flex-end", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, fontSize: 8, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, borderWidth: 1 },
 
   // ── Section headings ──
   sectionLabel: { fontSize: 8, fontWeight: "bold", color: C.primary, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 5 },
@@ -192,6 +197,22 @@ const S = StyleSheet.create({
   fieldLabel: { width: "40%", fontSize: 7.5, color: C.text, paddingRight: 8, lineHeight: 1.3 },
   fieldValue: { width: "53%", fontSize: 7.5, color: C.text, fontWeight: "bold", lineHeight: 1.3 },
   imageGrid: { width: "53%", flexDirection: "row", flexWrap: "wrap" },
+
+  // ── Tick list ──
+  // The answer column of a "(TICK)" question, set as the boxes it was on paper.
+  // A box drawn as a bordered View with an "X" in it, rather than as a ballot
+  // glyph, because Helvetica has no ballot glyph and the missing character
+  // prints as a blank — a box that cannot be ticked at all.
+  tickBox: { width: "53%" },
+  tickGroup: { flexDirection: "row", flexWrap: "wrap" },
+  tickOption: { flexDirection: "row", alignItems: "center", marginRight: 10, marginBottom: 2.5 },
+  tickSquare: { width: 7.5, height: 7.5, borderWidth: 0.5, borderColor: C.text, marginRight: 3.5, alignItems: "center", justifyContent: "center" },
+  tickMark: { fontSize: 6, fontWeight: "bold", lineHeight: 1 },
+  tickLabel: { fontSize: 7, color: C.muted, lineHeight: 1.3 },
+  tickLabelOn: { fontSize: 7.5, color: C.text, fontWeight: "bold", lineHeight: 1.3 },
+  tickExtra: { fontSize: 7, color: C.text, marginTop: 1.5, lineHeight: 1.3 },
+  tickNote: { fontSize: 6.5, color: C.amberText, fontStyle: "italic", marginTop: 2, lineHeight: 1.3 },
+
   imageTile: { width: "46%", borderWidth: 0.5, borderColor: C.border, backgroundColor: C.white, padding: 4, marginRight: 6, marginBottom: 5 },
   imageFrame: { height: 76, justifyContent: "center", alignItems: "center" },
   imagePreview: { maxWidth: "100%", maxHeight: 74, objectFit: "contain" },
@@ -422,11 +443,57 @@ function choiceOption(choice: unknown): { value: string; label: string } | null 
   return { value, label };
 }
 
-function normalizedSelectedValues(value: unknown): Set<string> {
-  if (isEmptyPdfValue(value)) return new Set();
+/** Comparable form of one answer or one option: case and spacing carry no meaning. */
+function matchKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+interface AnswerSelection {
+  /** Every spelling of every entry, ready to compare against an option. */
+  keys: Set<string>;
+  /** What each entry reads as. An empty string is an entry that carried no text. */
+  texts: string[];
+  /** How many entries the stored answer actually had. */
+  entries: number;
+}
+
+/**
+ * What an answer selected, in whatever shape it was stored.
+ *
+ * A tick can arrive as an array of strings, as a JSON array in a text column, as
+ * SharePoint's `;#`-delimited multi-value string, or as an array of option
+ * objects. All four are the same claim, so all four are read the same way, and
+ * an entry is matched on its value *or* its label — which of the two a column
+ * ends up holding is not something the printed page should depend on.
+ */
+function selectedAnswer(value: unknown): AnswerSelection {
+  const keys = new Set<string>();
+  const texts: string[] = [];
+  if (isEmptyPdfValue(value)) return { keys, texts, entries: 0 };
+
   const parsed = typeof value === "string" ? parseMaybeJson(value) ?? value : value;
-  const values = Array.isArray(parsed) ? parsed : [parsed];
-  return new Set(values.map((entry) => String(entry)));
+  const entries = Array.isArray(parsed)
+    ? parsed
+    // ";#" is SharePoint's multi-value separator; a single value carries none.
+    : typeof parsed === "string" && parsed.includes(";#")
+      ? parsed.split(";#").filter((part) => part.trim() !== "")
+      : [parsed];
+
+  for (const entry of entries) {
+    const spellings = typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean"
+      ? [String(entry)]
+      : isRecord(entry)
+        ? [entry.value, entry.text, entry.title, entry.label, entry.Value, entry.Title, entry.LookupValue]
+            .map(optionText)
+            .filter((text) => text !== "")
+        : [];
+    texts.push(spellings[0] ?? "");
+    for (const spelling of spellings) {
+      if (spelling.trim() !== "") keys.add(matchKey(spelling));
+    }
+  }
+
+  return { keys, texts, entries: entries.length };
 }
 
 function choiceOptionsForField(field: FormSubmissionField): { value: string; label: string }[] {
@@ -468,25 +535,106 @@ function renderPaperLines(field: FormSubmissionField) {
   );
 }
 
-function renderTickboxOptions(field: FormSubmissionField) {
+/** Which options an answer ticked, plus anything it said that no option covers. */
+function tickedOptions(field: FormSubmissionField): {
+  options: { value: string; label: string; ticked: boolean }[];
+  extras: string[];
+  unreadable: boolean;
+} {
   const options = choiceOptionsForField(field);
-  if (options.length === 0) return renderPaperLines(field);
-  const selected = normalizedSelectedValues(field.value);
-  if (field.type.toLowerCase() === "boolean" || field.type.toLowerCase() === "consent") {
-    const boolValue = typeof field.value === "boolean" ? String(field.value) : String(field.value).toLowerCase();
-    if (boolValue === "yes") selected.add("true");
-    if (boolValue === "no") selected.add("false");
+  const answer = selectedAnswer(field.value);
+  const type = field.type.toLowerCase();
+
+  if (type === "boolean" || type === "consent") {
+    const spoken = matchKey(String(field.value));
+    if (spoken === "yes" || spoken === "checked") answer.keys.add("true");
+    if (spoken === "no" || spoken === "unchecked") answer.keys.add("false");
   }
+
+  const matched = new Set<string>();
+  const marked = options.map((option) => {
+    const ticked = answer.keys.has(matchKey(option.value)) || answer.keys.has(matchKey(option.label));
+    if (ticked) {
+      matched.add(matchKey(option.value));
+      matched.add(matchKey(option.label));
+    }
+    return { ...option, ticked };
+  });
+
+  return {
+    options: marked,
+    // An answer naming something the option list does not have is still an
+    // answer — a fill-in choice, or a list edited after the form was filed.
+    extras: answer.texts.filter((text) => text.trim() !== "" && !matched.has(matchKey(text))),
+    // Entries were stored and not one of them carried any text: the labels were
+    // lost before they reached the record, and an untouched list of boxes would
+    // report that as "nothing was ticked".
+    unreadable: answer.entries > 0 && answer.texts.every((text) => text.trim() === ""),
+  };
+}
+
+function unreadableTickNote(field: FormSubmissionField): string {
+  const count = selectedAnswer(field.value).entries;
+  return `${count} ${count === 1 ? "item was" : "items were"} ticked, but no label was stored with them.`;
+}
+
+function renderTickboxOptions(field: FormSubmissionField) {
+  const { options, extras, unreadable } = tickedOptions(field);
+  if (options.length === 0) return renderPaperLines(field);
   return (
-    <View style={S.paperOptionGroup}>
-      {options.map((option) => (
-        <View key={`${field.key}-${option.value}`} style={S.paperOption}>
-          <View style={S.paperOptionBox}>
-            {selected.has(option.value) ? <Text style={S.paperOptionMark}>X</Text> : null}
+    <View style={S.paperFieldBox}>
+      <View style={S.paperOptionGroup}>
+        {options.map((option) => (
+          <View key={`${field.key}-${option.value}`} style={S.paperOption}>
+            <View style={S.paperOptionBox}>
+              {option.ticked ? <Text style={S.paperOptionMark}>X</Text> : null}
+            </View>
+            <Text style={S.paperOptionLabel}>{option.label}</Text>
           </View>
-          <Text style={S.paperOptionLabel}>{option.label}</Text>
-        </View>
-      ))}
+        ))}
+      </View>
+      {extras.length > 0 ? <Text style={S.paperOptionLabel}>Also: {extras.join(", ")}</Text> : null}
+      {unreadable ? <Text style={S.tickNote}>{unreadableTickNote(field)}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * Whether to print this field as its list of options rather than as a sentence.
+ *
+ * A "(TICK)" panel on a permit is a column of boxes on the paper form it
+ * replaces, and it has to stay one on the printed record: a reader checking a
+ * permit needs to see the controls that were *not* taken as much as the ones
+ * that were. A single-answer question stays a sentence — one tick among two
+ * reads worse than the word "Yes" — and so does a very long option list, where
+ * forty empty boxes would bury the answer instead of showing it.
+ */
+function shouldListChoices(field: FormSubmissionField): boolean {
+  const type = field.type.toLowerCase();
+  const options = choiceOptionsForField(field);
+  if (options.length === 0 || options.length > 24) return false;
+  if (["checkbox", "tagbox", "multiselect", "checkboxgroup"].includes(type)) return true;
+  // Whatever the type is called, an answer holding several values is a tick list.
+  return selectedAnswer(field.value).entries > 1;
+}
+
+/** The compact tick list, for one row of the data table. */
+function renderChoiceList(field: FormSubmissionField) {
+  const { options, extras, unreadable } = tickedOptions(field);
+  return (
+    <View style={S.tickBox}>
+      <View style={S.tickGroup}>
+        {options.map((option) => (
+          <View key={`${field.key}-${option.value}`} style={S.tickOption}>
+            <View style={S.tickSquare}>
+              {option.ticked ? <Text style={S.tickMark}>X</Text> : null}
+            </View>
+            <Text style={option.ticked ? S.tickLabelOn : S.tickLabel}>{option.label}</Text>
+          </View>
+        ))}
+      </View>
+      {extras.length > 0 ? <Text style={S.tickExtra}>Also: {extras.join(", ")}</Text> : null}
+      {unreadable ? <Text style={S.tickNote}>{unreadableTickNote(field)}</Text> : null}
     </View>
   );
 }
@@ -635,6 +783,7 @@ function SignatureWell({ signature, caption }: { signature?: string; caption: st
 function FieldRow({ field, index, striped }: { field: FormSubmissionField; index: number; striped: boolean }) {
   const imageSources = collectImageSources(field.value);
   const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
+  const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
 
   return (
     <View style={[S.fieldRow, striped ? S.fieldRowAlt : {}]} wrap={false}>
@@ -644,7 +793,7 @@ function FieldRow({ field, index, striped }: { field: FormSubmissionField; index
         ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
         : imageSources.length > 0
           ? renderImageSources(imageSources)
-          : measure || <Text style={S.fieldValue}>{fmtVal(field.value, field) || "—"}</Text>}
+          : ticks || measure || <Text style={S.fieldValue}>{fmtVal(field.value, field) || "—"}</Text>}
     </View>
   );
 }
@@ -675,6 +824,14 @@ function LayerDetailCard({
     ? evaluationFieldsForLayer(layer, includeEmptyEvaluationFields)
     : [];
   const who = layer.confirmerName || layer.confirmerEmail || layer.email || "";
+  // An evaluation that asked for a signature has already collected one, in its
+  // own answers below. Drawing the layer's well as well put an empty rule under
+  // the signatory's name a centimetre above their actual signature, which reads
+  // as ink that failed to load rather than as ink that was never asked for.
+  const signedInAnswers = evaluationFields.some(
+    (field) => isSignatureField(field) && collectImageSources(field.value).length > 0,
+  );
+  const drawSignature = showSignature && !(signedInAnswers && !(layer.signature ?? "").trim());
 
   return (
     <View style={S.layerCard} wrap={false}>
@@ -692,7 +849,7 @@ function LayerDetailCard({
           <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}</Text>
           {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
         </View>
-        {showSignature ? <SignatureWell signature={layer.signature} caption={who || "Signature"} /> : null}
+        {drawSignature ? <SignatureWell signature={layer.signature} caption={who || "Signature"} /> : null}
       </View>
 
       {evaluationFields.length > 0 && (
@@ -703,6 +860,7 @@ function LayerDetailCard({
           {evaluationFields.map((field, index) => {
             const imageSources = collectImageSources(field.value);
             const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
+            const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
             return (
               <View key={`${field.key}-${index}`} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
                 <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
@@ -712,7 +870,7 @@ function LayerDetailCard({
                     ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
                     : imageSources.length > 0
                       ? renderImageSources(imageSources)
-                      : measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
+                      : ticks || measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
               </View>
             );
           })}
@@ -777,7 +935,12 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
         {/* ═══ LETTERHEAD ═══ */}
         {letterheadName ? <Text style={S.companyName}>{letterheadName}</Text> : null}
         <View style={S.letterhead}>
-          <View style={S.letterheadLeft}>
+          <View style={S.logoBox}>
+            {effectiveLogoUrl
+              ? <Image style={{ height: logoHeight, maxWidth: 170 }} src={effectiveLogoUrl} />
+              : <Text style={[S.logoFallback, { color: primary }]}>{letterheadName || "LOGO"}</Text>}
+          </View>
+          <View style={S.letterheadAddress}>
             {profile.addressLines.map((line) => (
               <Text key={line} style={S.companyLine}>{line}</Text>
             ))}
@@ -785,17 +948,21 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
               <Text key={line} style={S.companyContact}>{line}</Text>
             ))}
           </View>
-          <View style={S.logoBox}>
-            {effectiveLogoUrl
-              ? <Image style={{ height: logoHeight, maxWidth: 170 }} src={effectiveLogoUrl} />
-              : <Text style={[S.logoFallback, { color: primary }]}>{letterheadName || "LOGO"}</Text>}
-          </View>
         </View>
         <View style={[S.rule, { backgroundColor: primary }]} />
 
         {/* ═══ DOCUMENT BAND ═══ */}
         <View style={S.docBand}>
           <View style={S.docBandLeft}>
+            <Text style={S.docTitle}>{title}{referenceNo ? ` No. ${referenceNo}` : ""}</Text>
+            {metaRows.map((row) => (
+              <View key={row.label} style={S.metaRow}>
+                <Text style={S.metaLabel}>{row.label} :</Text>
+                <Text style={S.metaValue}>{row.value || "-"}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={S.docBandRight}>
             <Text style={S.bandLabel}>Submitted By</Text>
             <Text style={S.bandHeadline}>{meta.submittedBy || "—"}</Text>
             {selectedCompany && letterheadName !== selectedCompany
@@ -806,15 +973,6 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                 <Text style={{ color: badge.text }}>{badge.label}</Text>
               </View>
             )}
-          </View>
-          <View style={S.docBandRight}>
-            <Text style={S.docTitle}>{title}{referenceNo ? ` No. ${referenceNo}` : ""}</Text>
-            {metaRows.map((row) => (
-              <View key={row.label} style={S.metaRow}>
-                <Text style={S.metaLabel}>{row.label} :</Text>
-                <Text style={S.metaValue}>{row.value || "-"}</Text>
-              </View>
-            ))}
           </View>
         </View>
 
