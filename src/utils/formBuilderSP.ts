@@ -2,7 +2,7 @@ import type { LayerStatus, EvaluationDataEntry, LayerConfigItem, EvaluationEmail
 import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { SharePointHttpError } from "./sharepointClient";
-import { OSHES_LISTS } from "../config/oshes";
+import { OSHE_LISTS } from "../config/oshe";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
@@ -301,11 +301,11 @@ async function setColumnIndexed(token: string, listTitle: string, fieldName: str
 }
 
 const LIST_INDEXES: Record<string, string[]> = {
-  [OSHES_LISTS.masterForm]: ['Title', 'Slug', 'FormID', 'CurrentVersion'],
-  [OSHES_LISTS.approvers]: ['FormTitle', 'LayerNumber', 'ApproverEmail'],
-  [OSHES_LISTS.versions]: ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
-  [OSHES_LISTS.builderLog]: ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
-  [OSHES_LISTS.dashboardSettings]: ['BackgroundId', 'UpdatedAt'],
+  [OSHE_LISTS.masterForm]: ['Title', 'Slug', 'FormID', 'CurrentVersion'],
+  [OSHE_LISTS.approvers]: ['FormTitle', 'LayerNumber', 'ApproverEmail'],
+  [OSHE_LISTS.versions]: ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
+  [OSHE_LISTS.builderLog]: ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
+  [OSHE_LISTS.dashboardSettings]: ['BackgroundId', 'UpdatedAt'],
 };
 
 async function ensureIndexedColumns(
@@ -842,13 +842,13 @@ interface FormConfigData {
 }
 
 export async function getAllFormConfigs(token: string): Promise<FormConfigData[]> {
-  if (!await listExists(token, OSHES_LISTS.masterForm)) return [];
+  if (!await listExists(token, OSHE_LISTS.masterForm)) return [];
   const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$orderby=Title asc&$top=500`) as { value?: FormConfigData[] };
   return data.value || [];
 }
 
 export async function getFormConfigByTitle(token: string, listTitle: string): Promise<FormConfigData | null> {
-  if (!await listExists(token, OSHES_LISTS.masterForm)) return null;
+  if (!await listExists(token, OSHE_LISTS.masterForm)) return null;
   const data = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('Master%20Form')/items?$filter=Title eq '${encodeURIComponent(sanitizeODataValue(listTitle))}'&$select=Id,Title,FormID,NumberOfApprovalLayer,Slug,CurrentVersion,IsPublished,IsPublic,ConditionField,ApprovalRules,LayerConfig&$top=1`) as { value?: FormConfigData[] };
   return data.value?.[0] || null;
 }
@@ -866,29 +866,29 @@ export interface DeleteFormResult {
 
 // ── Bootstrap (from reference) ──────────────────────────────────────────
 const LIST_SCHEMAS: Record<string, { t: number; desc: string; cols: SpColumnSpec[] }> = {
-  [OSHES_LISTS.masterForm]: { t: 100, desc: 'OSHES form builder configuration', cols: [
+  [OSHE_LISTS.masterForm]: { t: 100, desc: 'OSHE form builder configuration', cols: [
     { n: 'FormID', k: 2 }, { n: 'NumberOfApprovalLayer', k: 9 },
     { n: 'Slug', k: 2 }, { n: 'CurrentVersion', k: 2 },
     { n: 'IsPublished', k: 8 }, { n: 'IsPublic', k: 8 },
     { n: 'ConditionField', k: 2 }, { n: 'ApprovalRules', k: 3, ml: true },
     { n: 'LayerConfig', k: 3, ml: true },
   ]},
-  [OSHES_LISTS.approvers]: { t: 100, desc: 'OSHES approver layers per form', cols: [
+  [OSHE_LISTS.approvers]: { t: 100, desc: 'OSHE approver layers per form', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'LayerNumber', k: 9 },
     { n: 'ApproverEmail', k: 2 }, { n: 'ApproverName', k: 2 },
   ]},
-  [OSHES_LISTS.versions]: { t: 100, desc: 'Published OSHES form version metadata', cols: [
+  [OSHE_LISTS.versions]: { t: 100, desc: 'Published OSHE form version metadata', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'FormSlug', k: 2 },
     { n: 'FormVersion', k: 2 }, { n: 'SurveyJSON', k: 3, ml: true },
     { n: 'PublishedBy', k: 2 }, { n: 'PublishedAt', k: 4 },
   ]},
-  [OSHES_LISTS.builderLog]: { t: 100, desc: 'OSHES form builder audit log', cols: [
+  [OSHE_LISTS.builderLog]: { t: 100, desc: 'OSHE form builder audit log', cols: [
     { n: 'FormTitle', k: 2 }, { n: 'EventType', k: 2 },
     { n: 'ChangedBy', k: 2 }, { n: 'EventSummary', k: 3, ml: true },
     { n: 'BeforeJSON', k: 3, ml: true }, { n: 'AfterJSON', k: 3, ml: true },
     { n: 'EventAt', k: 4 },
   ]},
-  [OSHES_LISTS.dashboardSettings]: { t: 100, desc: 'Shared OSHES dashboard settings', cols: [
+  [OSHE_LISTS.dashboardSettings]: { t: 100, desc: 'Shared OSHE dashboard settings', cols: [
     { n: 'BackgroundId', k: 2 }, { n: 'CustomImageUrl', k: 3, ml: true },
     { n: 'CustomImageSource', k: 3, ml: true }, { n: 'ImageOpacity', k: 9 },
     // The appearance axes. Created from the browser on the signed-in admin's
@@ -914,7 +914,7 @@ async function ensureListExists(token: string, listTitle: string): Promise<void>
 }
 
 export async function ensureDashboardBackgroundSettingsList(token: string): Promise<void> {
-  await ensureListExists(token, OSHES_LISTS.dashboardSettings);
+  await ensureListExists(token, OSHE_LISTS.dashboardSettings);
 }
 
 // ── Get latest form by slug (from reference) ────────────────────────────────
@@ -1454,7 +1454,7 @@ function emailBody(params: {
         <tr><td style="height:4px;background:${params.statusColor};font-size:0;line-height:0">&nbsp;</td></tr>
         <tr>
           <td class="pad" style="padding:22px 28px;background:#FFFFFF;border-bottom:1px solid #E5EAF1">
-            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHES Form</div>
+            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHE Form</div>
             <div style="margin-top:4px;font-size:13px;line-height:18px;color:#6B7280">Automated workflow notification</div>
           </td>
         </tr>
@@ -1481,7 +1481,7 @@ function emailBody(params: {
         </tr>
         <tr>
           <td class="pad" style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
-            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHES Forms.
+            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHE Forms.
           </td>
         </tr>
       </table>
@@ -1532,7 +1532,7 @@ export async function triggerApprovalNotification(
       secondaryLink: { href: requestLink, label: `${openLabel} myself` },
       instructions: [
         'Copy the review link below — use the "Copy review link" button if you would rather not select it by hand.',
-        `Send the link to whoever must ${nextActionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHES account.`,
+        `Send the link to whoever must ${nextActionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHE account.`,
         `They review the submission and record the decision. Whoever completes it is recorded against Layer ${stepLayer}, and the workflow then moves on by itself.`,
       ],
     }
@@ -1540,7 +1540,7 @@ export async function triggerApprovalNotification(
       link: requestLink,
       linkLabel: openLabel,
       instructions: [
-        `Open the ${nextLayerType === 'evaluation' ? 'evaluation' : 'approval'} with the button below and sign in with your PMW OSHES account.`,
+        `Open the ${nextLayerType === 'evaluation' ? 'evaluation' : 'approval'} with the button below and sign in with your PMW OSHE account.`,
         'Check the submission details, earlier layers’ decisions and any attachments.',
         `Record your decision. Layer ${stepLayer} of ${totalLayers} closes and the workflow moves to the next step automatically.`,
       ],
@@ -1580,7 +1580,7 @@ export async function triggerApprovalNotification(
         try {
           const approvers = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHE_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(sanitizeODataValue(formTitle))}' and LayerNumber eq ${layer}&$select=ApproverEmail,ApproverName&$top=1`
           ) as { value?: { ApproverEmail?: string; ApproverName?: string }[] };
           targetEmails = [approvers.value?.[0]?.ApproverEmail || ''].filter(Boolean);
         } catch {
@@ -1626,7 +1626,7 @@ export async function triggerApprovalNotification(
               { label: 'Step type', value: nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval' },
               { label: 'Action needed', value: nextLayerType === 'evaluation' ? 'Complete the evaluation' : 'Approve or reject' },
               { label: 'Current status', value: 'Submitted' },
-              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHES account sign-in' },
+              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHE account sign-in' },
             ],
             ...actionBlock(layer),
             note: actionNote,
@@ -1670,7 +1670,7 @@ export async function triggerApprovalNotification(
               { label: 'Current step', value: workflowStage },
               { label: 'Step type', value: nextLayerType === 'evaluation' ? 'Evaluation' : 'Approval' },
               { label: 'Action needed', value: nextLayerType === 'evaluation' ? 'Complete the evaluation' : 'Approve or reject' },
-              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHES account sign-in' },
+              { label: 'Access', value: isPublicStep ? 'Public link — no sign-in needed' : 'PMW OSHE account sign-in' },
             ],
             ...actionBlock(displayNextLayerNumber),
             pdfUrl,

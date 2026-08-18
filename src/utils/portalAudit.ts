@@ -1,4 +1,4 @@
-import { OSHES_LISTS } from "../config/oshes";
+import { OSHE_LISTS } from "../config/oshe";
 import type { AuditEntry, PortalRecord, SharePointClient } from "../types";
 import { formatAuditWhen, parseDate } from "./portalTime";
 
@@ -67,7 +67,7 @@ export function sortAudit(entries: AuditEntry[]): AuditEntry[] {
  */
 export async function readAuditTrail(spClient: SharePointClient): Promise<AuditEntry[]> {
   try {
-    const items = await spClient.queryList(OSHES_LISTS.auditTrail, {
+    const items = await spClient.queryList(OSHE_LISTS.auditTrail, {
       select: ["Title", "EventAt", "Reference", "Actor", "EventSummary"],
       orderby: "EventAt desc",
       top: 500,
@@ -102,7 +102,7 @@ export async function writeAuditEntry(
   const entry = toEntry(at, input.reference, input.who, input.event);
 
   try {
-    await spClient.upsertListItem(OSHES_LISTS.auditTrail, `Title eq '${at.toISOString()}-${input.reference}'`, {
+    await spClient.upsertListItem(OSHE_LISTS.auditTrail, `Title eq '${at.toISOString()}-${input.reference}'`, {
       Title: `${at.toISOString()}-${input.reference}`,
       EventAt: at.toISOString(),
       Reference: input.reference,

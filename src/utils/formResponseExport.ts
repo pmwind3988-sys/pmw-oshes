@@ -12,7 +12,7 @@
  * Reads only. `formResponseCsv.ts` decides what every cell looks like.
  */
 import { spGet } from "./formBuilderSP";
-import { OSHES_LISTS } from "../config/oshes";
+import { OSHE_LISTS } from "../config/oshe";
 import { getDynamicMatrixFields } from "./matrixData";
 import { layerSequenceFromConfig } from "./layerSequence";
 import { getSelectedCompany } from "./companySelection";
@@ -109,7 +109,7 @@ async function readVersionSchemas(token: string, formTitle: string): Promise<Map
   const items = await readAllPages(
     token,
     listItemsUrl(
-      OSHES_LISTS.versions,
+      OSHE_LISTS.versions,
       `$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=FormVersion,SurveyJSON&$top=100`,
     ),
   );

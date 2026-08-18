@@ -54,7 +54,7 @@ export default function EmptyState({ hasFilters }: EmptyStateProps) {
         <Typography sx={{ fontSize: 13.5, color: editorial.muted, lineHeight: 1.6 }}>
           {hasFilters
             ? "Try adjusting your search criteria or clearing some filters."
-            : "Submissions will appear here once users start filling out OSHES forms."}
+            : "Submissions will appear here once users start filling out OSHE forms."}
         </Typography>
       </Stack>
     </Box>

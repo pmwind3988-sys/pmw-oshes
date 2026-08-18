@@ -1,8 +1,8 @@
-# Handoff: OSHES role-scoped dashboards, approval flow & public QR entry
+# Handoff: OSHE role-scoped dashboards, approval flow & public QR entry
 
 ## Overview
 
-A prototype of the OSHES portal reorganised around **who is looking at it**. It covers:
+A prototype of the OSHE portal reorganised around **who is looking at it**. It covers:
 
 1. A working **sign-in** screen with a purely visual idle animation panel.
 2. Five **role-scoped views** — Administrator, Evaluator (Safety Officer), Approver, Staff/submitter, Auditor (read-only).
@@ -33,11 +33,11 @@ The prototype uses five demo accounts. Map them to real authorisation as follows
 
 | Prototype role | Demo account | Real signal in this codebase |
 |---|---|---|
-| Administrator | aminah.yusof@pmw.gov.my | `isAdmin` — member of `SP_STATIC.adminGroup` (OSHES Forms Owner) |
+| Administrator | aminah.yusof@pmw.gov.my | `isAdmin` — member of `SP_STATIC.adminGroup` (OSHE Forms Owner) |
 | Evaluator (Safety Officer) | nurul.aziz@pmw.gov.my | Appears as a layer assignee of `type: "evaluation"`, and/or is layer 1 assignee on incident-class forms |
 | Approver | faizal.mokhtar@pmw.gov.my | Is the assignee of an `approval` layer on at least one open submission |
 | Staff / submitter | sazali.rahim@marinekita.com | Neither admin nor an assignee — sees only rows where `submittedByEmail`/`createdByEmail` matches, which `App.tsx` already filters for |
-| Auditor (read-only) | tan.weiling@pmw.gov.my | **New**: a read-only group (e.g. `OSHES Auditors`) checked with the same `spClient.isGroupMember` pattern. No new write paths — the account simply never renders an action |
+| Auditor (read-only) | tan.weiling@pmw.gov.my | **New**: a read-only group (e.g. `OSHE Auditors`) checked with the same `spClient.isGroupMember` pattern. No new write paths — the account simply never renders an action |
 
 `src/App.tsx` already computes `isAdmin`, `canUseFormBuilder`, and an `assigneeVisibilityMap` per list. The role view should be **derived** from those plus the submission set, not stored on the user. Suggested derivation, placed next to `authDecision.ts`:
 
@@ -71,7 +71,7 @@ Landing screen after sign-in: `today` for admin and evaluator, `queue` for appro
 
 Two equal columns, full viewport height, divided by a 1px hairline.
 
-- **Left column** — brand lockup top-left (`PMW OSHES`, 22px heading weight; a 10px uppercase 0.14em-tracked subtitle `SAFETY · HEALTH · ENVIRONMENT · SECURITY`); a footer line at 11px muted: "Prototype · demo accounts below, any password of four characters or more". Between them, a **purely visual idle animation**, no words:
+- **Left column** — brand lockup top-left (`PMW OSHE`, 22px heading weight; a 10px uppercase 0.14em-tracked subtitle `SAFETY · HEALTH · ENVIRONMENT · SECURITY`); a footer line at 11px muted: "Prototype · demo accounts below, any password of four characters or more". Between them, a **purely visual idle animation**, no words:
   - a 40×40px grid of hairlines at 7% ink, inset `-40px 0`, translating `0 → -40px` over 14s linear infinite (seamless drift);
   - a 1px accent horizontal scan line sweeping `top: 4% → 96%` over 9s ease-in-out infinite, fading in at 12% and out after 88%;
   - a square stack centred in the column, `min(340px, 100%)` wide, `aspect-ratio: 1`: four nested square frames at insets 0 / 14% / 30% / 44%, rotating 34s, 22s (reverse), 15s, 9s (reverse) linear infinite;
@@ -128,7 +128,7 @@ Footnote, verbatim: "SLA per layer is new data — it does not exist in the curr
 
 `Add form type` dialog: Name · Code (auto-uppercased, ≤4 chars) · Layers (numeric, clamped 1–6) · SLA days. On confirm the type appears in the catalogue, in "Inbound today" at zero, in the QR picker if public, and writes an audit entry. Empty name → toast "Give the form type a name first."
 
-This screen is the answer to "the form set must be configurable later" — nothing downstream hard-codes a form list. In this repo it belongs with the existing form-builder plumbing: `src/utils/formBuilderSP.ts`, `src/config/oshes.ts`, `api/form-config.ts`, and the Layers tab of `AdminFormBuilder.tsx`. **Do not build a parallel catalogue** — extend `LayerConfig` with the SLA and public flags.
+This screen is the answer to "the form set must be configurable later" — nothing downstream hard-codes a form list. In this repo it belongs with the existing form-builder plumbing: `src/utils/formBuilderSP.ts`, `src/config/oshe.ts`, `api/form-config.ts`, and the Layers tab of `AdminFormBuilder.tsx`. **Do not build a parallel catalogue** — extend `LayerConfig` with the SLA and public flags.
 
 ### 7. People & roles (admin)
 
@@ -155,7 +155,7 @@ Right-hand drawer, `min(580px, 94vw)`, over a 42% neutral-900 scrim; the scrim's
 
 ### 10. Public flow (signed out) — strictly linear
 
-Centred 430px column, a small chrome bar above it: `PMW OSHES` · a stage label · `Exit`. Stage labels: "Step 1 of 3 · choose a form", "Step 2 of 3 · no sign-in needed", "Step 3 of 3 · keep the reference", "Tracking". Each stage animates in with a 6px rise over 160ms.
+Centred 430px column, a small chrome bar above it: `PMW OSHE` · a stage label · `Exit`. Stage labels: "Step 1 of 3 · choose a form", "Step 2 of 3 · no sign-in needed", "Step 3 of 3 · keep the reference", "Tracking". Each stage animates in with a 6px rise over 160ms.
 
 1. **Poster scanned** — "Poster scanned · code JTY3-C" (10px uppercase accent), `Jetty 3 · Berth C` (26px), "PMW Port Klang · location filled in for you". Then "What are you reporting?" and a 56px row per **public** catalogue form: name + "Severity is asked · N approval layers". Footnote: "A poster can encode one specific form and skip this step. Anything urgent — call 999 first, then file."
 2. **Form** — `← Change form` and the draft indicator; the form name as heading; Where (prefilled from the poster) · outcome (4 options, 48px targets, only when the form captures severity) · a warning block when the outcome is Serious or worse ("This pages the duty safety officer the moment you submit, and starts a 24-hour investigation clock. Keep the area as it is if it is safe to do so.") · What happened · Photos · Your name ("Optional — you can report anonymously") · Email ("Optional") · a "Still needed: …" line · a 48px submit, **disabled until location, outcome and description are present** · "Saved on this device as you type, so a dropped signal at the jetty does not lose the entry."
@@ -236,7 +236,7 @@ To drive the prototype: open `PMW OSHES.dc.html`, click a demo account row, then
 
 ## Open questions for the team
 
-1. **Auditor group** — does a read-only OSHES group exist in Entra, or does one need creating?
+1. **Auditor group** — does a read-only OSHE group exist in Entra, or does one need creating?
 2. **SLA semantics** — working days or calendar days, and per layer or per whole form?
 3. **Return for more information** — is there an existing SharePoint status for it, or does `Rejected` + a note carry it today?
 4. **Reassignment** — permanent change to the `LayerConfig` assignee, or per-submission override? The prototype assumes per-submission.

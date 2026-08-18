@@ -86,12 +86,12 @@ export default function ShareLinkPage() {
   }, [reviewLink]);
 
   const mailtoHref = useMemo(() => {
-    const subject = "Action required: PMW OSHES Forms review link";
+    const subject = "Action required: PMW OSHE Forms review link";
     const body = [
       "Hello,",
       "",
       "Please use the link below to review and record your decision on this submission.",
-      "It opens without a sign-in, so no PMW OSHES account is needed.",
+      "It opens without a sign-in, so no PMW OSHE account is needed.",
       "",
       reviewLink,
       "",
@@ -126,7 +126,7 @@ export default function ShareLinkPage() {
                 variant="overline"
                 sx={{ letterSpacing: "0.08em", fontWeight: 800, color: editorial.pmwBlueDark }}
               >
-                PMW OSHES Form
+                PMW OSHE Form
               </Typography>
             </Box>
             <Typography sx={{ mt: 0.5, fontSize: { xs: 22, md: 26 }, fontWeight: 800, color: editorial.ink }}>
@@ -137,7 +137,7 @@ export default function ShareLinkPage() {
           <Box sx={{ px: { xs: 3, md: 4 }, py: { xs: 3, md: 3.5 } }}>
             {!reviewLink ? (
               <Alert severity="warning" sx={{ borderRadius: "12px" }}>
-                This page did not receive a valid PMW OSHES review link. Open the copy button in
+                This page did not receive a valid PMW OSHE review link. Open the copy button in
                 the workflow email again, or copy the link printed in that email by hand.
               </Alert>
             ) : (

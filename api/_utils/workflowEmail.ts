@@ -205,7 +205,7 @@ export function recordWorkflowEmailAttempt(
   return { ...log, [key]: next };
 }
 
-export function resolveOshesFormSender(): string {
+export function resolveOsheFormSender(): string {
   return (
     process.env.OSHES_FORM_EMAIL_FROM_ADDRESS ||
     process.env.VITE_OSHES_FORM_EMAIL_FROM_ADDRESS ||
@@ -222,9 +222,9 @@ export async function sendGraphEmail(
   message: WorkflowEmailMessage,
 ): Promise<void> {
   const recipients = typeof message.to === "string" ? [message.to] : message.to;
-  const fromAddress = resolveOshesFormSender();
+  const fromAddress = resolveOsheFormSender();
   if (!fromAddress) {
-    throw new Error("OSHES form email sender is not configured.");
+    throw new Error("OSHE form email sender is not configured.");
   }
 
   const graphRes = await fetch(
@@ -595,7 +595,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
         <tr><td style="height:4px;background:#0078D4;font-size:0;line-height:0">&nbsp;</td></tr>
         <tr>
           <td class="pad" style="padding:22px 28px;border-bottom:1px solid #E5EAF1">
-            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHES Form</div>
+            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHE Form</div>
             <div style="margin-top:4px;font-size:13px;line-height:18px;color:#6B7280">Automated workflow notification</div>
           </td>
         </tr>
@@ -622,7 +622,7 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
         </tr>
         <tr>
           <td class="pad" style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
-            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHES Forms.
+            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHE Forms.
           </td>
         </tr>
       </table>
@@ -664,18 +664,18 @@ export function buildWorkflowActionEmail(
     },
     {
       label: "Access",
-      value: isPublic ? "Public link — no sign-in needed" : "PMW OSHES account sign-in",
+      value: isPublic ? "Public link — no sign-in needed" : "PMW OSHE account sign-in",
     },
   ];
 
   const instructions = isPublic
     ? [
       `Copy the review link below — use the "Copy review link" button if you would rather not select it by hand.`,
-      `Send the link to whoever must ${actionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHES account.`,
+      `Send the link to whoever must ${actionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHE account.`,
       `They review the submission and record the decision. Whoever completes it is recorded against Layer ${params.layer}, and the workflow then moves on by itself.`,
     ]
     : [
-      `Open the ${isEvaluation ? "evaluation" : "approval"} with the button below and sign in with your PMW OSHES account.`,
+      `Open the ${isEvaluation ? "evaluation" : "approval"} with the button below and sign in with your PMW OSHE account.`,
       "Check the submission details, earlier layers' decisions and any attachments.",
       `Record your decision. Layer ${params.layer} of ${params.totalLayers} closes and the workflow moves to the next step automatically.`,
     ];

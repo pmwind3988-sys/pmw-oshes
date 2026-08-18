@@ -19,7 +19,7 @@ export const ME = "sazali@marinekita.com";
 const PEOPLE = [
   { name: "Nurul Aziz", email: "nurul@pmw.gov.my", role: "Safety Officer" },
   { name: "Hafiz Rahman", email: "hafiz@pmw.gov.my", role: "Shift Supervisor" },
-  { name: "Chan Wei Ling", email: "weiling@pmw.gov.my", role: "OSHES Manager" },
+  { name: "Chan Wei Ling", email: "weiling@pmw.gov.my", role: "OSHE Manager" },
   { name: "Sazali Rahim", email: ME, role: "Yard Lead" },
 ];
 

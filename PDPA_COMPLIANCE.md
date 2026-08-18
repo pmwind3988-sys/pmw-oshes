@@ -1,6 +1,6 @@
 # PDPA Implementation Notes
 
-This app includes product-level guardrails for Malaysia PDPA-aware OSHES forms. It is not a substitute for PMW legal review.
+This app includes product-level guardrails for Malaysia PDPA-aware OSHE forms. It is not a substitute for PMW legal review.
 
 ## Current controls
 
@@ -16,6 +16,6 @@ This app includes product-level guardrails for Malaysia PDPA-aware OSHES forms. 
 
 - Confirm privacy notice text, contact email, and controller details.
 - Confirm retention rules for incident, injury, permit, audit, environmental, training, and security records.
-- Restrict injury or health-related records to authorised OSHES and management users only.
+- Restrict injury or health-related records to authorised OSHE and management users only.
 - Avoid collecting NRIC/passport numbers unless there is a documented and approved purpose.
 - Recheck SharePoint permissions before go-live.

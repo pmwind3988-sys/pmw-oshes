@@ -101,7 +101,7 @@ html {
 
 body {
   margin: 0;
-  /* A long reference or address — OSHES-2026-0000, a 40-character mailbox — has
+  /* A long reference or address — OSHE-2026-0000, a 40-character mailbox — has
      no break opportunity, so it sets the min-content width of whatever holds it
      and prises grid and flex tracks open until the page is wider than the phone.
      `anywhere` rather than `break-word`: both break the line, but only

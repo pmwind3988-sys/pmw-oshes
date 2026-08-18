@@ -21,7 +21,7 @@ import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
 import { portalSections, roleLabel } from "../../utils/portalRole";
-import { builderUrl } from "../../config/oshes";
+import { builderUrl } from "../../config/oshe";
 import type { PortalNavSection, PortalScreen } from "../../types";
 
 // Capped against the viewport so the nav never fills a small phone edge to edge —
@@ -342,7 +342,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.01em", transition: "opacity 0.16s ease" }}
             noWrap
           >
-            PMW OSHES
+            PMW OSHE
           </Typography>
           <Box
             component="span"
@@ -481,7 +481,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             sx={{ alignItems: "center", justifyContent: "space-between", px: 2.5, py: 2, pb: 1.75 }}
           >
             <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ fontSize: 17, fontWeight: 800 }}>PMW OSHES</Typography>
+              <Typography sx={{ fontSize: 17, fontWeight: 800 }}>PMW OSHE</Typography>
               <Typography sx={{ fontSize: 11, color: editorial.muted, fontWeight: 700 }} noWrap>
                 {roleLabel(role)}
               </Typography>
@@ -495,7 +495,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
           {/* Separated from the nav above because it leaves this app. Opening a
               new tab is the honest signal: the builder is a shared tool writing
-              to the OSHES site, not a page of this portal. */}
+              to the OSHE site, not a page of this portal. */}
           {access.canManageCatalogue && builder && (
             <Box sx={{ p: 2.5, borderTop: editorialHairline }}>
               <Button

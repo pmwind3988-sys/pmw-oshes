@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Box, Button, Divider, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { panelSx } from "../../theme/surfaces";
-import { OSHES_APP } from "../../config/oshes";
+import { OSHE_APP } from "../../config/oshe";
 import { DEV_ROLE_OPTIONS, isDevRoleSwitchEnabled, readDevRole, writeDevRole } from "../../utils/devRoleOverride";
 import type { PortalRole } from "../../types";
 import Logo from "../Logo";
@@ -84,7 +84,7 @@ export default function SignInScreen({ onLogin }: SignInScreenProps) {
         }}
       >
         <Box>
-          <Typography sx={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>PMW OSHES</Typography>
+          <Typography sx={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>PMW OSHE</Typography>
           <Typography
             sx={{
               fontSize: 10,
@@ -101,7 +101,7 @@ export default function SignInScreen({ onLogin }: SignInScreenProps) {
         <IdleAnimationPanel />
 
         <Typography sx={{ fontSize: 11, color: editorial.muted }}>
-          {OSHES_APP.name} · sign in with your Microsoft 365 work account
+          {OSHE_APP.name} · sign in with your Microsoft 365 work account
         </Typography>
       </Box>
 
@@ -135,7 +135,7 @@ export default function SignInScreen({ onLogin }: SignInScreenProps) {
 
             <Box>
               <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
-                {OSHES_APP.name}
+                {OSHE_APP.name}
               </Typography>
               <Typography variant="body2" sx={{ mt: 1, color: editorial.muted }}>
                 Sign in to reach your submissions, approvals, and the forms assigned to you.

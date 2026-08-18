@@ -197,7 +197,7 @@ describe("buildWorkflowActionEmail", () => {
     expect(email.body).not.toContain("Copy review link");
     expect(email.body).toContain(`<td align="center" style="padding:22px 0 0">`);
     expect(email.body).toContain(">Open approval</a>");
-    expect(email.body).toContain("PMW OSHES account sign-in");
+    expect(email.body).toContain("PMW OSHE account sign-in");
   });
 
   it("falls back to the link shape when a stored schedule entry has no authMode", () => {

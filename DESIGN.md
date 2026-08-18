@@ -145,7 +145,7 @@ weight as well as hue.
 ## The three appearance axes
 
 The palette above is the default, not the only one. An administrator picks three
-independent settings for the whole workspace, stored in the OSHES admin settings list
+independent settings for the whole workspace, stored in the OSHE admin settings list
 alongside the wallpaper and applied through `applyAppearance`:
 
 | Axis | What it decides | Options |

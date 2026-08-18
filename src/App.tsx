@@ -47,7 +47,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
-import { builderUrl } from "./config/oshes";
+import { builderUrl } from "./config/oshe";
 
 
 
@@ -77,11 +77,11 @@ const AUTH_LOAD_STEP_TEXT: Record<AuthLoadStep, Pick<LoadingStep, "label" | "des
   },
   site: {
     label: "Check SharePoint access",
-    description: "Confirming this account can reach the configured OSHES SharePoint site.",
+    description: "Confirming this account can reach the configured OSHE SharePoint site.",
   },
   permissions: {
     label: "Load portal permissions",
-    description: "Reading OSHES Forms Owner and Form Builder Superuser access.",
+    description: "Reading OSHE Forms Owner and Form Builder Superuser access.",
   },
   lists: {
     label: "Discover form lists",
@@ -630,7 +630,7 @@ export default function App() {
   const userEmail = activeAccount?.username || "";
   const [isAdmin, setIsAdmin] = useState(false);
   const [canUseFormBuilder, setCanUseFormBuilder] = useState(false);
-  /** Read-only OSHES group. Members see everything and can act on nothing. */
+  /** Read-only OSHE group. Members see everything and can act on nothing. */
   const [isAuditor, setIsAuditor] = useState(false);
   const [authProfileStatus, setAuthProfileStatus] = useState<AuthProfileStatus>("unknown");
 
@@ -1015,7 +1015,7 @@ export default function App() {
           finishProfileLoad();
           setErrorMsg("");
           if (accountIsInternal) {
-            setErrorMsg("SharePoint returned 403 while loading OSHES data. Confirm that this account can open the configured SharePoint site and lists.");
+            setErrorMsg("SharePoint returned 403 while loading OSHE data. Confirm that this account can open the configured SharePoint site and lists.");
             setAuthErrorMode("generic");
             setAuthErrorStep(null);
             setAuthProfileStatus("unknown");
@@ -1214,7 +1214,7 @@ export default function App() {
   async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
     if (!isAdmin) {
       throw new Error(
-        `Only members of ${SP_STATIC.adminGroup || "the OSHES admin group"} can delete submissions.`,
+        `Only members of ${SP_STATIC.adminGroup || "the OSHE admin group"} can delete submissions.`,
       );
     }
 

@@ -55,7 +55,7 @@ export default function PrivacyNoticePage() {
 
           <Box sx={{ p: { xs: 3, md: 4 } }}>
             <Typography variant="body1" sx={{ color: editorial.ink, lineHeight: 1.8 }}>
-              This notice explains how personal data submitted through PMW OSHES Forms is collected,
+              This notice explains how personal data submitted through PMW OSHE Forms is collected,
               used, disclosed, protected, retained, and made available for access or correction requests.
             </Typography>
 

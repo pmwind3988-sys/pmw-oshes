@@ -5,7 +5,7 @@ import {
   updateListItemFields,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
-import { OSHES_LISTS } from "./_utils/oshesConfig.js";
+import { OSHE_LISTS } from "./_utils/osheConfig.js";
 import {
   buildWorkflowActionEmail,
   deliverWorkflowEmail,
@@ -52,7 +52,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const forms = await queryListItems(token, OSHES_LISTS.masterForm, { top: 500 });
+    const forms = await queryListItems(token, OSHE_LISTS.masterForm, { top: 500 });
     let sent = 0;
     let failed = 0;
     let examined = 0;

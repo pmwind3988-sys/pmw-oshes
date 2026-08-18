@@ -1,7 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItemById, queryListItems, resolveResponseListName } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
-import { OSHES_LISTS } from "./_utils/oshesConfig.js";
+import { OSHE_LISTS } from "./_utils/osheConfig.js";
 
 interface ApiRequest {
   query: Record<string, string | string[]>;
@@ -70,7 +70,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   try {
     const token = await getGraphToken();
-    const forms = await queryListItems(token, OSHES_LISTS.masterForm, { top: 200 });
+    const forms = await queryListItems(token, OSHE_LISTS.masterForm, { top: 200 });
 
     let listTitle = "";
     let layerCount = 1;

@@ -324,7 +324,7 @@ export default function ResponseViewer() {
         tone="error"
         icon={<BlockIcon sx={{ fontSize: 28 }} />}
         title="Access denied"
-        message="This page is limited to the OSHES admin group. Ask an administrator to add you if you need to read responses."
+        message="This page is limited to the OSHE admin group. Ask an administrator to add you if you need to read responses."
       />
     );
   }
@@ -332,7 +332,7 @@ export default function ResponseViewer() {
   return (
     <WorkspacePage>
       <WorkspaceHeader
-        eyebrow="OSHES admin workspace"
+        eyebrow="OSHE admin workspace"
         title={`${formTitle} responses`}
         subtitle={`${submissions.length} submission${submissions.length !== 1 ? "s" : ""} recorded for this form.`}
         actions={

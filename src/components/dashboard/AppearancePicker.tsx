@@ -279,7 +279,7 @@ export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
         )}
         {!isAdmin && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            You can look through the themes here, but only an OSHES administrator can change what everyone sees.
+            You can look through the themes here, but only an OSHE administrator can change what everyone sees.
           </Alert>
         )}
 
@@ -303,7 +303,7 @@ export default function AppearancePicker({ open, onClose, isAdmin }: Props) {
                     sx={{ ...CARD_SX, ...selectionSx(selected) }}
                   >
                     <Box sx={{ position: "relative" }}>
-                      <Specimen p={contrastSpecimens[index]} label="OSHES" />
+                      <Specimen p={contrastSpecimens[index]} label="OSHE" />
                       {selected && <Tick />}
                     </Box>
                     <Box sx={{ px: 1.1, py: 0.9 }}>

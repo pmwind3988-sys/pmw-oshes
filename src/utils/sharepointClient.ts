@@ -133,9 +133,9 @@ function sitePathPrefix(siteUrl: string): string {
 /**
  * Whether this file belongs to this submission, on this site.
  *
- * Both halves matter. OSHES and HR run the same schema with the same library
+ * Both halves matter. OSHE and HR run the same schema with the same library
  * names on two different SharePoint sites — `Signature Images` exists on both —
- * so matching the library name alone would let a link pasted into an OSHES
+ * so matching the library name alone would let a link pasted into an OSHE
  * answer delete a signature belonging to an HR record. The site prefix is what
  * keeps the sweep inside its own site.
  */

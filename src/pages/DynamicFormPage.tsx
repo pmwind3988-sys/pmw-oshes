@@ -32,7 +32,7 @@ import { PREFILLED_QR_PARAM, cloneAndApplyPrefilledQr, decodePrefilledQrPayload,
 import { findLocationField } from "../utils/formFieldHints";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
-import { OSHES_LISTS } from "../config/oshes";
+import { OSHE_LISTS } from "../config/oshe";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { COMPANY } from "../config/company";
 
@@ -749,7 +749,7 @@ export default function DynamicFormPage() {
             if (fallback.formConfig.IsPublic === false) {
               if (!isSharePointAccessDeniedError(spError)) throw spError;
               throw new Error(
-                `You do not have access to "${String(fallback.formConfig.Title || formId)}". This form is restricted to named SharePoint users — ask an OSHES Forms Owner to grant you access, then reload this page.`,
+                `You do not have access to "${String(fallback.formConfig.Title || formId)}". This form is restricted to named SharePoint users — ask an OSHE Forms Owner to grant you access, then reload this page.`,
                 { cause: spError },
               );
             }
@@ -912,7 +912,7 @@ export default function DynamicFormPage() {
   const formTitle = String(formData?.formConfig?.Title || formData?.surveyJson?.title || "Form");
   const documentHeader = documentHeaderFromMeta(formData?.meta, formIdValue, formVersion);
 
-  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW OSHES"; }, [formTitle]);
+  useEffect(() => { document.title = formTitle ? `Form: ${formTitle}` : "Form — PMW OSHE"; }, [formTitle]);
 
   /**
    * The submit gate: the form's own validation first, then the one condition
@@ -1045,7 +1045,7 @@ export default function DynamicFormPage() {
       const deferDepartmentApproverLookupToApi = !token && hasDepartmentApproverLayers;
 
       if (hasManualBranches) {
-        // Manual branch workflows start only after an OSHES Forms Owner chooses a branch.
+        // Manual branch workflows start only after an OSHE Forms Owner chooses a branch.
         resolvedLayerCount = 0;
         activeLayers = [];
       } else if (layerConfigParsed?.layers?.length) {
@@ -1067,7 +1067,7 @@ export default function DynamicFormPage() {
             resolvedLayerCount = matched.layers.length;
           }
         } else if (token) {
-          const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
+          const apData = await spGet(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHE_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(cfg.Title as string)}'&$select=LayerNumber,ApproverEmail,ApproverName&$orderby=LayerNumber asc&$top=10`).catch(() => ({ value: [] })) as { value: Record<string, string>[] };
           activeLayers = (apData.value ?? []).map((a) => ({ email: a.ApproverEmail, name: a.ApproverName }));
           resolvedLayerCount = activeLayers.length;
         }
@@ -1560,7 +1560,7 @@ export default function DynamicFormPage() {
       <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
         <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
         <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
-        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask an OSHES Forms Owner to republish the form and share the link again.</p>
+        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask an OSHE Forms Owner to republish the form and share the link again.</p>
       </div>
     </div>
   );
@@ -1702,7 +1702,7 @@ export default function DynamicFormPage() {
             </div>}
           </div>
         )}
-        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: t.textMuted }}>PMW International Berhad OSHES Forms</div>
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: t.textMuted }}>PMW International Berhad OSHE Forms</div>
       </div>
 
       {showQr && (

@@ -80,7 +80,7 @@ export async function ensureGraphListSchema(token: string, schema: GraphListSche
 
 /**
  * Reference numbers are provisioned by this deployment rather than by a form
- * builder: OSHES forms are authored from the HR builder on a different origin,
+ * builder: OSHE forms are authored from the HR builder on a different origin,
  * so a form can be switched to reference numbering without anyone republishing
  * it here. Ensuring the column at submit time is what closes that gap.
  */

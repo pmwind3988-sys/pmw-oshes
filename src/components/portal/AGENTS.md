@@ -90,7 +90,7 @@ A form has an SLA only where its layer or its `LayerConfig` sets `slaDays`. `lay
 - `slaNote` is empty; screens use `waitNote`, which falls back to the plain age on the layer
 - `TodayScreen`'s stuck panel becomes "Longest waits"
 
-There used to be a `VITE_OSHE_SLA_DEFAULT_DAYS` global fallback of three working days. It meant a form nobody had ever given a deadline turned red on day four and reported a breach against a number no one had chosen. It is gone; `anySla(catalogue)` is how a screen asks whether to render SLA vocabulary at all.
+There used to be a `VITE_OSHES_SLA_DEFAULT_DAYS` global fallback of three working days. It meant a form nobody had ever given a deadline turned red on day four and reported a breach against a number no one had chosen. It is gone; `anySla(catalogue)` is how a screen asks whether to render SLA vocabulary at all.
 
 ## The catalogue reports visibility, it does not set it
 `IsPublic` is authored in the pmw-hrform builder, which is the only writer of it. `CatalogueScreen`'s "Who can reach it" column is a read-only badge over `entry.visibility`, and `saveCatalogueSettings()` writes **SLA only**. The screen used to carry a Public/Internal toggle that wrote the flag from outside the builder — a second writer for a value stored in two places (`LayerConfig.isPublic` and the `IsPublic` column), which is what the "mismatch" state exists to report. Do not add it back; `resolveFormVisibility()` still surfaces unset and mismatched forms so they can be fixed at the source.

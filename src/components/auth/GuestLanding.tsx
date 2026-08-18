@@ -217,7 +217,7 @@ export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingPr
                 mb: 2,
               }}
             >
-              PMW OSHES Forms
+              PMW OSHE Forms
             </Typography>
 
             <Typography

@@ -3,9 +3,9 @@ function env(name: keyof ImportMetaEnv, fallback: string): string {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
-export const OSHES_APP = {
-  name: env("VITE_APP_NAME", "PMW OSHES Forms"),
-  department: env("VITE_DEPARTMENT_NAME", "OSHES"),
+export const OSHE_APP = {
+  name: env("VITE_APP_NAME", "PMW OSHE Forms"),
+  department: env("VITE_DEPARTMENT_NAME", "OSHE"),
   /**
    * SharePoint group whose members administer this deployment.
    *
@@ -22,7 +22,7 @@ export const OSHES_APP = {
    * SharePoint group allowed to author forms in the shared builder.
    *
    * Separate from `adminGroup` because the two grants are genuinely different:
-   * administering this deployment is a read/act permission on OSHES records,
+   * administering this deployment is a read/act permission on OSHE records,
    * while authoring writes schema that both products render. Left blank, admins
    * are treated as authors — which is the smaller deployment's usual shape and
    * is no wider than the builder's own group check on the far side.
@@ -30,16 +30,16 @@ export const OSHES_APP = {
   formBuilderGroup: env("VITE_OSHES_FORM_BUILDER_GROUP", ""),
 } as const;
 
-if (!OSHES_APP.adminGroup) {
+if (!OSHE_APP.adminGroup) {
   console.warn(
-    "VITE_OSHES_ADMIN_GROUP is not set — no account will resolve as an OSHES admin. " +
+    "VITE_OSHES_ADMIN_GROUP is not set — no account will resolve as an OSHE admin. " +
       "It is compared as a literal string against the SharePoint group Title; " +
       "list the real names with <site-url>/_api/web/sitegroups?$select=Title",
   );
 }
 
 /**
- * Deep link to the pmw-hrform form builder, pointed at the OSHES site.
+ * Deep link to the pmw-hrform form builder, pointed at the OSHE site.
  *
  * Forms are authored in one place for both products. Rather than embed that
  * builder here — which would mean reintroducing the code this app deliberately
@@ -57,7 +57,7 @@ export function builderUrl(formTitle?: string): string | null {
   const path = formTitle
     ? `/admin/builder/${encodeURIComponent(formTitle)}`
     : "/admin/builder";
-  // ?site=oshes is what puts the builder in OSHES mode. Without it the operator
+  // ?site=oshes is what puts the builder in OSHE mode. Without it the operator
   // would land on HR's forms, which is the one outcome worth engineering against.
   return `${base}${path}?site=oshes`;
 }
@@ -65,11 +65,11 @@ export function builderUrl(formTitle?: string): string | null {
 /**
  * List names are deliberately NOT prefixed and NOT configurable.
  *
- * OSHES lives on its own SharePoint site, so the site boundary already separates
+ * OSHE lives on its own SharePoint site, so the site boundary already separates
  * it from HR. Keeping the names identical to pmw-hrform means the shared form
  * builder writes the same schema to either site with no per-site list mapping.
  */
-export const OSHES_LISTS = {
+export const OSHE_LISTS = {
   masterForm: "Master Form",
   approvers: "Approvers",
   versions: "Web Form Versions",

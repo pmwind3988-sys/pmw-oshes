@@ -18,7 +18,7 @@ import {
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import theme from "../../theme";
-import { OSHES_APP } from "../../config/oshes";
+import { OSHE_APP } from "../../config/oshe";
 
 interface AdminGuardProps {
   isAdmin: boolean;
@@ -30,7 +30,7 @@ interface AdminGuardProps {
 // denied user to ask for membership of a group that may not exist.
 export default function AdminGuard({
   isAdmin,
-  restrictedTo = OSHES_APP.adminGroup || "the OSHES admin group",
+  restrictedTo = OSHE_APP.adminGroup || "the OSHE admin group",
   children,
 }: AdminGuardProps) {
   const navigate = useNavigate();

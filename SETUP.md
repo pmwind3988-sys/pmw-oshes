@@ -1,4 +1,4 @@
-# PMW OSHES — deployment setup
+# PMW OSHE — deployment setup
 
 Everything needed to take this app from a clean repo to a working deployment.
 
@@ -11,7 +11,7 @@ that configuration and runs the forms.
 
 ## The fact this guide is built on
 
-**The OSHES SharePoint site is on the same host as the HR site**
+**The OSHE SharePoint site is on the same host as the HR site**
 (`https://tenant.sharepoint.com`). Confirmed 2026-08-01 against the
 configured `VITE_SP_SITE_URL`.
 
@@ -22,10 +22,10 @@ scope is granted per **origin**, not per site:
 https://tenant.sharepoint.com/AllSites.Manage
 ```
 
-A user who can already use the HR app holds a token that works on the OSHES site
+A user who can already use the HR app holds a token that works on the OSHE site
 the moment the site exists. No second app registration, no second consent prompt.
 
-If OSHES ends up on a different tenant or host, stop — sections B and C change
+If OSHE ends up on a different tenant or host, stop — sections B and C change
 substantially and the shared certificate no longer applies.
 
 ---
@@ -52,7 +52,7 @@ substantially and the shared certificate no longer applies.
    Either create a dedicated group, or point `VITE_OSHES_ADMIN_GROUP` at the
    site's built-in **Owners** group (`<Site Name> Owners`), which is what this
    deployment does. Reusing Owners is simpler, and it means anyone granted site
-   ownership for any reason also gets form authoring and hard delete on OSHES
+   ownership for any reason also gets form authoring and hard delete on OSHE
    submissions. Create a separate group if those two sets of people should differ.
 
    **Whatever you choose, take the name from SharePoint rather than typing it.**
@@ -135,7 +135,7 @@ set in the Vercel project as well as locally.
 |---|---|
 | `VITE_AZURE_CLIENT_ID` | Same app registration as HR |
 | `VITE_AZURE_TENANT_ID` | Same tenant |
-| `VITE_SP_SITE_URL` | **The OSHES site.** No trailing slash |
+| `VITE_SP_SITE_URL` | **The OSHE site.** No trailing slash |
 | `VITE_OSHES_ADMIN_GROUP` | Exact group name from step A2 |
 | `VITE_OSHES_AUDITOR_GROUP` | Exact group name, or blank |
 
@@ -177,14 +177,14 @@ of assigning an online reviewer. Blank disables it entirely.
 > each **layer's assignee**, not against the sender. Any workflow layer assigned
 > to that mailbox becomes `Manual Approval Required` — a PDF goes out and no
 > approval link is generated. If a layer ever needs a genuine online approval
-> routed to the OSHES inbox, give the sentinel its own address first.
+> routed to the OSHE inbox, give the sentinel its own address first.
 
 ### Misc
 
 | Key | Notes |
 |---|---|
-| `VITE_APP_NAME` | Defaults to `PMW OSHES Forms` |
-| `VITE_DEPARTMENT_NAME` | Defaults to `OSHES` |
+| `VITE_APP_NAME` | Defaults to `PMW OSHE Forms` |
+| `VITE_DEPARTMENT_NAME` | Defaults to `OSHE` |
 | `VITE_PDPA_CONTACT_EMAIL` | Shown in the privacy notice |
 | `VITE_APP_BASE_URL` | Production origin. Approval links in email are built from it — a wrong value 404s every emailed link |
 | `VITE_BUILDER_URL` | Origin of the pmw-hrform deployment. **Origin only** — the app appends `/admin/builder?site=oshes`. Blank hides the link |
@@ -274,7 +274,7 @@ will not re-send. The response reports `{ examined, sent, failed }`.
 ## E. First run — proving it works
 
 12. **Teach the form builder about this site.** The builder is a separate
-    deployment (`pmw-hrform`) and has no way to discover the OSHES site — it
+    deployment (`pmw-hrform`) and has no way to discover the OSHE site — it
     reads a static registry. Set both in that project's environment:
 
     | Key | Value |
@@ -282,13 +282,13 @@ will not re-send. The response reports `{ examined, sent, failed }`.
     | `VITE_SP_SITE_URL_OSHES` | the same URL as `VITE_SP_SITE_URL` here |
     | `VITE_OSHES_ADMIN_GROUP` | the same group name as here |
 
-    Only a URL and a group name cross over — no OSHES secret belongs in the
+    Only a URL and a group name cross over — no OSHE secret belongs in the
     builder's environment. Both are `VITE_`-prefixed, so they are compiled in at
     build time: **the builder must be rebuilt after setting them**, not merely
     restarted.
 
 13. Open the builder at `/admin/builder?site=oshes`, signed in as a member of
-    the admin group from step A2. An orange banner naming the OSHES site
+    the admin group from step A2. An orange banner naming the OSHE site
     confirms it is pointed at the right place.
 
     Opening it provisions the five system lists automatically — the call is

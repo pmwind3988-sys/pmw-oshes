@@ -115,7 +115,7 @@ export default function RestrictedAccessScreen({
                     maxWidth: 460,
                   }}
                 >
-                  This Microsoft 365 account can sign in, but it does not have access to the configured OSHES SharePoint site.
+                  This Microsoft 365 account can sign in, but it does not have access to the configured OSHE SharePoint site.
                 </Typography>
 
                 {userEmail && (
