@@ -1,10 +1,11 @@
-import type { AuditEntry, HardDeleteSubmissionResult, PortalRecord, SharePointClient } from "../types";
+import type { AuditEntry, HardDeleteSubmissionResult, PortalRecord, SharePointClient, SurveyJson } from "../types";
 import { writeAuditEntry } from "./portalAudit";
+import { regenerateRecordPdf } from "./portalPdf";
 import { claimLayerEmail } from "./layerAssignees";
 import { normalizeEmail } from "./portalPeople";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "./statusConstants";
 import { setWorkflowAssignmentOverride } from "./workflowAssignmentData";
-import { getScheduledWorkflowEmail, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
+import { cancelScheduledWorkflowEmails, getScheduledWorkflowEmail, setScheduledWorkflowEmail } from "./workflowEmailSchedule";
 
 /**
  * "Return for more information" has no agreed SharePoint status yet (open
@@ -282,6 +283,13 @@ export async function reassignLayer(
 /**
  * Cancel (admin) or withdraw (submitter, own item, still on layer 1). The record
  * keeps its reference and is marked cancelled with the actor's name against it.
+ *
+ * Cancelling has to stop the chain, not just relabel it. Writing FormStatus on
+ * its own left the layer sitting at "Pending" and its reminder still queued, so
+ * the cron went on chasing an approver for a signature nobody wanted, the
+ * approval dashboard went on listing the item as theirs to sign, and the next
+ * page load derived the record's status back out of that pending layer. All
+ * three read the layer, so the layer is what has to be closed.
  */
 export async function cancelSubmission(
   context: PortalActionContext,
@@ -289,20 +297,72 @@ export async function cancelSubmission(
   reason: string,
 ): Promise<PortalActionResult> {
   const trimmed = reason.trim();
-  const fields = { FormStatus: SP_FORM_STATUS.CANCELLED };
+  const step = record.chain[record.at];
+  const layerNumber = step?.layerNumber ?? record.at + 1;
+  const now = new Date().toISOString();
+  // The same action by two different people: the person who filed it withdraws
+  // it, anyone else cancels it. The trail should say which one happened.
+  const verb = normalizeEmail(context.actorEmail) === record.submitterEmail ? "Withdrawn" : "Cancelled";
+
+  const fields: Record<string, unknown> = { FormStatus: SP_FORM_STATUS.CANCELLED };
+
+  // A record with no chain has nothing to stand down, and one that is already
+  // settled has a decision recorded against its layer that must not be
+  // overwritten by this one.
+  if (record.hasWorkflow && !record.done) {
+    fields[`L${layerNumber}_Status`] = SP_LAYER_STATUS.CANCELLED;
+    fields[`L${layerNumber}_Rejection`] = trimmed
+      ? `${verb} by ${context.actorName} — ${trimmed}`
+      : `${verb} by ${context.actorName}`;
+    fields.WorkflowEmailSchedule = JSON.stringify(
+      cancelScheduledWorkflowEmails(record.submission.workflowEmailScheduleRaw, now),
+    );
+  }
 
   await patch(context, record, fields);
 
   const audit = await writeAuditEntry(context.spClient, {
     reference: record.reference,
     who: context.actorName,
-    event: `Marked cancelled${trimmed ? ` — ${trimmed}` : ""}`,
+    event: `${verb} on ${record.hasWorkflow ? record.layerLabel.toLowerCase() : "a form with no approval step"}${trimmed ? ` — ${trimmed}` : ""}`,
   });
 
   return {
     fields,
     audit,
-    toast: `${record.reference} marked cancelled. Everyone in the chain has been told.`,
+    toast: record.hasWorkflow && !record.done
+      ? `${record.reference} ${verb.toLowerCase()}. ${step?.who ?? "The approver"} is no longer being asked to sign it.`
+      : `${record.reference} ${verb.toLowerCase()}. The record keeps its reference and stays readable.`,
+  };
+}
+
+/**
+ * Rebuild the stored PDF and point the record at the new file.
+ *
+ * The copy in the Form PDFs library is written at submit time and again as
+ * layers are signed, so between those moments it is a photograph of an older
+ * version of the record. This is the button for saying "print it again from
+ * what it says now" — the old file is deleted, the rebuilt one takes its place,
+ * and the reader gets a copy of what was stored.
+ */
+export async function regenerateSubmissionPdf(
+  context: PortalActionContext,
+  record: PortalRecord,
+  surveyJson: SurveyJson | null,
+): Promise<PortalActionResult> {
+  const pdfUrl = await regenerateRecordPdf(record, surveyJson, context.spClient);
+  const fields = { PdfUrl: pdfUrl };
+
+  const audit = await writeAuditEntry(context.spClient, {
+    reference: record.reference,
+    who: context.actorName,
+    event: `PDF rebuilt from the record as it stands — ${record.stage.toLowerCase()}`,
+  });
+
+  return {
+    fields,
+    audit,
+    toast: `${record.reference} PDF rebuilt from the record as it stands and saved over the stored copy.`,
   };
 }
 

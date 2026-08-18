@@ -3,6 +3,18 @@
 interface ImportMetaEnv {
   readonly VITE_APP_NAME?: string;
   readonly VITE_DEPARTMENT_NAME?: string;
+  /**
+   * Letterhead printed at the top of every generated PDF. See `src/config/company.ts`
+   * — each is omitted from the page when unset rather than defaulted to a guess.
+   */
+  readonly VITE_COMPANY_NAME?: string;
+  /** One line; `|` starts the next line of the address block. */
+  readonly VITE_COMPANY_ADDRESS?: string;
+  readonly VITE_COMPANY_PHONE?: string;
+  readonly VITE_COMPANY_FAX?: string;
+  readonly VITE_COMPANY_SST_NO?: string;
+  /** Full-resolution mark. The PDF header scales it from its own aspect ratio. */
+  readonly VITE_COMPANY_LOGO_URL?: string;
   readonly VITE_OSHES_ADMIN_GROUP?: string;
   readonly VITE_OSHES_AUDITOR_GROUP?: string;
   /** Mailbox workflow email is sent from. */

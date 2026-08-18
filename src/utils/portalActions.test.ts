@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deleteSubmission, type PortalActionContext } from "./portalActions";
+import { cancelSubmission, deleteSubmission, type PortalActionContext } from "./portalActions";
 import { describeWorkflow, resolveFormVisibility } from "./formWorkflow";
 import { toPortalRecord } from "./portalRecords";
 import { OSHES_LISTS } from "../config/oshes";
@@ -56,7 +56,7 @@ function entry(): CatalogueEntry {
   };
 }
 
-function submission(): Submission {
+function submission(overrides: Partial<Submission> = {}): Submission {
   return {
     id: "142",
     submissionId: "142",
@@ -73,11 +73,12 @@ function submission(): Submission {
     submissionData: {},
     currentLayer: 1,
     referenceNo: "INC-300726-0142",
+    ...overrides,
   };
 }
 
-function record(): PortalRecord {
-  return toPortalRecord(submission(), entry(), { "sazali@marinekita.com": "Sazali Rahim" }, {}, NOW);
+function record(overrides: Partial<Submission> = {}): PortalRecord {
+  return toPortalRecord(submission(overrides), entry(), { "sazali@marinekita.com": "Sazali Rahim" }, {}, NOW);
 }
 
 function context(removed: Partial<HardDeleteSubmissionResult> = {}): {
@@ -103,6 +104,69 @@ function context(removed: Partial<HardDeleteSubmissionResult> = {}): {
     upsertListItem,
   };
 }
+
+describe("cancelSubmission", () => {
+  const scheduled = JSON.stringify({
+    "1": {
+      layer: 1,
+      recipient: "nurul@pmw.gov.my",
+      dueAt: "2026-07-30T09:00:00.000Z",
+      status: "scheduled",
+      updatedAt: "2026-07-30T09:00:00.000Z",
+      layerType: "approval",
+      totalLayers: 1,
+    },
+  });
+
+  function fieldsOf(upsert: ReturnType<typeof vi.fn>): Record<string, unknown> {
+    const [, , body] = upsert.mock.calls[0] as [string, string, Record<string, unknown>];
+    return body;
+  }
+
+  it("closes the layer it stopped on, not only the record's label", async () => {
+    const { actor, upsertListItem } = context();
+
+    const result = await cancelSubmission(actor, record({ workflowEmailScheduleRaw: scheduled }), "Duplicate report");
+
+    // The list item write comes first, the audit row second.
+    expect(fieldsOf(upsertListItem).FormStatus).toBe("Cancelled");
+    expect(fieldsOf(upsertListItem).L1_Status).toBe("Cancelled");
+    expect(String(fieldsOf(upsertListItem).L1_Rejection)).toContain("Duplicate report");
+    expect(result.fields.FormStatus).toBe("Cancelled");
+  });
+
+  it("stands the queued reminder down, so nobody is chased for a signature nobody wants", async () => {
+    const { actor, upsertListItem } = context();
+
+    await cancelSubmission(actor, record({ workflowEmailScheduleRaw: scheduled }), "");
+
+    const schedule = JSON.parse(String(fieldsOf(upsertListItem).WorkflowEmailSchedule)) as Record<string, { status: string }>;
+    // The cron sends anything still marked "scheduled" and never looks at
+    // FormStatus, so leaving this alone kept a withdrawn permit in the post.
+    expect(schedule["1"].status).toBe("cancelled");
+  });
+
+  it("names the actor's own action: the person who filed it withdraws it", async () => {
+    const { actor, upsertListItem } = context();
+    const mine = { ...actor, actorEmail: "sazali@marinekita.com", actorName: "Sazali Rahim" };
+
+    const result = await cancelSubmission(mine, record(), "Filed twice");
+
+    expect(String(fieldsOf(upsertListItem).L1_Rejection)).toContain("Withdrawn by Sazali Rahim");
+    expect(result.audit.event).toContain("Withdrawn");
+    expect(result.toast).toContain("withdrawn");
+  });
+
+  it("leaves a settled record's layer alone — its decision is already recorded", async () => {
+    const { actor, upsertListItem } = context();
+
+    await cancelSubmission(actor, record({ formStatus: "Completed", currentLayer: 1 }), "Filed in error");
+
+    expect(fieldsOf(upsertListItem).FormStatus).toBe("Cancelled");
+    expect(fieldsOf(upsertListItem).L1_Status).toBeUndefined();
+    expect(fieldsOf(upsertListItem).WorkflowEmailSchedule).toBeUndefined();
+  });
+});
 
 describe("deleteSubmission", () => {
   it("hands the whole submission to the client, so its files go with the row", async () => {

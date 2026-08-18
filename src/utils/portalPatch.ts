@@ -35,6 +35,12 @@ export function applySubmissionPatch(submission: Submission, fields: Record<stri
       next.evaluationDataRaw = String(value);
       continue;
     }
+    if (key === "PdfUrl") {
+      // A regenerated PDF replaces the one it was built from, so the next
+      // regeneration has to delete the new file rather than the old one.
+      next.pdfUrl = value === null || value === undefined ? undefined : String(value);
+      continue;
+    }
 
     const layerMatch = /^L(\d+)_(Status|SignedAt|Email|Rejection|Signature)$/.exec(key);
     if (!layerMatch) continue;

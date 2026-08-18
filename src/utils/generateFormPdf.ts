@@ -7,65 +7,11 @@ import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPd
 import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
 import { fetchWithAuthRecovery } from "./authRecovery";
+import { layerNumberFromValue, layerSequenceFromConfig } from "./layerSequence";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
 // ── Layer data extraction ──────────────────────────────────────────────────
-
-function parseLayerConfig(layerConfig: unknown): Record<string, unknown> | null {
-  if (typeof layerConfig === "string" && layerConfig.trim()) {
-    try {
-      const parsed = JSON.parse(layerConfig) as unknown;
-      return isRecord(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-  return isRecord(layerConfig) ? layerConfig : null;
-}
-
-function layerNumberFromValue(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function branchMatches(branch: Record<string, unknown>, selectedBranch: string): boolean {
-  const selected = selectedBranch.trim().toLowerCase();
-  if (!selected) return false;
-  return [branch.name, branch.label].some((value) => typeof value === "string" && value.trim().toLowerCase() === selected);
-}
-
-function layerSequenceFromConfig(layerConfig: unknown, selectedBranchRaw: unknown): Record<string, unknown>[] {
-  const parsed = parseLayerConfig(layerConfig);
-  if (!parsed) return [];
-
-  const selectedBranch = typeof selectedBranchRaw === "string" ? selectedBranchRaw : "";
-  const manualBranches = Array.isArray(parsed.manualBranches) ? parsed.manualBranches.filter(isRecord) : [];
-  const selectedManualBranch = manualBranches.find((branch) => branchMatches(branch, selectedBranch));
-  if (selectedManualBranch && Array.isArray(selectedManualBranch.layers)) {
-    return selectedManualBranch.layers.filter(isRecord);
-  }
-
-  const layers = Array.isArray(parsed.layers) ? parsed.layers.filter(isRecord) : [];
-  const byLayerNumber = new Map<number, Record<string, unknown>>();
-  for (const layer of layers) {
-    const layerNumber = layerNumberFromValue(layer.layerNumber);
-    if (layerNumber !== null) byLayerNumber.set(layerNumber, layer);
-  }
-  for (const branch of manualBranches) {
-    if (!Array.isArray(branch.layers)) continue;
-    for (const layer of branch.layers.filter(isRecord)) {
-      const layerNumber = layerNumberFromValue(layer.layerNumber);
-      if (layerNumber !== null && !byLayerNumber.has(layerNumber)) byLayerNumber.set(layerNumber, layer);
-    }
-  }
-
-  return [...byLayerNumber.values()].sort((a, b) => (layerNumberFromValue(a.layerNumber) ?? 0) - (layerNumberFromValue(b.layerNumber) ?? 0));
-}
 
 function evaluationElementsByLayer(layerConfig: unknown, selectedBranch: unknown): Map<number, Record<string, unknown>[]> {
   const result = new Map<number, Record<string, unknown>[]>();
@@ -287,21 +233,119 @@ function sharePointDownloadAspxUrl(value: string): string {
   return `${SP_SITE_URL}/_layouts/15/download.aspx?SourceUrl=${encodeURIComponent(serverRelativePath)}`;
 }
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image blob"));
-    reader.readAsDataURL(blob);
-  });
+/**
+ * What the bytes actually are, ignoring what the server said they are.
+ *
+ * SharePoint serves files from `/$value` and `download.aspx` as
+ * `application/octet-stream` about as often as it serves them with a real image
+ * type, so trusting `Content-Type` threw away perfectly good PNGs — which is
+ * how a signature became an empty box on the page. The first bytes of a raster
+ * do not lie, and they also catch the failure that matters: an expired session
+ * answers `200` with a sign-in page, and `<!DOCTYPE` is not an image.
+ */
+function sniffImageMimeType(bytes: Uint8Array): string {
+  const startsWith = (...signature: number[]): boolean =>
+    signature.every((byte, index) => bytes[index] === byte);
+
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (startsWith(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  if (startsWith(0x42, 0x4d)) return "image/bmp";
+  return "";
 }
 
+function sniffRiffWebp(bytes: Uint8Array): boolean {
+  const ascii = (offset: number, text: string): boolean =>
+    [...text].every((char, index) => bytes[offset + index] === char.charCodeAt(0));
+  return ascii(0, "RIFF") && ascii(8, "WEBP");
+}
+
+function looksLikeSvg(bytes: Uint8Array): boolean {
+  const head = new TextDecoder().decode(bytes.slice(0, 512)).trim().toLowerCase();
+  return head.startsWith("<svg") || (head.startsWith("<?xml") && head.includes("<svg"));
+}
+
+/** The only two rasters `@react-pdf/renderer` can embed directly. */
+const PDF_NATIVE_IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
+
+function bytesToDataUrl(bytes: Uint8Array, mimeType: string): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return `data:${mimeType};base64,${btoa(binary)}`;
+}
+
+/**
+ * Re-encode to PNG through a canvas.
+ *
+ * GIF, BMP, WEBP and SVG all display in the browser and none of them embed in a
+ * PDF, so a site photo saved as a WEBP would silently vanish from the record.
+ * The browser already knows how to decode them; this borrows that decoder and
+ * hands the PDF the one format it takes. Returns "" outside a DOM, where the
+ * caller falls back to a printed placeholder rather than a hole in the page.
+ */
+async function reencodeImageToPng(dataUrl: string): Promise<string> {
+  if (typeof document === "undefined" || typeof Image === "undefined") return "";
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Image decode failed"));
+      element.src = dataUrl;
+    });
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return "";
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
+
+async function responseToPdfImageDataUrl(response: Response): Promise<string> {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length === 0) return "";
+
+  const sniffed = sniffImageMimeType(bytes)
+    || (sniffRiffWebp(bytes) ? "image/webp" : "")
+    || (looksLikeSvg(bytes) ? "image/svg+xml" : "");
+  // The declared type is only consulted when the bytes are unrecognised, and
+  // even then only if it claims to be an image — an HTML sign-in page reaches
+  // here as `text/html` and is correctly rejected.
+  const mimeType = sniffed || (response.headers.get("content-type") ?? "").split(";")[0]?.trim() || "";
+  if (!mimeType.startsWith("image/")) return "";
+
+  const dataUrl = bytesToDataUrl(bytes, mimeType);
+  return PDF_NATIVE_IMAGE_TYPES.has(mimeType) ? dataUrl : reencodeImageToPng(dataUrl);
+}
+
+/**
+ * Resolve an image reference to something the PDF can actually embed.
+ *
+ * Returns "" when the image cannot be reached or cannot be encoded. It used to
+ * return the unreachable URL, which `@react-pdf/renderer` then failed to fetch
+ * a second time — and it swallows that failure with a `console.warn` and lays
+ * out an empty box. An empty result is honest, and the document draws a labelled
+ * placeholder for it instead of an unexplained blank rectangle.
+ */
 async function imageSourceToDataUrl(token: string, source: string, cache: Map<string, string>): Promise<string> {
   const trimmed = source.trim();
-  if (!trimmed || trimmed.startsWith("data:image/")) return trimmed;
+  if (!trimmed) return "";
+  if (trimmed.startsWith("data:image/")) {
+    const mimeType = trimmed.slice(5).split(";")[0]?.toLowerCase() ?? "";
+    return PDF_NATIVE_IMAGE_TYPES.has(mimeType) ? trimmed : reencodeImageToPng(trimmed);
+  }
+
   const absolute = toAbsoluteSharePointUrl(trimmed);
   const cached = cache.get(absolute);
-  if (cached) return cached;
+  if (cached !== undefined) return cached;
 
   const authHeaders = { Authorization: `Bearer ${token}`, Accept: "*/*" };
   const candidateUrls = [
@@ -316,17 +360,17 @@ async function imageSourceToDataUrl(token: string, source: string, cache: Map<st
         headers: requestUrl !== absolute || isSharePointSource(absolute) ? authHeaders : undefined,
       });
       if (!response.ok) continue;
-      const blob = await response.blob();
-      if (!blob.type.startsWith("image/")) continue;
-      const dataUrl = await blobToDataUrl(blob);
+      const dataUrl = await responseToPdfImageDataUrl(response);
+      if (!dataUrl) continue;
       cache.set(absolute, dataUrl);
       return dataUrl;
     } catch {
       continue;
     }
   }
-  console.warn(`PDF image hydration failed for all candidate URLs; embedding unresolved source: ${absolute}`);
-  return absolute;
+  console.warn(`PDF image hydration failed for every candidate URL; the page will print a placeholder for: ${absolute}`);
+  cache.set(absolute, "");
+  return "";
 }
 
 function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
@@ -350,6 +394,11 @@ function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
   return isImageSource(candidate) || isSharePointSource(candidate, siteUrl) ? candidate : "";
 }
 
+/** The keys a SharePoint URL/Hyperlink value hides its address behind. */
+const URL_VALUE_KEYS = new Set([
+  "Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl",
+]);
+
 async function hydrateImageValue(token: string, value: unknown, cache: Map<string, string>): Promise<unknown> {
   if (typeof value === "string") {
     const parsed = parseMaybeJson(value);
@@ -365,7 +414,7 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
   if (!isRecord(value)) return value;
 
   const next: Record<string, unknown> = { ...value };
-  for (const key of ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"]) {
+  for (const key of URL_VALUE_KEYS) {
     const raw = next[key];
     if (typeof raw === "string") {
       const source = imageSourceFromString(raw);
@@ -382,10 +431,29 @@ async function hydrateImageValue(token: string, value: unknown, cache: Map<strin
     }
   }
 
+  // Anything still nested gets the same treatment. A photo column inside a
+  // dynamic matrix arrives as `{ columns, rows: [{ Photo: "<url>" }] }`, which
+  // the URL-key pass above walks straight past — so the picture reached the PDF
+  // as an unfetchable link and printed as nothing at all.
+  for (const [key, raw] of Object.entries(next)) {
+    if (URL_VALUE_KEYS.has(key)) continue;
+    if (typeof raw !== "string" && !Array.isArray(raw) && !isRecord(raw)) continue;
+    next[key] = await hydrateImageValue(token, raw, cache);
+  }
+
   return next;
 }
 
-async function hydratePdfImages(token: string, data: PdfFormData): Promise<void> {
+/**
+ * Pull every picture the document needs into the document itself.
+ *
+ * Signatures, photographs and the letterhead are SharePoint URLs that
+ * `@react-pdf/renderer` cannot fetch — it has no credentials — so each one is
+ * downloaded here and replaced by a data URI. Exported because the portal's
+ * own "Download PDF" renders the same document from the browser and needs the
+ * same images in it.
+ */
+export async function hydratePdfImages(token: string, data: PdfFormData): Promise<void> {
   const cache = new Map<string, string>();
   const entries = await Promise.all(
     Object.entries(data.responseData).map(async ([key, value]) => [key, await hydrateImageValue(token, value, cache)] as const),
@@ -471,7 +539,14 @@ export async function generateAndStorePdf(
   await options.onGeneratedBlob?.(blob);
 
   if (options.replaceExistingPdfUrl) {
-    await deleteFormPdf(token, options.replaceExistingPdfUrl);
+    // Losing the rebuilt document because yesterday's copy could not be deleted
+    // — it was moved, or removed by hand — is the wrong way round: the upload
+    // below is the point of the call, and a stray old file is recoverable.
+    try {
+      await deleteFormPdf(token, options.replaceExistingPdfUrl);
+    } catch (error) {
+      console.warn("Could not delete the PDF being replaced; the rebuilt one is uploaded anyway.", error);
+    }
   }
 
   // Upload to SharePoint Form PDFs library
@@ -503,4 +578,8 @@ export async function generateAndStorePdf(
 export const __test__ = {
   imageSourceFromString,
   sharePointServerRelativePath,
+  sniffImageMimeType,
+  sniffRiffWebp,
+  looksLikeSvg,
+  responseToPdfImageDataUrl,
 };

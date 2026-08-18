@@ -3,19 +3,28 @@ import {
   Alert,
   Box,
   Button,
+  ButtonGroup,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Drawer,
   IconButton,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Tab,
   Tabs,
   TextField,
   Typography,
 } from "@mui/material";
-import { Close as CloseIcon, DeleteForeverOutlined as DeleteForeverIcon } from "@mui/icons-material";
+import {
+  ArrowDropDown as ArrowDropDownIcon,
+  BlockOutlined as BlockIcon,
+  Close as CloseIcon,
+  DeleteForeverOutlined as DeleteForeverIcon,
+} from "@mui/icons-material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
@@ -23,12 +32,11 @@ import { normalizeEmail } from "../../utils/portalPeople";
 import {
   cancelSubmission,
   deleteSubmission,
-  nudgeApprover,
+  regenerateSubmissionPdf,
   returnForInformation,
   signLayer,
 } from "../../utils/portalActions";
 import { downloadRecordPdf } from "../../utils/portalPdf";
-import ReassignDialog from "./ReassignDialog";
 import { recordKey } from "../../utils/portalRecords";
 import { SeverityPill, StatusPill } from "./PortalPills";
 import { AnswersTab, ApprovalsTab, OverviewTab, TimelineTab } from "./RecordDetail";
@@ -99,8 +107,6 @@ export default function SubmissionDrawer() {
     removeRecord,
     appendAudit,
     toast,
-    nudged,
-    markNudged,
     surveyJsonByForm,
     audit,
   } = portal;
@@ -108,7 +114,9 @@ export default function SubmissionDrawer() {
   const [tab, setTab] = useState<TabId>("overview");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
+  /** Which PDF job is running, so the split control can say which one. */
+  const [pdfBusy, setPdfBusy] = useState<"" | "download" | "regenerate">("");
+  const [pdfMenu, setPdfMenu] = useState<HTMLElement | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -130,16 +138,18 @@ export default function SubmissionDrawer() {
     record && record.hasWorkflow && !record.done && !record.returned && record.currentAssigneeEmail === email,
   );
   const canSign = !readOnly && isMyLayer;
-  // Nothing to chase on a form with no chain — there is no next approver.
-  const canChaseThis =
-    !readOnly && Boolean(record) && access.canChase && record!.hasWorkflow && !record!.done && !record!.returned && !isMyLayer;
+  const isMine = Boolean(record) && record!.submitterEmail === email;
+  // Rebuilding the stored PDF changes no answer and no signature — it reprints
+  // what the record already says — so it is open to the people the record is
+  // actually about: whoever filed it, whoever is holding it, and administrators.
+  const canRegenerate = !readOnly && Boolean(record) && (access.isAdmin || isMyLayer || isMine);
   // Withdrawing your own filing is a property of having filed it, not of the
   // role label — an approver who reports a hazard may withdraw it too.
   const canCancel =
     !readOnly &&
     Boolean(record) &&
     !record!.done &&
-    (access.isAdmin || (record!.submitterEmail === email && record!.at === 0));
+    (access.isAdmin || (isMine && record!.at === 0));
   // Deletion is administrators only, and stays available on a settled record —
   // a wrongly filed report is usually noticed after it has been signed, and
   // "cancel it instead" is not an answer when the objection is that the photos
@@ -182,22 +192,6 @@ export default function SubmissionDrawer() {
       closeDrawer();
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not return this submission.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleNudge = async () => {
-    if (!record) return;
-    setBusy(true);
-    try {
-      const result = await nudgeApprover(actor, record);
-      applyPatch(record, result.fields);
-      appendAudit(result.audit);
-      markNudged(record.reference);
-      toast(result.toast);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not send the reminder.");
     } finally {
       setBusy(false);
     }
@@ -249,17 +243,37 @@ export default function SubmissionDrawer() {
     }
   };
 
+  const formSurveyJson = record ? surveyJsonByForm[record.listTitle] ?? record.submission.surveyJson ?? null : null;
+
   const handlePdf = async () => {
-    if (!record) return;
+    if (!record || pdfBusy) return;
+    setPdfBusy("download");
     try {
-      await downloadRecordPdf(record, surveyJsonByForm[record.listTitle] ?? record.submission.surveyJson ?? null);
+      await downloadRecordPdf(record, formSurveyJson, spClient);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not generate the PDF.");
+    } finally {
+      setPdfBusy("");
     }
   };
 
-  const cancelLabel = record && record.submitterEmail === email ? "Withdraw" : "Cancel submission";
-  const hasActions = canSign || canChaseThis || canCancel || canDelete;
+  const handleRegeneratePdf = async () => {
+    if (!record || pdfBusy) return;
+    setPdfBusy("regenerate");
+    try {
+      const result = await regenerateSubmissionPdf(actor, record, formSurveyJson);
+      applyPatch(record, result.fields);
+      appendAudit(result.audit);
+      toast(result.toast);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not rebuild the PDF.");
+    } finally {
+      setPdfBusy("");
+    }
+  };
+
+  const cancelLabel = isMine ? "Withdraw" : "Cancel submission";
+  const hasActions = canSign || canCancel || canDelete;
   // Typing the reference is the gate. A record with signatures and photos
   // against it is worth more than one misplaced click, and this is the only
   // action in the portal with nothing left to undo it from.
@@ -417,34 +431,42 @@ export default function SubmissionDrawer() {
                   </>
                 )}
 
-                {canChaseThis && (
-                  <>
+                {/* One control, two jobs: the press downloads what the record
+                    says now, the arrow offers to rebuild the copy SharePoint is
+                    storing. Keeping the rebuild behind the arrow is deliberate —
+                    it deletes a file, and that is not what a stray click on
+                    "Download" should do. */}
+                <ButtonGroup variant={hasActions ? "text" : "outlined"} sx={{ alignItems: "stretch" }}>
+                  <Button onClick={() => void handlePdf()} disabled={Boolean(pdfBusy)} sx={{ minHeight: 40 }}>
+                    {pdfBusy === "download" ? "Preparing…" : "Download PDF"}
+                  </Button>
+                  {canRegenerate && (
                     <Button
-                      variant="outlined"
-                      onClick={() => void handleNudge()}
-                      disabled={busy || Boolean(nudged[record.reference])}
-                      sx={{ minHeight: 40 }}
+                      aria-label="Other PDF actions"
+                      aria-haspopup="menu"
+                      aria-expanded={Boolean(pdfMenu)}
+                      onClick={(event) => setPdfMenu(event.currentTarget)}
+                      disabled={Boolean(pdfBusy)}
+                      sx={{ minHeight: 40, minWidth: 34, px: 0.25 }}
                     >
-                      {nudged[record.reference] ? "Nudged" : "Nudge approver"}
+                      <ArrowDropDownIcon fontSize="small" />
                     </Button>
-                    <Button variant="outlined" onClick={() => setReassignOpen(true)} disabled={busy} sx={{ minHeight: 40 }}>
-                      Reassign layer
-                    </Button>
-                  </>
+                  )}
+                </ButtonGroup>
+                {pdfBusy === "regenerate" && (
+                  <Typography sx={{ fontSize: 12, color: editorial.muted }}>Rebuilding the stored PDF…</Typography>
                 )}
-
-                <Button
-                  variant={hasActions ? "text" : "outlined"}
-                  onClick={() => void handlePdf()}
-                  sx={{ minHeight: 40 }}
-                >
-                  Download PDF
-                </Button>
 
                 {(canCancel || canDelete) && (
                   <Stack direction="row" spacing={1} sx={{ ml: "auto", alignItems: "center" }}>
                     {canCancel && (
-                      <Button onClick={() => setCancelOpen(true)} disabled={busy} sx={{ minHeight: 40, color: editorial.muted }}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => setCancelOpen(true)}
+                        disabled={busy}
+                        startIcon={<BlockIcon fontSize="small" />}
+                        sx={{ minHeight: 40, color: editorial.ink, borderColor: editorial.border }}
+                      >
                         {cancelLabel}
                       </Button>
                     )}
@@ -470,7 +492,30 @@ export default function SubmissionDrawer() {
         )}
       </Drawer>
 
-      {reassignOpen && record && <ReassignDialog record={record} onClose={() => setReassignOpen(false)} />}
+      <Menu
+        anchorEl={pdfMenu}
+        open={Boolean(pdfMenu)}
+        onClose={() => setPdfMenu(null)}
+        anchorOrigin={{ vertical: "top", horizontal: "left" }}
+        transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+        slotProps={{ paper: { sx: { maxWidth: 320 } } }}
+      >
+        <MenuItem
+          onClick={() => {
+            setPdfMenu(null);
+            void handleRegeneratePdf();
+          }}
+        >
+          <ListItemText
+            primary="Re-generate PDF"
+            secondary="Rebuilds it from the record as it stands and replaces the stored copy"
+            slotProps={{
+              primary: { sx: { fontSize: 13.5, fontWeight: 700 } },
+              secondary: { sx: { fontSize: 11.5, whiteSpace: "normal" } },
+            }}
+          />
+        </MenuItem>
+      </Menu>
 
       <Dialog open={cancelOpen} onClose={busy ? undefined : () => setCancelOpen(false)} fullWidth maxWidth="sm" transitionDuration={120}>
         <DialogTitle sx={{ fontWeight: 800 }}>
@@ -478,8 +523,12 @@ export default function SubmissionDrawer() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
-            The record stays and keeps its reference — it is marked cancelled with your name against it. Anyone already
-            in the chain is told. This cannot be undone from here.
+            The record stays and keeps its reference — it is marked cancelled with your name against it, and it stays
+            readable to everyone who can see it now.
+            {record?.hasWorkflow && !record?.done
+              ? ` The layer it is sitting on is closed, and ${record.currentAssignee || "the approver"} stops being asked to sign it — including the automatic reminders.`
+              : ""}
+            {" "}This cannot be undone from here.
           </Typography>
           <TextField
             label="Reason, for the record"
@@ -495,7 +544,7 @@ export default function SubmissionDrawer() {
             Keep it open
           </Button>
           <Button variant="contained" onClick={() => void handleCancel()} disabled={busy}>
-            Mark cancelled
+            {busy ? "Withdrawing…" : `Mark ${cancelLabel === "Withdraw" ? "withdrawn" : "cancelled"}`}
           </Button>
         </DialogActions>
       </Dialog>

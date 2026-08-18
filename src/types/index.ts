@@ -74,6 +74,8 @@ export interface Submission {
   workflowEmailScheduleRaw?: string | null;
   /** Raw EvaluationData note column — per-layer notes and evaluation answers. */
   evaluationDataRaw?: string | null;
+  /** Stored PDF in the Form PDFs library — the copy a regeneration replaces. */
+  pdfUrl?: string;
 }
 
 export interface HardDeleteSubmissionResult {

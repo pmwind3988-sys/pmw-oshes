@@ -2,9 +2,12 @@
  * FormPdfDocument.tsx — Corporate-style PDF for form submissions with approval/evaluation layers.
  */
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { COMPANY, companyContactLines, type CompanyProfile } from "../config/company";
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
 import { formatPdfDateTimeValue, formatPdfFieldValue, getPdfMeasureContext } from "./pdfFieldFormatting";
+import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSignatureField, parseMaybeJson } from "./pdfImageSources";
+import { chainProgress, isAwaitingLayer } from "./pdfLayerProgress";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -32,6 +35,8 @@ export interface PdfFormData {
   pdfConfig?: PdfConfig;
   /** Document control header for the specific published profile. */
   documentHeader?: DocumentControlHeader;
+  /** Letterhead identity. Defaults to the deployment's configured company. */
+  company?: CompanyProfile;
 }
 
 export interface PdfLayerResult {
@@ -54,8 +59,11 @@ export interface PdfLayerResult {
 // ── Colors ────────────────────────────────────────────────────────────────
 
 const C = {
-  primary: "#0078D4",
-  secondary: "#6264A7",
+  // Sampled off the mark in `public/logo.png` rather than picked to look near
+  // it: the navy rule under the letterhead sits inches from the logo on a
+  // printed page, and two blues that are almost the same read as a mistake.
+  primary: "#2B2870",
+  secondary: "#007DB0",
   border: "#D1D5DB",
   borderLight: "#E5E7EB",
   bg: "#F3F4F6",
@@ -83,57 +91,68 @@ const C = {
 // ── Styles ────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  page: { paddingTop: 32, paddingHorizontal: 32, paddingBottom: 54, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
-  // Header
-  header: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14, paddingBottom: 12, borderBottomWidth: 2.5, borderBottomColor: C.primary },
-  logoBox: { width: 90, height: 42, marginRight: 18, flexShrink: 0 },
-  logo: { width: 90, height: 42, objectFit: "contain" },
-  headerRight: { flexGrow: 1, flexShrink: 1, alignItems: "flex-end" },
-  docTitle: { fontSize: 15, fontWeight: "heavy", color: C.primary, marginBottom: 3, textAlign: "right", lineHeight: 1.12 },
-  docRef: { fontSize: 6.5, color: C.muted, textAlign: "right", lineHeight: 1.2 },
-  // Info grid
-  infoGrid: { flexDirection: "row", flexWrap: "wrap", marginBottom: 10 },
-  // The reference gets a band of its own above the grid rather than an 8pt cell
-  // inside it. A printed copy is read back over the phone and filed by hand, so
-  // the one thing someone needs to find on the page must be findable at arm's
-  // length.
-  referenceBand: {
-    alignSelf: "flex-start",
-    backgroundColor: C.blueBg,
-    borderWidth: 0.5,
-    borderColor: C.blueText,
-    paddingVertical: 3.5,
-    paddingHorizontal: 8,
-    marginBottom: 8,
-  },
-  referenceLabel: { fontSize: 6, color: C.blueText, textTransform: "uppercase", letterSpacing: 0.6 },
-  referenceValue: { fontSize: 13, color: C.blueText, fontWeight: "bold", letterSpacing: 0.4, marginTop: 1 },
-  infoCell: { width: "50%", marginBottom: 4, paddingRight: 8 },
-  infoLabel: { fontSize: 6, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6 },
-  infoValue: { fontSize: 8, color: C.text, marginTop: 1, lineHeight: 1.25 },
-  // Document control header
-  docControl: { flexDirection: "row", flexWrap: "wrap", borderWidth: 0.5, borderColor: C.border, marginBottom: 10 },
-  docControlCell: { paddingVertical: 3.5, paddingHorizontal: 7, borderRightWidth: 0.5, borderRightColor: C.borderLight, borderBottomWidth: 0.5, borderBottomColor: C.borderLight },
-  docControlLabel: { fontSize: 5.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 },
-  docControlValue: { fontSize: 7.5, color: C.text, marginTop: 1, fontWeight: "bold" },
-  // Company block
-  companyBox: { backgroundColor: C.bg, padding: 7, marginBottom: 10 },
-  companyLine: { fontSize: 6.5, color: C.muted, marginBottom: 1 },
+  page: { paddingTop: 34, paddingHorizontal: 34, paddingBottom: 56, fontFamily: "Helvetica", fontSize: 8.5, color: C.text, lineHeight: 1.25 },
+
+  // ── Letterhead ──
+  // Name and address on the left, mark on the right, one heavy rule beneath the
+  // pair. The rule is what makes the block read as stationery rather than as a
+  // first row of content.
+  letterhead: { flexDirection: "row", alignItems: "flex-start", marginBottom: 9 },
+  letterheadLeft: { flexGrow: 1, flexShrink: 1, paddingRight: 14 },
+  // Centred across the full measure, above the address and the mark, the way
+  // the company's own stationery sets it.
+  companyName: { fontSize: 13, fontWeight: "bold", color: C.text, textAlign: "center", marginBottom: 6, letterSpacing: 0.2 },
+  companyLine: { fontSize: 8, color: C.text, lineHeight: 1.35 },
+  companyContact: { fontSize: 8, color: C.text, lineHeight: 1.35 },
+  // No width, only a height and a ceiling. react-pdf measures the raster and
+  // derives the width from its own aspect ratio, so one number resizes the mark
+  // for any page size or density and it is never stretched to fit a box.
+  logoBox: { flexShrink: 0, alignItems: "flex-end", justifyContent: "flex-start" },
+  logoFallback: { fontSize: 15, fontWeight: "bold", color: C.primary, letterSpacing: 1 },
+  rule: { height: 2, backgroundColor: C.primary, marginBottom: 9 },
+
+  // ── Document band: who/what on the left, the document's own facts on the right ──
+  docBand: { flexDirection: "row", alignItems: "flex-start", marginBottom: 11 },
+  docBandLeft: { width: "50%", paddingRight: 14 },
+  docBandRight: { width: "50%" },
+  bandLabel: { fontSize: 7, color: C.muted, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 3 },
+  bandHeadline: { fontSize: 11, fontWeight: "bold", color: C.primary, marginBottom: 2 },
+  bandLine: { fontSize: 8, color: C.text, lineHeight: 1.35 },
+  // The reference is the one thing read back over the phone and filed by hand,
+  // so it is set at the size of the quotation number it replaces.
+  docTitle: { fontSize: 13, fontWeight: "bold", color: C.text, textAlign: "right", marginBottom: 5, lineHeight: 1.15 },
+  metaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 1.5 },
+  metaLabel: { fontSize: 8, color: C.muted },
+  metaValue: { fontSize: 8, color: C.text, fontWeight: "bold", textAlign: "right" },
+
   // Status badge
   badge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, fontSize: 8, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, borderWidth: 1 },
 
   // ── Section headings ──
-  sectionLabel: { fontSize: 7.5, fontWeight: "heavy", color: C.text, marginBottom: 5, paddingBottom: 2, borderBottomWidth: 1.5, borderBottomColor: C.primary },
-  pageSection: { marginBottom: 24 },
-  approvalPageSection: { marginBottom: 18 },
-  tableBlock: { borderWidth: 0.5, borderColor: C.borderLight, marginTop: 2 },
+  sectionLabel: { fontSize: 8, fontWeight: "bold", color: C.primary, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 5 },
+  pageSection: { marginBottom: 18 },
+  approvalPageSection: { marginBottom: 14 },
+  tableBlock: { borderWidth: 0.5, borderColor: C.border, marginTop: 2 },
   subSectionLabel: { fontSize: 7.5, fontWeight: "bold", color: C.primary, marginBottom: 3, marginTop: 6 },
+
+  // ── The data table ──
+  // One bordered table with a solid navy head, the way the printed quotation
+  // sets its line items. A numbered first column is what makes a response
+  // referable in a phone call: "item 4 is wrong" beats "the third box down".
+  dataTable: { borderWidth: 0.5, borderColor: C.border },
+  dataHeadRow: { flexDirection: "row", backgroundColor: C.primary },
+  dataHeadText: { color: C.white, fontSize: 7, fontWeight: "bold", paddingHorizontal: 5, paddingVertical: 4 },
+  dataGroupRow: { backgroundColor: C.bg, borderTopWidth: 0.5, borderTopColor: C.border, borderBottomWidth: 0.5, borderBottomColor: C.border, paddingHorizontal: 5, paddingVertical: 3 },
+  dataGroupText: { fontSize: 7.5, fontWeight: "bold", color: C.primary, textTransform: "uppercase", letterSpacing: 0.5 },
+  colIndex: { width: "7%" },
+  colQuestion: { width: "40%" },
+  colAnswer: { width: "53%" },
 
   // ── Layer table ──
   layerRow: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: C.borderLight, paddingVertical: 3.5, alignItems: "flex-start" },
   layerHeader: { backgroundColor: C.primary },
-  layerHeaderText: { color: C.white, fontSize: 6, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.4, paddingHorizontal: 3, paddingVertical: 2.5 },
-  layerCell: { paddingHorizontal: 3, fontSize: 6.5, color: C.text, lineHeight: 1.25 },
+  layerHeaderText: { color: C.white, fontSize: 6.5, fontWeight: "bold", paddingHorizontal: 4, paddingVertical: 3 },
+  layerCell: { paddingHorizontal: 4, fontSize: 7, color: C.text, lineHeight: 1.25 },
   colNum: { width: "6%" },
   colType: { width: "12%" },
   colStatus: { width: "13%" },
@@ -141,24 +160,44 @@ const S = StyleSheet.create({
   colTime: { width: "20%" },
   colReason: { width: "28%" },
 
+  // ── Layer detail cards ──
+  // Every layer gets a card, including the ones that carry no ink. A layer that
+  // is simply absent from the page reads as a step that never happened, which
+  // is a different claim from "approved, no signature captured".
+  layerCard: { borderWidth: 0.5, borderColor: C.border, marginBottom: 8 },
+  layerCardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: C.bg, paddingHorizontal: 7, paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: C.border },
+  layerCardTitle: { fontSize: 8, fontWeight: "bold", color: C.primary },
+  layerCardStatus: { fontSize: 7.5, fontWeight: "bold" },
+  layerCardBody: { flexDirection: "row", padding: 7 },
+  layerCardFacts: { flexGrow: 1, flexShrink: 1, paddingRight: 10 },
+
   // ── Signature block ──
-  sigBlock: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 4, padding: 7, backgroundColor: C.bgAlt, borderWidth: 0.5, borderColor: C.borderLight },
-  sigLine: { flex: 1 },
-  sigLabel: { fontSize: 5.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.4 },
+  sigLabel: { fontSize: 6.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 },
   sigName: { fontSize: 8, fontWeight: "bold", color: C.text, marginTop: 1 },
-  sigDetail: { fontSize: 5.5, color: C.muted, marginTop: 1 },
-  sigImageBox: { width: 92, minHeight: 34, marginLeft: "auto", justifyContent: "center", alignItems: "flex-end" },
-  sigImage: { maxWidth: 92, maxHeight: 34, objectFit: "contain" },
+  sigDetail: { fontSize: 6.5, color: C.muted, marginTop: 1.5, lineHeight: 1.3 },
+  // A fixed-height well with a rule under it. The ink sits on the rule when
+  // there is ink; when there is not, the rule is a place to sign in pen, which
+  // is the one thing an empty white rectangle failed to be.
+  sigWell: { width: 118, flexShrink: 0 },
+  sigInk: { height: 34, justifyContent: "flex-end", alignItems: "center" },
+  sigImage: { maxWidth: 116, maxHeight: 34, objectFit: "contain" },
+  sigRule: { borderBottomWidth: 0.8, borderBottomColor: C.text, marginTop: 2 },
+  sigCaption: { fontSize: 6, color: C.muted, textAlign: "center", marginTop: 2 },
+  sigMissing: { fontSize: 6, color: C.muted, fontStyle: "italic", textAlign: "center" },
 
   // ── Field rows ──
-  fieldRow: { flexDirection: "row", paddingVertical: 3, paddingHorizontal: 4, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  fieldRow: { flexDirection: "row", paddingVertical: 3.5, paddingHorizontal: 5, borderBottomWidth: 0.4, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   fieldRowAlt: { backgroundColor: C.bgAlt },
-  fieldLabel: { width: "34%", fontSize: 7, color: C.muted, paddingRight: 6, lineHeight: 1.3 },
-  fieldValue: { width: "66%", fontSize: 7, color: C.text, lineHeight: 1.3 },
-  imageGrid: { width: "66%", flexDirection: "row", flexWrap: "wrap" },
-  imageTile: { width: "45%", minHeight: 64, borderWidth: 0.5, borderColor: C.borderLight, backgroundColor: C.white, padding: 4, marginRight: 6, marginBottom: 5, justifyContent: "center", alignItems: "center" },
-  imagePreview: { maxWidth: "100%", maxHeight: 76, objectFit: "contain" },
-  measureBox: { width: "66%" },
+  fieldIndex: { width: "7%", fontSize: 7.5, color: C.muted },
+  fieldLabel: { width: "40%", fontSize: 7.5, color: C.text, paddingRight: 8, lineHeight: 1.3 },
+  fieldValue: { width: "53%", fontSize: 7.5, color: C.text, fontWeight: "bold", lineHeight: 1.3 },
+  imageGrid: { width: "53%", flexDirection: "row", flexWrap: "wrap" },
+  imageTile: { width: "46%", borderWidth: 0.5, borderColor: C.border, backgroundColor: C.white, padding: 4, marginRight: 6, marginBottom: 5 },
+  imageFrame: { height: 76, justifyContent: "center", alignItems: "center" },
+  imagePreview: { maxWidth: "100%", maxHeight: 74, objectFit: "contain" },
+  imageCaption: { fontSize: 5.5, color: C.muted, marginTop: 3, textAlign: "center" },
+  imageMissing: { fontSize: 6, color: C.muted, fontStyle: "italic", textAlign: "center", lineHeight: 1.3 },
+  measureBox: { width: "53%" },
   measureValue: { fontSize: 7, fontWeight: "bold", color: C.text, marginBottom: 3 },
   measureTrack: { height: 5, backgroundColor: C.borderLight, borderRadius: 2.5, marginBottom: 3 },
   measureFill: { height: 5, backgroundColor: C.primary, borderRadius: 2.5 },
@@ -166,9 +205,9 @@ const S = StyleSheet.create({
   measureScaleText: { fontSize: 5.5, color: C.muted },
 
   // ── Eval fields sub-table ──
-  evalSubRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 6, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
-  evalSubLabel: { width: "34%", fontSize: 6, color: C.muted, paddingRight: 5, lineHeight: 1.25 },
-  evalSubValue: { width: "66%", fontSize: 6, color: C.text, lineHeight: 1.25 },
+  evalSubRow: { flexDirection: "row", paddingVertical: 2.5, paddingHorizontal: 7, borderBottomWidth: 0.3, borderBottomColor: C.borderLight, alignItems: "flex-start" },
+  evalSubLabel: { width: "40%", fontSize: 7, color: C.muted, paddingRight: 6, lineHeight: 1.25 },
+  evalSubValue: { width: "53%", fontSize: 7, color: C.text, lineHeight: 1.25 },
   paperEvalRow: { flexDirection: "row", paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 0.5, borderBottomColor: C.borderLight, alignItems: "flex-start" },
   paperEvalLabel: { width: "30%", fontSize: 10, color: C.text, paddingRight: 10, lineHeight: 1.35 },
   paperFieldBox: { width: "66%" },
@@ -180,23 +219,46 @@ const S = StyleSheet.create({
   paperOptionMark: { fontSize: 10, fontWeight: "bold", lineHeight: 1 },
   paperOptionLabel: { fontSize: 9.5, color: C.text, lineHeight: 1.25 },
 
+  // ── Progress notice ──
+  // A ruled strip, not a watermark: it has to survive a photocopy and it has to
+  // be read before the signature page, because it is what stops an interim copy
+  // being filed as the signed one.
+  notice: { borderWidth: 0.8, borderColor: C.amberBorder, backgroundColor: C.amberBg, paddingHorizontal: 8, paddingVertical: 5, marginBottom: 11 },
+  noticeLabel: { fontSize: 7.5, fontWeight: "bold", color: C.amberText, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 1.5 },
+  noticeText: { fontSize: 7.5, color: C.text, lineHeight: 1.35 },
+
+  // ── Layers still to sign ──
+  pendingBlock: { borderWidth: 0.5, borderColor: C.border, borderStyle: "dashed", paddingHorizontal: 7, paddingVertical: 5 },
+  pendingHead: { fontSize: 7.5, fontWeight: "bold", color: C.muted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 3 },
+  pendingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: 2 },
+  pendingWho: { fontSize: 7.5, color: C.text, flexGrow: 1, flexShrink: 1, paddingRight: 8, lineHeight: 1.3 },
+  pendingState: { fontSize: 7, color: C.muted, flexShrink: 0 },
+
   // ── No data ──
-  noData: { fontSize: 7, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
+  noData: { fontSize: 7.5, color: C.muted, fontStyle: "italic", textAlign: "center", paddingVertical: 10 },
+
+  // ── Notes ──
+  // The quotation's "Conditions of sales" slot. Standing text about the
+  // document, set below the content and above the rule, not floated as a
+  // centred afterthought.
+  notesBlock: { marginTop: 12 },
+  notesHeading: { fontSize: 7.5, fontWeight: "bold", color: C.text, marginBottom: 2 },
+  notesLine: { fontSize: 7, color: C.text, lineHeight: 1.35 },
 
   // ── Footer ──
-  footer: { position: "absolute", bottom: 22, left: 32, right: 32, flexDirection: "row", justifyContent: "space-between", paddingTop: 5, borderTopWidth: 0.5, borderTopColor: C.borderLight, fontSize: 6, color: C.muted },
+  footer: { position: "absolute", bottom: 24, left: 34, right: 34, flexDirection: "row", justifyContent: "space-between", paddingTop: 5, borderTopWidth: 0.5, borderTopColor: C.border, fontSize: 6.5, color: C.muted },
 
   // ── Matrix table ──
-  matrixSection: { marginBottom: 16 },
-  matrixTable: { marginBottom: 8, borderWidth: 0.5, borderColor: C.border },
+  matrixSection: { marginBottom: 10 },
+  matrixTable: { marginBottom: 6, borderWidth: 0.5, borderColor: C.border },
   matrixHeaderRow: { flexDirection: "row", backgroundColor: C.primary },
-  matrixHeaderCell: { paddingHorizontal: 4, paddingVertical: 3, borderRightWidth: 0.5, borderRightColor: C.white },
-  matrixHeaderText: { fontSize: 6, fontWeight: "heavy", color: C.white, textTransform: "uppercase", letterSpacing: 0.3 },
+  matrixHeaderCell: { paddingHorizontal: 4, paddingVertical: 3.5, borderRightWidth: 0.5, borderRightColor: C.white },
+  matrixHeaderText: { fontSize: 6.5, fontWeight: "bold", color: C.white },
   matrixDataRow: { flexDirection: "row", borderBottomWidth: 0.3, borderBottomColor: C.borderLight },
   matrixDataRowAlt: { backgroundColor: C.bgAlt },
-  matrixDataCell: { paddingHorizontal: 4, paddingVertical: 2.5, borderRightWidth: 0.3, borderRightColor: C.borderLight },
-  matrixDataText: { fontSize: 6.5, color: C.text },
-  matrixFieldLabel: { fontSize: 7.5, fontWeight: "bold", color: C.secondary, marginBottom: 3, marginTop: 2 },
+  matrixDataCell: { paddingHorizontal: 4, paddingVertical: 3, borderRightWidth: 0.3, borderRightColor: C.borderLight },
+  matrixDataText: { fontSize: 7, color: C.text },
+  matrixFieldLabel: { fontSize: 7.5, fontWeight: "bold", color: C.text, marginBottom: 3, marginTop: 2 },
   formSection: { marginBottom: 8 },
 });
 
@@ -226,76 +288,6 @@ function fallbackPdfLabel(key: string): string {
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim() || key;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseMaybeJson(value: string): unknown | null {
-  const trimmed = value.trim();
-  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
-  try {
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function isImageSource(value: string): boolean {
-  const trimmed = value.trim();
-  return /^data:image\//i.test(trimmed) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(trimmed);
-}
-
-function isSharePointImageCandidate(value: string): boolean {
-  const trimmed = value.trim();
-  return /^(https?:\/\/|\/)/i.test(trimmed) && /(\/sites\/|\/teams\/|\/Signature%20Images\/|\/Signature Images\/|\/Form%20PDFs\/|\/Lists\/)/i.test(trimmed);
-}
-
-function extractImageSrcFromHtml(value: string): string {
-  const match = value.match(/<img\b[^>]*\bsrc=(["'])(.*?)\1/i);
-  return match?.[2]?.trim() ?? "";
-}
-
-function splitSharePointUrlFieldValue(value: string): string {
-  const trimmed = value.trim();
-  const separatorIndex = trimmed.search(/,\s+/);
-  if (separatorIndex === -1) return trimmed;
-  return trimmed.slice(0, separatorIndex).trim();
-}
-
-function collectImageSources(value: unknown): string[] {
-  if (value === null || value === undefined) return [];
-  if (Array.isArray(value)) return value.flatMap(collectImageSources);
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    const parsed = parseMaybeJson(trimmed);
-    if (parsed !== null) return collectImageSources(parsed);
-    const htmlSrc = extractImageSrcFromHtml(trimmed);
-    const candidate = splitSharePointUrlFieldValue(htmlSrc || trimmed);
-    return isImageSource(candidate) || isSharePointImageCandidate(candidate) ? [candidate] : [];
-  }
-
-  if (!isRecord(value)) return [];
-
-  const directKeys = ["Url", "url", "webUrl", "WebUrl", "LinkingUrl", "linkingUrl", "ServerRelativeUrl", "serverRelativeUrl"];
-  for (const key of directKeys) {
-    const next = value[key];
-    if (typeof next === "string") {
-      const candidate = splitSharePointUrlFieldValue(next);
-      if (isImageSource(candidate) || isSharePointImageCandidate(candidate)) return [candidate];
-    }
-  }
-
-  const serverUrl = value.serverUrl || value.ServerUrl;
-  const relativeUrl = value.serverRelativeUrl || value.ServerRelativeUrl;
-  if (typeof serverUrl === "string" && typeof relativeUrl === "string") {
-    const url = `${serverUrl.replace(/\/$/, "")}${relativeUrl}`;
-    return isImageSource(url) || isSharePointImageCandidate(url) ? [url] : [];
-  }
-
-  return [];
 }
 
 function docControlCells(
@@ -328,7 +320,11 @@ function LayerRow({ layer }: { layer: PdfLayerResult; isLast: boolean }) {
   const badge = badgeStyle(layer.status);
   const isManualPaper = layer.status.trim().toLowerCase().startsWith("manual ");
   const rejectedAtLayer = layer.status.toLowerCase().includes("rejected at layer") ? layer.status : "";
-  const remarks = isManualPaper ? "" : layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
+  // An evaluation layer used to print "Confirmed" in its remarks whatever its
+  // status said, so a layer nobody had opened yet was reported as confirmed.
+  const remarks = isManualPaper || isAwaitingLayer(layer)
+    ? ""
+    : layer.rejection || rejectedAtLayer || (layer.type === "evaluation" ? "Confirmed" : "");
   return (
     <View style={S.layerRow} wrap={false}>
       <Text style={[S.layerCell, S.colNum]}>{layer.layerNumber}</Text>
@@ -588,16 +584,145 @@ function renderImageSources(sources: string[]) {
   if (sources.length === 0) return null;
   return (
     <View style={S.imageGrid}>
-      {sources.map((src, index) => (
-        <View key={`${src}-${index}`} style={S.imageTile} wrap={false}>
-          <Image style={S.imagePreview} src={src} />
-        </View>
-      ))}
+      {sources.map((src, index) => {
+        const caption = imageCaption(src);
+        return (
+          <View key={`${src}-${index}`} style={S.imageTile} wrap={false}>
+            <View style={S.imageFrame}>
+              {isEmbeddableImage(src)
+                ? <Image style={S.imagePreview} src={src} />
+                : <Text style={S.imageMissing}>Image stored with the record{"\n"}(not embedded)</Text>}
+            </View>
+            {caption ? <Text style={S.imageCaption}>{caption}</Text> : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
 
-export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader }: PdfFormData) {
+/**
+ * A signature well: the ink, the rule it sits on, and who it belongs to.
+ *
+ * The rule is drawn whether or not there is ink. An approver who signed on
+ * paper, or whose stored image could not be fetched, leaves a line to sign
+ * rather than a blank the reader has to interpret.
+ */
+function SignatureWell({ signature, caption }: { signature?: string; caption: string }) {
+  const ink = (signature ?? "").trim();
+  return (
+    <View style={S.sigWell} wrap={false}>
+      <View style={S.sigInk}>
+        {ink && isEmbeddableImage(ink)
+          ? <Image style={S.sigImage} src={ink} />
+          : ink
+            ? <Text style={S.sigMissing}>Signed — image unavailable</Text>
+            : null}
+      </View>
+      <View style={S.sigRule} />
+      <Text style={S.sigCaption}>{caption}</Text>
+    </View>
+  );
+}
+
+
+/**
+ * One question and its answer, as a numbered row of the data table.
+ *
+ * `index` is the running number across the whole table rather than within a
+ * section, so "item 12" identifies one row of one document.
+ */
+function FieldRow({ field, index, striped }: { field: FormSubmissionField; index: number; striped: boolean }) {
+  const imageSources = collectImageSources(field.value);
+  const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
+
+  return (
+    <View style={[S.fieldRow, striped ? S.fieldRowAlt : {}]} wrap={false}>
+      <Text style={S.fieldIndex}>{index}</Text>
+      <Text style={S.fieldLabel}>{field.label}</Text>
+      {isSignatureField(field)
+        ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
+        : imageSources.length > 0
+          ? renderImageSources(imageSources)
+          : measure || <Text style={S.fieldValue}>{fmtVal(field.value, field) || "—"}</Text>}
+    </View>
+  );
+}
+
+/**
+ * One layer's own page-block: what it decided, who decided it, and the ink.
+ *
+ * Every layer that reached a decision gets one, approval and evaluation alike.
+ * The previous document only drew a block for layers that carried a signature
+ * image, so a paper approval or an unfetchable signature removed the whole
+ * layer from the record rather than removing only its picture.
+ */
+function LayerDetailCard({
+  layer,
+  showSignature,
+  showEvaluationDetails,
+  includeEmptyEvaluationFields,
+  primary,
+}: {
+  layer: PdfLayerResult;
+  showSignature: boolean;
+  showEvaluationDetails: boolean;
+  includeEmptyEvaluationFields: boolean;
+  primary: string;
+}) {
+  const badge = badgeStyle(layer.status);
+  const evaluationFields = showEvaluationDetails && layer.type === "evaluation"
+    ? evaluationFieldsForLayer(layer, includeEmptyEvaluationFields)
+    : [];
+  const who = layer.confirmerName || layer.confirmerEmail || layer.email || "";
+
+  return (
+    <View style={S.layerCard} wrap={false}>
+      <View style={S.layerCardHead}>
+        <Text style={[S.layerCardTitle, { color: primary }]}>
+          Layer {layer.layerNumber} · {layer.type === "evaluation" ? "Evaluation" : "Approval"}
+        </Text>
+        <Text style={[S.layerCardStatus, { color: badge.text }]}>{badge.label}</Text>
+      </View>
+
+      <View style={S.layerCardBody}>
+        <View style={S.layerCardFacts}>
+          <Text style={S.sigLabel}>Actioned by</Text>
+          <Text style={S.sigName}>{who || "—"}</Text>
+          <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}</Text>
+          {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
+        </View>
+        {showSignature ? <SignatureWell signature={layer.signature} caption={who || "Signature"} /> : null}
+      </View>
+
+      {evaluationFields.length > 0 && (
+        <View>
+          <View style={S.dataGroupRow}>
+            <Text style={S.dataGroupText}>Evaluation responses</Text>
+          </View>
+          {evaluationFields.map((field, index) => {
+            const imageSources = collectImageSources(field.value);
+            const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
+            return (
+              <View key={`${field.key}-${index}`} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
+                <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
+                {includeEmptyEvaluationFields
+                  ? renderPaperFieldValue(field)
+                  : isSignatureField(field)
+                    ? <View style={S.imageGrid}><SignatureWell signature={imageSources[0]} caption={field.label} /></View>
+                    : imageSources.length > 0
+                      ? renderImageSources(imageSources)
+                      : measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader, company }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Main Page",
     includeAdditionalFields: false,
@@ -610,97 +735,130 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
   const referenceNo = (meta.referenceNo || String(responseData?.[REFERENCE_NO_FIELD] ?? "")).trim();
   const selectedCompany = getSelectedCompany(responseData, surveyJson);
   const primary = layoutConfig?.primaryColor?.trim() || C.primary;
-  const secondary = layoutConfig?.secondaryColor?.trim() || C.secondary;
   const comfortable = layoutConfig?.density === "comfortable";
   const showStatusBadge = layoutConfig?.showStatusBadge !== false;
   const showApproverChain = layoutConfig?.showApproverChain !== false;
   const showSignatures = layoutConfig?.showSignatures !== false;
   const showEvaluationDetails = layoutConfig?.showEvaluationDetails !== false;
   const includeEmptyEvaluationFields = layoutConfig?.includeEmptyEvaluationFields === true;
-  const effectiveLogoUrl = layoutConfig?.headerLogoUrl?.trim() || logoUrl;
+  const progress = chainProgress(layerResults, meta.formStatus);
+  // A layer detail card is a record of a decision, so only a layer that reached
+  // one gets one. The exception is the blank-form mode, whose whole purpose is
+  // printing an unsigned evaluation for someone to fill in by hand.
+  const detailLayers = includeEmptyEvaluationFields
+    ? layerResults ?? []
+    : (layerResults ?? []).filter((layer) => !isAwaitingLayer(layer));
+
+  const profile = company ?? COMPANY;
+  const letterheadName = profile.name || selectedCompany;
+  const contactLines = companyContactLines(profile);
+  const effectiveLogoUrl = layoutConfig?.headerLogoUrl?.trim() || logoUrl || profile.logoUrl;
+  // The mark is given a height and a width ceiling, never a width. react-pdf
+  // measures the raster and derives the other dimension from its own ratio, so
+  // this single number rescales the logo for a denser layout or a different
+  // paper size without ever squashing it.
+  const logoHeight = comfortable ? 46 : 40;
+
+  const controlCells = docControlCells(documentHeader, meta.formVersion);
+  const metaRows: { label: string; value: string }[] = [
+    { label: "Date", value: fmtDate(meta.submittedAt) },
+    { label: "Form", value: meta.formTitle },
+    { label: "Version", value: `v${meta.formVersion}` },
+    ...controlCells.map((cell) => ({ label: cell.label, value: cell.value })),
+  ];
+
+  // The table numbers items continuously across sections, so the counter lives
+  // outside the section loop.
+  let itemNumber = 0;
 
   return (
-    <Document>
+    <Document title={title} author={letterheadName || undefined}>
       <Page size="A4" style={[S.page, comfortable ? { fontSize: 9.3, lineHeight: 1.35 } : {}]}>
-        {/* ═══ HEADER ═══ */}
-        <View style={[S.header, { borderBottomColor: primary }]}>
-          <View style={S.logoBox}>
-            {effectiveLogoUrl ? <Image style={S.logo} src={effectiveLogoUrl} /> : <Text style={{ fontSize: 14, fontWeight: "bold", color: primary }}>LOGO</Text>}
+        {/* ═══ LETTERHEAD ═══ */}
+        {letterheadName ? <Text style={S.companyName}>{letterheadName}</Text> : null}
+        <View style={S.letterhead}>
+          <View style={S.letterheadLeft}>
+            {profile.addressLines.map((line) => (
+              <Text key={line} style={S.companyLine}>{line}</Text>
+            ))}
+            {contactLines.map((line) => (
+              <Text key={line} style={S.companyContact}>{line}</Text>
+            ))}
           </View>
-          <View style={S.headerRight}>
-            <Text style={[S.docTitle, { color: primary }]}>{title}</Text>
-            <Text style={S.docRef}>Document Ref: {meta.formTitle} / v{meta.formVersion}</Text>
+          <View style={S.logoBox}>
+            {effectiveLogoUrl
+              ? <Image style={{ height: logoHeight, maxWidth: 170 }} src={effectiveLogoUrl} />
+              : <Text style={[S.logoFallback, { color: primary }]}>{letterheadName || "LOGO"}</Text>}
           </View>
         </View>
+        <View style={[S.rule, { backgroundColor: primary }]} />
 
-        {/* ═══ DOCUMENT CONTROL HEADER ═══ */}
-        {docControlCells(documentHeader, meta.formVersion).length > 0 && (
-          <View style={S.docControl}>
-            {docControlCells(documentHeader, meta.formVersion).map((cell) => (
-              <View key={cell.label} style={S.docControlCell}>
-                <Text style={S.docControlLabel}>{cell.label}</Text>
-                <Text style={S.docControlValue}>{cell.value}</Text>
+        {/* ═══ DOCUMENT BAND ═══ */}
+        <View style={S.docBand}>
+          <View style={S.docBandLeft}>
+            <Text style={S.bandLabel}>Submitted By</Text>
+            <Text style={S.bandHeadline}>{meta.submittedBy || "—"}</Text>
+            {selectedCompany && letterheadName !== selectedCompany
+              ? <Text style={S.bandLine}>Company: {selectedCompany}</Text>
+              : null}
+            {showStatusBadge && (
+              <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border, marginTop: 5, marginBottom: 0 }]}>
+                <Text style={{ color: badge.text }}>{badge.label}</Text>
+              </View>
+            )}
+          </View>
+          <View style={S.docBandRight}>
+            <Text style={S.docTitle}>{title}{referenceNo ? ` No. ${referenceNo}` : ""}</Text>
+            {metaRows.map((row) => (
+              <View key={row.label} style={S.metaRow}>
+                <Text style={S.metaLabel}>{row.label} :</Text>
+                <Text style={S.metaValue}>{row.value || "-"}</Text>
               </View>
             ))}
           </View>
-        )}
+        </View>
 
-        {/* ═══ STATUS BADGE ═══ */}
-        {showStatusBadge && <View style={[S.badge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
-          <Text style={{ color: badge.text }}>{badge.label}</Text>
-        </View>}
-
-        {/* ═══ REFERENCE ═══ */}
-        {referenceNo && (
-          <View style={S.referenceBand}>
-            <Text style={S.referenceLabel}>Reference No.</Text>
-            <Text style={S.referenceValue}>{referenceNo}</Text>
+        {/* ═══ PROGRESS NOTICE ═══ */}
+        {progress && (
+          <View style={S.notice} wrap={false}>
+            <Text style={S.noticeLabel}>{progress.headline}</Text>
+            <Text style={S.noticeText}>{progress.note}</Text>
           </View>
         )}
 
-        {/* ═══ INFO GRID ═══ */}
-        <View style={S.infoGrid}>
-          <View style={S.infoCell}><Text style={S.infoLabel}>Submitted By</Text><Text style={S.infoValue}>{meta.submittedBy || "—"}</Text></View>
-          <View style={S.infoCell}><Text style={S.infoLabel}>Date Submitted</Text><Text style={S.infoValue}>{fmtDate(meta.submittedAt)}</Text></View>
-          <View style={S.infoCell}><Text style={S.infoLabel}>Form</Text><Text style={S.infoValue}>{meta.formTitle}</Text></View>
-          <View style={S.infoCell}><Text style={S.infoLabel}>Version</Text><Text style={S.infoValue}>v{meta.formVersion}</Text></View>
-          {selectedCompany && (
-            <View style={S.infoCell}><Text style={S.infoLabel}>Company</Text><Text style={S.infoValue}>{selectedCompany}</Text></View>
-          )}
-        </View>
-
-        {/* ═══ FORM FIELDS ═══ */}
+        {/* ═══ FORM DATA ═══ */}
         <View style={S.pageSection}>
-          <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>FORM DATA</Text>
-          {formSections.length === 0 ? (
-            <Text style={S.noData}>No form fields available.</Text>
-          ) : (
-            formSections.map((section) => (
-              <View key={section.id} style={S.formSection}>
-                <Text style={S.subSectionLabel}>{section.title}</Text>
-                {section.fields.map((field, fieldIndex) => {
-                  if (field.kind === "matrix") {
-                    return <View key={field.key} wrap={false}>{renderMatrixField(field)}</View>;
-                  }
-                  const imageSources = collectImageSources(field.value);
-                  const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
-                  return (
-                    <View key={field.key} style={[S.fieldRow, fieldIndex % 2 === 1 ? S.fieldRowAlt : {}]} wrap={false}>
-                      <Text style={S.fieldLabel}>{field.label}</Text>
-                      {imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.fieldValue}>{fmtVal(field.value, field)}</Text>}
-                    </View>
-                  );
-                })}
-              </View>
-            ))
-          )}
+          <View style={S.dataTable}>
+            <View style={[S.dataHeadRow, { backgroundColor: primary }]} wrap={false}>
+              <Text style={[S.dataHeadText, S.colIndex]}>No.</Text>
+              <Text style={[S.dataHeadText, S.colQuestion]}>Item Description</Text>
+              <Text style={[S.dataHeadText, S.colAnswer]}>Response</Text>
+            </View>
+            {formSections.length === 0 ? (
+              <Text style={S.noData}>No form fields available.</Text>
+            ) : (
+              formSections.map((section) => (
+                <View key={section.id}>
+                  <View style={S.dataGroupRow} wrap={false}>
+                    <Text style={[S.dataGroupText, { color: primary }]}>{section.title}</Text>
+                  </View>
+                  {section.fields.map((field) => {
+                    if (field.kind === "matrix") {
+                      return <View key={field.key} style={{ paddingHorizontal: 5, paddingTop: 5 }} wrap={false}>{renderMatrixField(field)}</View>;
+                    }
+                    itemNumber += 1;
+                    return <FieldRow key={field.key} field={field} index={itemNumber} striped={itemNumber % 2 === 0} />;
+                  })}
+                </View>
+              ))
+            )}
+          </View>
         </View>
-
 
         {/* ═══ LAYER APPROVAL TABLE ═══ */}
         {showApproverChain && layerResults && layerResults.length > 0 && (
           <View break style={S.approvalPageSection}>
-            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>APPROVAL / EVALUATION CHAIN</Text>
+            <Text style={[S.sectionLabel, { color: primary }]}>Approval / Evaluation Chain</Text>
             <View style={S.tableBlock} wrap={false}>
               <View style={[S.layerRow, S.layerHeader, { backgroundColor: primary }]} wrap={false}>
                 <Text style={[S.layerHeaderText, S.colNum]}>#</Text>
@@ -717,60 +875,44 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
           </View>
         )}
 
-        {/* ═══ SIGNATURE BLOCKS (only shown when at least one layer has a signature) ═══ */}
-        {showSignatures && layerResults && layerResults.filter(l => l.signature).length > 0 && (
+        {/* ═══ PER-LAYER DETAIL: ink, decision, and evaluation answers ═══ */}
+        {(showSignatures || showEvaluationDetails) && layerResults && layerResults.length > 0 && (
           <View style={S.approvalPageSection}>
-            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>SIGNATURES</Text>
-            {layerResults.filter(l => l.signature).map((layer, i) => {
-              const badge = badgeStyle(layer.status);
-              return (
-                <View key={i} style={S.sigBlock} wrap={false}>
-                  <View style={S.sigLine}>
-                    <Text style={S.sigLabel}>Layer {layer.layerNumber} - {layer.type === "evaluation" ? "Evaluation" : "Approval"}</Text>
-                    <Text style={S.sigName}>{layer.email || ""} - <Text style={{ color: badge.text }}>{badge.label}</Text></Text>
-                    <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}{layer.rejection ? ` - Reason: ${layer.rejection}` : ""}</Text>
+            <Text style={[S.sectionLabel, { color: primary }]}>Layer Details &amp; Signatures</Text>
+            {detailLayers.map((layer, i) => (
+              <LayerDetailCard
+                key={i}
+                layer={layer}
+                showSignature={showSignatures}
+                showEvaluationDetails={showEvaluationDetails}
+                includeEmptyEvaluationFields={includeEmptyEvaluationFields}
+                primary={primary}
+              />
+            ))}
+            {/* Named, but not drawn as a signature block: an empty well under a
+                name is indistinguishable from a signature that failed to load. */}
+            {progress && !includeEmptyEvaluationFields && (
+              <View style={S.pendingBlock} wrap={false}>
+                <Text style={S.pendingHead}>Not signed</Text>
+                {progress.awaiting.map((layer, i) => (
+                  <View key={`awaiting-${i}`} style={S.pendingRow}>
+                    <Text style={S.pendingWho}>
+                      Layer {layer.layerNumber} · {layer.type === "evaluation" ? "Evaluation" : "Approval"}
+                      {layer.email ? ` · ${layer.email}` : ""}
+                    </Text>
+                    <Text style={S.pendingState}>{badgeStyle(layer.status).label}</Text>
                   </View>
-                  <View style={S.sigImageBox}>
-                    <Image style={S.sigImage} src={layer.signature} />
-                  </View>
-                </View>
-              );
-            })}
+                ))}
+              </View>
+            )}
           </View>
         )}
 
-        {/* ═══ EVALUATION FIELDS (per layer) ═══ */}
-        {showEvaluationDetails && layerResults && layerResults.filter(l => l.type === "evaluation" && ((l.evaluationFields && Object.keys(l.evaluationFields).length > 0) || (includeEmptyEvaluationFields && l.evaluationSurveyElements?.length))).length > 0 && (
-          <View style={S.approvalPageSection}>
-            <Text style={[S.sectionLabel, { borderBottomColor: primary }]}>EVALUATION DETAILS</Text>
-            {layerResults.filter(l => l.type === "evaluation").map((layer, i) => {
-              const fields = evaluationFieldsForLayer(layer, includeEmptyEvaluationFields);
-              if (fields.length === 0) return null;
-              return (
-                <View key={i} style={{ marginBottom: includeEmptyEvaluationFields ? 12 : 6 }} wrap={false}>
-                  <Text style={[S.subSectionLabel, { color: secondary }]}>Layer {layer.layerNumber} - {layer.confirmerName || layer.confirmerEmail || "Evaluator"}</Text>
-                  {fields.map((field, fi) => {
-                    const imageSources = collectImageSources(field.value);
-                    const measureValue = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
-                    return (
-                      <View key={fi} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
-                        <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
-                        {includeEmptyEvaluationFields
-                          ? renderPaperFieldValue(field)
-                          : imageSources.length > 0 ? renderImageSources(imageSources) : measureValue || <Text style={S.evalSubValue}>{fmtVal(field.value, field)}</Text>}
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* ═══ ISO STANDARDS ═══ */}
+        {/* ═══ NOTES ═══ */}
         {isoStandards && (
-          <View style={{ marginTop: 10, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: C.borderLight }}>
-            <Text style={{ fontSize: 5.5, color: C.muted, textAlign: "center" }}>{isoStandards}</Text>
+          <View style={S.notesBlock} wrap={false}>
+            <Text style={S.notesHeading}>Standards:</Text>
+            <Text style={S.notesLine}>{isoStandards}</Text>
           </View>
         )}
 

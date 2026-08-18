@@ -13,6 +13,24 @@ export function isCompletedFormStatus(status: string | null | undefined): boolea
   return normalized === "approved" || normalized === "completed" || normalized === "fullyapproved";
 }
 
+/**
+ * A withdrawal, in any of the words the column has carried for it.
+ *
+ * Cancellation is a decision taken *about* a record rather than by one of its
+ * layers, so it cannot be derived from layer statuses — a withdrawn form still
+ * has a layer sitting at "Pending", because nobody ever signed it. That is why
+ * this is asked before the layers are consulted at all.
+ */
+export function isCancelledFormStatus(status: string | null | undefined): boolean {
+  const normalized = (status ?? "").toLowerCase().replace(/[\s_-]/g, "");
+  return normalized.includes("cancel") || normalized.includes("withdraw") || normalized.includes("void");
+}
+
+/** Returned to the submitter for more information — also a decision about the record. */
+export function isReturnedFormStatus(status: string | null | undefined): boolean {
+  return (status ?? "").toLowerCase().replace(/[\s_-]/g, "").includes("return");
+}
+
 export function isTerminalLayerStatus(status: string | null | undefined): boolean {
   const normalized = (status ?? "").toLowerCase().replace(/[\s_-]/g, "");
   return (
@@ -49,6 +67,17 @@ export function resolveWorkflowDisplayState(args: {
 
   const layerStatuses = Array.from({ length: totalLayers }, (_, index) => args.layerStatuses[index]);
   const rawCurrentLayer = normalizeLayerNumber(args.currentLayer, totalLayers);
+
+  // A cancelled record is finished being asked about. Deriving its status from
+  // the layers instead reads the unsigned layer it stopped on as work still in
+  // progress and reports it back as "In Review" — which is how a withdrawal came
+  // to be written to SharePoint, acknowledged on screen, and then quietly undone
+  // by the next reload. The layer it stopped on stays the current one: that is
+  // where it stopped, not where it would have gone next.
+  if (isCancelledFormStatus(args.formStatus)) {
+    return { formStatus: SP_FORM_STATUS.CANCELLED, currentLayer: rawCurrentLayer || 1 };
+  }
+
   const currentLayerStatus = rawCurrentLayer > 0 ? layerStatuses[rawCurrentLayer - 1] : undefined;
   let currentLayer = rawCurrentLayer || 1;
 
@@ -76,6 +105,10 @@ export function resolveWorkflowDisplayState(args: {
     formStatus = SP_FORM_STATUS.REJECTED;
   } else if (isCompletedFormStatus(formStatus)) {
     formStatus = SP_FORM_STATUS.COMPLETED;
+  } else if (isReturnedFormStatus(formStatus)) {
+    // Returned is the same kind of claim as cancelled: the record is with the
+    // submitter, whatever the layer it left behind still says.
+    formStatus = args.formStatus ?? null;
   } else if (hasAnyLayerStatus) {
     formStatus = formStatusLabel(deriveFormStatus(layerStatuses.map(normalizeLayerStatus)));
   }

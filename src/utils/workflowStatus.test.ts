@@ -57,6 +57,50 @@ describe("workflowStatus", () => {
     });
   });
 
+  it("keeps a withdrawal, instead of deriving it back out of the layer it stopped on", () => {
+    // A withdrawn record still has an unsigned layer, because nobody ever
+    // signed it. Reading the layers instead of the record reported that as work
+    // in progress — which is how a withdrawal was written to SharePoint,
+    // acknowledged on screen, and then undone by the next page load.
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "Cancelled",
+        currentLayer: 1,
+        totalLayers: 3,
+        layerStatuses: ["Cancelled", null, null],
+      }),
+    ).toEqual({
+      formStatus: "Cancelled",
+      currentLayer: 1,
+    });
+  });
+
+  it("keeps a withdrawal recorded before the layer was closed too", () => {
+    // Records cancelled by the older code have FormStatus and nothing else.
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "Cancelled",
+        currentLayer: 2,
+        totalLayers: 3,
+        layerStatuses: ["Approved", "Pending", null],
+      }),
+    ).toEqual({
+      formStatus: "Cancelled",
+      currentLayer: 2,
+    });
+  });
+
+  it("keeps a record returned to its submitter with the submitter", () => {
+    expect(
+      resolveWorkflowDisplayState({
+        formStatus: "Returned",
+        currentLayer: 1,
+        totalLayers: 2,
+        layerStatuses: ["Pending", null],
+      }).formStatus,
+    ).toBe("Returned");
+  });
+
   it("keeps the rejected layer current when rejection happens before later propagated statuses", () => {
     expect(
       resolveWorkflowDisplayState({

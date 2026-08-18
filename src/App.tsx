@@ -581,6 +581,7 @@ function mapSubmission(
     formId,
     formVersion,
     publishKey: raw.PublishKey ? String(raw.PublishKey) : undefined,
+    pdfUrl: raw.PdfUrl ? String(raw.PdfUrl) : undefined,
     referenceNo: raw[REFERENCE_NO_FIELD] ? String(raw[REFERENCE_NO_FIELD]) : undefined,
     currentLayerStatus:
       currentLayer > 0 && layerStatusValues[currentLayer - 1]

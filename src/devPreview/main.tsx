@@ -7,6 +7,7 @@ import { buildTheme } from "../theme";
 import { CONTRAST_THEMES, DEFAULT_APPEARANCE, applyAppearance, type AppearanceSetting } from "../theme/appearance";
 import { PortalProvider } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
+import SubmissionDrawer from "../components/portal/SubmissionDrawer";
 import HomeScreen from "../pages/portal/HomeScreen";
 import TodayScreen from "../pages/portal/TodayScreen";
 import QueueScreen from "../pages/portal/QueueScreen";
@@ -41,6 +42,11 @@ const param = (name: string, fallback: string) => new URLSearchParams(location.s
 function Harness() {
   const [screen, setScreen] = useState<ScreenKey>(() => param("screen", "home") as ScreenKey);
   const [contrast, setContrast] = useState(() => param("contrast", "paper"));
+  // The record detail is half the portal's design and none of it was reachable
+  // here, so the drawer opens against fixtures like everything else. Its actions
+  // write through a fixture client that does nothing, which is the point: this
+  // harness answers "does it read right", never "did it save".
+  const [drawerRef, setDrawerRef] = useState<string | null>(() => new URLSearchParams(location.search).get("record"));
 
   const setting: AppearanceSetting = { ...DEFAULT_APPEARANCE, contrastThemeId: contrast };
   applyAppearance(setting);
@@ -51,6 +57,9 @@ function Harness() {
     setScreen: (next) => {
       if (next in SCREENS) setScreen(next as ScreenKey);
     },
+    drawerRef,
+    openDrawer: (reference) => setDrawerRef(reference),
+    closeDrawer: () => setDrawerRef(null),
   });
 
   const chip = (on: boolean) => ({
@@ -93,6 +102,7 @@ function Harness() {
       <MemoryRouter>
         <PortalProvider {...value}>
           <PortalShell>{SCREENS[screen]}</PortalShell>
+          <SubmissionDrawer />
         </PortalProvider>
       </MemoryRouter>
     </ThemeProvider>

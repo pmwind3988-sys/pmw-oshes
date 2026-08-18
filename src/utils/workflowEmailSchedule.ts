@@ -1,6 +1,6 @@
 import type { EvaluationEmailSchedule } from "../types";
 
-export type ScheduledWorkflowEmailStatus = "scheduled" | "sent" | "failed";
+export type ScheduledWorkflowEmailStatus = "scheduled" | "sent" | "failed" | "cancelled";
 
 export interface ScheduledWorkflowEmail {
   layer: number;
@@ -70,6 +70,27 @@ export function setScheduledWorkflowEmail(
     ...parseScheduleLog(raw),
     [String(entry.layer)]: entry,
   };
+}
+
+/**
+ * Stand every queued reminder down.
+ *
+ * The cron only ever sends entries still marked `scheduled`, and it does not
+ * look at FormStatus — so a withdrawn record whose schedule is left alone keeps
+ * chasing an approver for a signature nobody wants any more. Cancelling the
+ * record has to cancel the post as well; entries already sent are left as the
+ * record of what went out.
+ */
+export function cancelScheduledWorkflowEmails(
+  raw: unknown,
+  updatedAt: string,
+): WorkflowEmailScheduleLog {
+  const schedule = parseScheduleLog(raw);
+  const next: WorkflowEmailScheduleLog = {};
+  for (const [layer, entry] of Object.entries(schedule)) {
+    next[layer] = entry.status === "scheduled" ? { ...entry, status: "cancelled", updatedAt } : entry;
+  }
+  return next;
 }
 
 export function getScheduledWorkflowEmail(

@@ -22,7 +22,16 @@
 | Dashboard backgrounds | `dashboardBackgrounds.ts` | Predefined background gradient/image definitions + CSS variable binding |
 | Dashboard background API | `dashboardBackgroundService.ts` | Frontend fetch wrapper for `/api/dashboard-background` |
 | PDF generation | `generateFormPdf.ts` | Client-side PDF creation via `@react-pdf/renderer`, uploads to SharePoint, opens in new tab |
-| PDF document template | `FormPdfDocument.tsx` | React-PDF document component for form response PDF |
+| PDF document template | `FormPdfDocument.tsx` | React-PDF document component for form response PDF. Letterhead + numbered data table + per-layer signature cards |
+| PDF chain progress | `pdfLayerProgress.ts` | `isAwaitingLayer()`, `chainProgress()` — which layers have been decided, and what an unfinished document says about itself |
+| Portal PDF (drawer) | `portalPdf.ts` | `recordLayerResults()` / `downloadRecordPdf()` / `regenerateRecordPdf()` — the copy rendered from a `PortalRecord`, and the rebuild that replaces the stored one |
+| PDF letterhead identity | `../config/company.ts` | `COMPANY` — name/address/contact/logo from `VITE_COMPANY_*`. Blank fields are omitted from the page, never guessed |
+| CSV response export | `formResponseCsv.ts` | `buildFormResponseCsv()` — pure. Every answer in form order, per-layer approval columns, Malaysian times, numbers bare, pictures as link-or-base64. **The one place a cell's shape is decided** — do not format for CSV anywhere else |
+| CSV export (per form) | `formResponseExport.ts` | `buildFormResponseExport()` — re-reads the response list in full (no `$select`), the schema per version, and matrix child rows grouped by parent. Used by `ResponseViewer` |
+| CSV export (dashboard) | `dashboardResponseCsv.ts` | `buildDashboardSubmissionCsv()` — translates `Submission[]` into the shared export shape. Used by `AdminHomePage` |
+| Export clock | `malaysiaTime.ts` | `formatMalaysiaDateTime()`, `malaysiaDateStamp()` — fixed UTC+8, same reasoning as `referenceNumber.ts`. Wall-clock text is never shifted; only stored instants convert |
+| Layer sequence | `layerSequence.ts` | `layerSequenceFromConfig()` — which layers a submission went through, manual branches resolved. Shared by the PDF and the CSV so they cannot disagree |
+| Answer vs. plumbing | `responseSystemFields.ts` | `responseAnswerFields()`, `isResponseSystemField()` — the one list of workflow/SharePoint columns. Layer columns match by pattern, so a fourth layer is not mistaken for a question |
 | Job apply PDF | `JobApplyPdfDocument.tsx` | React-PDF document for job application PDF |
 
 ## Dual SharePoint Client Pattern

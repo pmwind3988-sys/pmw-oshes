@@ -8,7 +8,7 @@
 | Context assembly | `PortalContainer.tsx` | Builds catalogue → records → access, and owns `screen` / `focusForm` / `focusStatus`. The only place portal state is held. |
 | Header, nav drawer, profile | `PortalShell.tsx` | Nav is a drawer at every width; the account lives top right. |
 | Record detail — layout | `RecordDetail.tsx` | `OverviewTab`, `AnswersTab`, `ApprovalsTab`, `TimelineTab`, plus `DetailRow` / `SoftCard`. No actions here. |
-| Record detail — actions | `SubmissionDrawer.tsx` | Tabbed drawer: gating, sign/return/nudge/reassign/cancel/delete/PDF, and the pinned action bar. |
+| Record detail — actions | `SubmissionDrawer.tsx` | Tabbed drawer: gating, sign/return/withdraw/delete, the PDF split control, and the pinned action bar. Nudge and reassign live on `TodayScreen` only. |
 | Interactive statistics | `PortalStats.tsx` | `StatTile`, `StatTileRow`, `StatusMix`, `IntakeChart`, `BarRows`, `DonutGauge`, `axisTicks`. |
 | Card, page header, table, task row | `../Widget.tsx` | Shared with `src/components/dashboard/`. See "One card shape" below. |
 | Radii and card recipes | `../../theme/surfaces.ts` | `radius`, `panelSx`, `sunkenSx`, `liftSx`, `gridline`. |
@@ -55,7 +55,29 @@ is the honest drawing.
 - **Counts and filters share one vocabulary.** Both are `StatFilter` (`src/types/portal.ts`), so a tile cannot count one way and filter another. `portalStats()` in `src/utils/portalStats.ts` is the single pass that produces them.
 - **Navigation states its own scope.** `setScreen` takes the form and status scope as arguments and clears them when they are not passed, so a nav click cannot inherit a form hub's filter. `PortalPage` keys `RecordsScreen` on that scope so it remounts with the filters seeded.
 - **Layout and actions are separate files.** `RecordDetail.tsx` decides how a record *reads*; `SubmissionDrawer.tsx` decides what this account may *do* with it. That is what lets the same detail serve an approver with three buttons and an audit account with none.
+- **Chasing happens where the queue is, not in the record.** Nudge and reassign are `TodayScreen`'s, gated by `access.canChase`. The drawer carried a second copy of both, which put two ways to chase an approver in front of the one person least likely to want either — the reader of a single record.
 - **Cancel keeps the record; delete ends it.** `cancelSubmission()` marks the record void and leaves it readable — that is the answer for a duplicate or a withdrawn filing. `deleteSubmission()` is administrators only and removes the item with every signature, photo, attachment, PDF and matrix row belonging to it (`hardDeleteSubmission` in `sharepointClient.ts` does the sweep). It is gated behind typing the reference, and its audit row is the only thing left afterwards — so it always writes one.
+
+## A withdrawal has to close the layer, not just relabel the record
+`cancelSubmission()` writes `FormStatus`, the current `L{n}_Status`, the reason, and a stood-down
+`WorkflowEmailSchedule` — because three separate readers ask the *layer*, not the record, whether
+work is outstanding: `workflow-email-cron` sends anything still marked `scheduled` and never looks at
+FormStatus, the builder's approval dashboard lists by layer status, and `resolveWorkflowDisplayState()`
+in `workflowStatus.ts` derives the form status back out of the layers on every load. That last one is
+why a withdrawal used to reappear as "In approval" after a refresh, and why `isCancelledFormStatus()`
+is now asked before the layers are consulted at all.
+
+## The PDF is printed from wherever the record has got to
+`recordLayerResults()` in `portalPdf.ts` reports each layer as decided, pending, or not started;
+`pdfLayerProgress.ts` owns the single test for which of those a status word means, and every producer
+of a document reads it. A layer with no decision gets no signature card and no date — it is named in
+the "Not signed" block instead, under a notice saying the page is an interim copy. A finished chain
+prints exactly as it always did.
+
+Two doors, deliberately: **Download PDF** renders from memory and stores nothing; **Re-generate PDF**,
+behind the arrow, deletes the stored copy, uploads a rebuilt one and repoints `PdfUrl` at it. Keeping
+the rebuild behind the arrow is the point — it deletes a file, which is not what a stray click on a
+download button should do.
 
 ## SLA is opt-in — do not reintroduce a default
 A form has an SLA only where its layer or its `LayerConfig` sets `slaDays`. `layerSlaDays()` returns **0** otherwise, `hasSla` is false on both `CatalogueEntry` and `PortalRecord`, and every SLA affordance is then absent — not zero, not "none", absent:
