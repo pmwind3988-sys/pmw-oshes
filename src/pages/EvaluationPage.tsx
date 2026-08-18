@@ -38,6 +38,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
 import { formatDisplayDateTime } from "../utils/displayDateTime";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
+import { COMPANY } from "../config/company";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -99,7 +100,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
         formStatus,
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
-      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
+      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : COMPANY.logoUrl,
     });
   } catch {
     /* PDF generation is best-effort after the workflow state is persisted. */

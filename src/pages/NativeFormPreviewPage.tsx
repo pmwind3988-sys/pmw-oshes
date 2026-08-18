@@ -24,6 +24,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { PDPA_CONSENT_LABEL, PDPA_SUMMARY } from "../utils/pdpa";
 import { DEMO_FORM } from "../native/demoForm";
 import type { DocumentControlHeader } from "../types";
+import { COMPANY } from "../config/company";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
@@ -372,7 +373,7 @@ function FormBanner({
             background: "var(--nf-sunken)",
           }}
         >
-          <img src={logoUrl || "/logo-128.png"} alt="" style={{ maxWidth: "100%", maxHeight: 40, objectFit: "contain" }} />
+          <img src={logoUrl || COMPANY.logoUrl} alt="" style={{ maxWidth: "100%", maxHeight: 40, objectFit: "contain" }} />
         </div>
         <div style={{ flex: 1, minWidth: 240, padding: "12px 18px" }}>
           <div

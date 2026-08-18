@@ -34,6 +34,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { toSharePointMalaysiaDateTime } from "../utils/sharepointDateTime";
 import { OSHES_LISTS } from "../config/oshes";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
+import { COMPANY } from "../config/company";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -1386,7 +1387,7 @@ export default function DynamicFormPage() {
                 layerResults: buildPdfLayerResults(respItem, 10, cfg.LayerConfig),
                 meta: { submittedBy: submittedByEmail, submittedAt: new Date().toISOString(), formTitle: cfg.Title as string, formVersion: formVer, formStatus: "submitted" },
                 isoStandards: isoStandardsText,
-                logoUrl: logoUrl || "/logo-128.png",
+                logoUrl: logoUrl || COMPANY.logoUrl,
                 pdfConfig: versionMeta.pdfConfig && typeof versionMeta.pdfConfig === "object" && !Array.isArray(versionMeta.pdfConfig)
                   ? { ...(versionMeta.pdfConfig as NonNullable<PdfFormData["pdfConfig"]>), ...(hasManualPaperWorkflow ? { enabled: true, includeEmptyEvaluationFields: true } : {}) }
                   : hasManualPaperWorkflow ? { enabled: true, title: "Manual Workflow Form", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true } : undefined,
@@ -1615,7 +1616,7 @@ export default function DynamicFormPage() {
               now, so a chooser up here would only ask the same question twice. */}
           <div className="dfp-banner-row" style={{ display: "flex", alignItems: "stretch", borderTop: `1px solid ${t.border}` }}>
             <div className="dfp-banner-logo" style={{ width: 150, flexShrink: 0, borderRight: `1px solid ${t.border}`, background: t.offWhite, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <img src={logoUrl || "/logo-128.png"} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
+              <img src={logoUrl || COMPANY.logoUrl} alt="Company Logo" style={{ maxWidth: "100%", maxHeight: 48, objectFit: "contain" }} />
             </div>
             <div className="dfp-doc-control" aria-label="Document control metadata">
               {[

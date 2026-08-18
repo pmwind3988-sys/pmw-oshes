@@ -84,6 +84,7 @@ import {
   validFixedAssigneeEmails,
 } from "../../utils/layerAssignees";
 import { buildLayerReviewLink, describeMissingReviewLink } from "../../utils/layerReviewLink";
+import { COMPANY } from "../../config/company";
 import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -194,7 +195,7 @@ async function loadPdfData(item: PendingItem, token: string): Promise<PdfFormDat
         formStatus: "",
       },
       isoStandards: typeof versionMeta.isoStandards === "string" ? versionMeta.isoStandards : undefined,
-      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : "/logo-128.png",
+      logoUrl: typeof versionMeta.logoUrl === "string" && versionMeta.logoUrl.trim() ? versionMeta.logoUrl : COMPANY.logoUrl,
     };
   } catch {
     return null;
