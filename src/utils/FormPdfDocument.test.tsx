@@ -442,6 +442,50 @@ describe("an evaluation that signed inside its own answers", () => {
     expect(text).toContain("SHOWN UNDER SIGNATURES & ATTACHMENTS");
   });
 
+  it("gives no signature block to a layer that captured no signature", async () => {
+    // An empty rule under somebody name is a place to sign. On a record of a
+    // decision already taken it reads as ink that failed to load, so a layer
+    // that was never asked for a signature says nothing rather than drawing one.
+    const data = baseData({
+      responseData: { Location: "Bay 3" },
+      layerResults: [{
+        layerNumber: 3,
+        type: "evaluation",
+        status: "Confirmed",
+        email: "ashraf@example.com",
+        signedAt: "2026-08-18T10:46:00",
+        confirmerName: "Muhammad Ashraf Bin Azahari",
+        evaluationFields: { Safe: "Yes" },
+        evaluationSurveyElements: [
+          { type: "radiogroup", name: "Safe", title: "Working area has been checked and it is safe", choices: ["Yes", "No"] },
+        ],
+      }],
+    });
+    const text = flatText(await renderPdf(data));
+    // The card is still there, and still says who acted and when.
+    expect(text).toContain("ACTIONED BY");
+    expect(occurrences(text, "MUHAMMAD ASHRAF BIN AZAHARI")).toBe(1);
+    expect(text).not.toContain("SIGNATURES & ATTACHMENTS");
+    // Only the logo is drawn: no well, no rule, no raster for a layer with no ink.
+    expect(drawnImageBoxes(await renderPdf(data))).toHaveLength(1);
+  });
+
+  it("still gives the blank form a rule to sign in pen", async () => {
+    // Printing an unsigned evaluation for somebody to fill in by hand is the one
+    // place an empty rule is the point rather than a defect.
+    const data = baseData({
+      pdfConfig: { enabled: true, title: "Permit To Work", deliveryMethod: "sharepoint", includeEmptyEvaluationFields: true },
+      layerResults: [{
+        layerNumber: 1,
+        type: "evaluation",
+        status: "Manual paper",
+        email: "ashraf@example.com",
+        evaluationSurveyElements: [{ type: "text", name: "Safe", title: "Area is safe" }],
+      }],
+    });
+    expect(flatText(await renderPdf(data))).toContain("ACTIONED BY");
+  });
+
   it("names the person on the signature and keeps the address as a reference", async () => {
     const data = baseData({
       layerResults: [{
@@ -540,6 +584,29 @@ describe("the letterhead and the document band", () => {
     expect(xOf(raw, "PTW-180826-0015")).toBeLessThan(297);
     expect(xOf(raw, "Submitted By".toUpperCase())).toBeGreaterThan(297);
     expect(xOf(raw, "ahmad@example.com")).toBeGreaterThan(297);
+  });
+
+  it("sets each fact beside the label it answers, not across the column from it", async () => {
+    const raw = await renderPdf(baseData({
+      meta: { ...baseData().meta, referenceNo: "PTW-180826-0015" },
+      documentHeader: {
+        documentNumber: "PMW-OSH-F-012",
+        issueNumber: "02",
+        effectiveDate: "2026-01-05",
+        revisionNumber: "1.3",
+        revisionDate: "2026-06-14",
+      },
+    }));
+    // Ranging the value to the right edge of the band put it a third of the page
+    // from the word it answers, so the pair had to be read as two columns rather
+    // than as one fact. Every value now starts where the widest label ends.
+    for (const [label, value] of [["Date", "18/08/2026"], ["Version", "v1.3"], ["Document No.", "PMW-OSH-F-012"], ["Effective Date", "05/01/2026"]] as const) {
+      const gap = xOf(raw, value) - xOf(raw, label);
+      expect(gap).toBeGreaterThan(0);
+      expect(gap).toBeLessThan(90);
+    }
+    // …and they share one left edge, so the block still reads as a column.
+    expect(xOf(raw, "18/08/2026")).toBe(xOf(raw, "PMW-OSH-F-012"));
   });
 });
 

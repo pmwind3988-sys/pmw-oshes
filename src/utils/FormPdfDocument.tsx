@@ -127,9 +127,13 @@ const S = StyleSheet.create({
   // The reference is the one thing read back over the phone and filed by hand,
   // so it is set at the size of the quotation number it replaces.
   docTitle: { fontSize: 13, fontWeight: "bold", color: C.text, marginBottom: 5, lineHeight: 1.15 },
-  metaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 1.5 },
-  metaLabel: { fontSize: 8, color: C.muted },
-  metaValue: { fontSize: 8, color: C.text, fontWeight: "bold", textAlign: "right" },
+  // Label and value set as two columns, the value starting where the widest
+  // label ends. Ranging the value to the right margin instead pushed it a third
+  // of the page away from the word it answers, so "Date" and its date were read
+  // as two separate things and the eye had to travel to pair them up.
+  metaRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 1.5 },
+  metaLabel: { fontSize: 8, color: C.muted, width: 74, flexShrink: 0 },
+  metaValue: { fontSize: 8, color: C.text, fontWeight: "bold", flexGrow: 1, flexShrink: 1 },
 
   // Status badge
   badge: { alignSelf: "flex-end", paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, fontSize: 8, fontWeight: "heavy", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, borderWidth: 1 },
@@ -663,9 +667,10 @@ function renderImageSources(sources: string[]) {
 /**
  * A signature well: the ink, the rule it sits on, and what it belongs to.
  *
- * The rule is drawn whether or not there is ink. An approver who signed on
- * paper, or whose stored image could not be fetched, leaves a line to sign
- * rather than a blank the reader has to interpret.
+ * The rule is drawn whether or not there is ink, because the well is only ever
+ * placed where a signature belongs - against ink that could not be fetched, or
+ * on a blank form printed for somebody to sign by hand. A layer that captured
+ * no signature is given no well at all.
  *
  * The caption names the person or the question, never the routing address: an
  * email under a signature is bookkeeping about how the form was delivered, not
@@ -854,9 +859,16 @@ function LayerDetailCard({
   const visualByFieldKey = new Map(
     visuals.filter((visual) => visual.fieldKey).map((visual) => [visual.fieldKey as string, visual] as const),
   );
-  // A layer that collected no picture at all still gets a rule to sign on: it
-  // may have been approved on paper, or its stored ink may have gone missing.
-  const drawEmptyWell = showSignature && visuals.length === 0;
+  // A layer that captured no signature gets no signature block. An empty rule
+  // under somebody's name is a place to sign, and on a record of a decision
+  // already taken it reads as ink that failed to load rather than as ink that
+  // was never asked for. Since a picture that could not be fetched now keeps its
+  // address, no visuals means no signature was ever captured, and the card says
+  // that by staying quiet - who acted and when is already above.
+  //
+  // The blank-form mode is the exception, because a rule to sign in pen is the
+  // whole point of printing an unsigned form for somebody to fill in by hand.
+  const drawEmptyWell = showSignature && visuals.length === 0 && includeEmptyEvaluationFields;
 
   return (
     <View style={S.layerCard} wrap={false}>
