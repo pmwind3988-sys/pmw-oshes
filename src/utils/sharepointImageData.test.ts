@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import {
+  hydrateImageValue,
+  imageSourceFromString,
+  isSharePointSource,
+  looksLikeSvg,
+  responseToImageDataUrl,
+  sniffImageMimeType,
+  sniffRiffWebp,
+} from "./sharepointImageData";
+
+/** A one-pixel PNG, header intact — enough for the sniffer to identify. */
+const PNG_BYTES = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+]);
+
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+
+describe("recognizing an image reference", () => {
+  it("recognizes SharePoint image URLs even when the download URL has no file extension", () => {
+    expect(imageSourceFromString(
+      "https://tenant.sharepoint.com/sites/hr/_layouts/15/download.aspx?UniqueId=abc",
+      "https://tenant.sharepoint.com/sites/hr",
+    )).toBe("https://tenant.sharepoint.com/sites/hr/_layouts/15/download.aspx?UniqueId=abc");
+  });
+
+  it("recognizes SharePoint URL field JSON values", () => {
+    expect(imageSourceFromString(
+      JSON.stringify({ Url: "/sites/hr/Signature%20Images/signed.png", Description: "Signature" }),
+      "https://tenant.sharepoint.com/sites/hr",
+    )).toBe("/sites/hr/Signature%20Images/signed.png");
+  });
+
+  it("does not mistake a typed answer for a picture", () => {
+    // `new URL("Hot Work", origin)` resolves, and its origin matches the site,
+    // so every plain-text answer on the form used to be classified as an image
+    // on our own tenant. Hydration then fetched it, got a 404, and wrote the
+    // answer back as an empty string - which is how a signed permit reached the
+    // page with its ticks unlabelled and its text fields blank.
+    const site = "https://tenant.sharepoint.com/sites/hr";
+    for (const answer of ["Hot Work", "Bay 3, compressor house", "Muhammad Ashraf Bin Azahari", "Yes", "3"]) {
+      expect(isSharePointSource(answer, site)).toBe(false);
+      expect(imageSourceFromString(answer, site)).toBe("");
+    }
+  });
+
+  it("still recognizes the addresses a picture really arrives as", () => {
+    const site = "https://tenant.sharepoint.com/sites/hr";
+    expect(isSharePointSource("/sites/hr/Signature%20Images/a.png", site)).toBe(true);
+    expect(isSharePointSource("https://tenant.sharepoint.com/sites/hr/x/a.png", site)).toBe(true);
+    expect(isSharePointSource("https://elsewhere.example.com/a.png", site)).toBe(false);
+  });
+});
+
+describe("what hydration hands back", () => {
+  /** Hydration with nothing reachable: every fetch fails. */
+  const hydrate = (value: unknown) => hydrateImageValue("token", value, new Map());
+
+  it("leaves a typed answer exactly as it was stored", async () => {
+    expect(await hydrate("Bay 3, compressor house")).toBe("Bay 3, compressor house");
+    expect(await hydrate(["Hot Work", "Confined Space"])).toEqual(["Hot Work", "Confined Space"]);
+  });
+
+  it("keeps the address of a picture it could not fetch", async () => {
+    // Blanking it reaches the page as an answer nobody gave. Keeping it lets the
+    // document draw the labelled placeholder it has for exactly this case.
+    const missing = "https://tenant.sharepoint.com/sites/hr/Signature%20Images/missing.png";
+    expect(await hydrate(missing)).toBe(missing);
+  });
+
+  it("leaves a data URI alone", async () => {
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    expect(await hydrate(png)).toBe(png);
+  });
+});
+
+describe("image type sniffing", () => {
+  it("identifies rasters from their leading bytes", () => {
+    expect(sniffImageMimeType(PNG_BYTES)).toBe("image/png");
+    expect(sniffImageMimeType(JPEG_BYTES)).toBe("image/jpeg");
+    expect(sniffImageMimeType(new Uint8Array([0x47, 0x49, 0x46, 0x38]))).toBe("image/gif");
+    expect(sniffImageMimeType(new Uint8Array([0x42, 0x4d, 0x36]))).toBe("image/bmp");
+  });
+
+  it("does not mistake a sign-in page for an image", () => {
+    const html = new TextEncoder().encode("<!DOCTYPE html><html><body>Sign in</body></html>");
+    expect(sniffImageMimeType(html)).toBe("");
+    expect(looksLikeSvg(html)).toBe(false);
+  });
+
+  it("identifies WEBP and SVG, which browsers render and PDFs cannot embed", () => {
+    const webp = new Uint8Array(16);
+    webp.set([...("RIFF")].map((c) => c.charCodeAt(0)), 0);
+    webp.set([...("WEBP")].map((c) => c.charCodeAt(0)), 8);
+    expect(sniffRiffWebp(webp)).toBe(true);
+    expect(looksLikeSvg(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBe(true);
+  });
+});
+
+describe("hydrating a fetched image", () => {
+  // The failure that put an empty box where a signature should have been:
+  // SharePoint serves a stored PNG as a generic download, and the old
+  // Content-Type check discarded it.
+  it("accepts a PNG that SharePoint serves as application/octet-stream", async () => {
+    const response = new Response(PNG_BYTES, {
+      headers: { "content-type": "application/octet-stream" },
+    });
+    await expect(responseToImageDataUrl(response)).resolves.toMatch(/^data:image\/png;base64,/);
+  });
+
+  it("accepts a JPEG whose type header is missing entirely", async () => {
+    const response = new Response(JPEG_BYTES);
+    await expect(responseToImageDataUrl(response)).resolves.toMatch(/^data:image\/jpeg;base64,/);
+  });
+
+  it("rejects the HTML sign-in page an expired session returns with a 200", async () => {
+    const response = new Response("<!DOCTYPE html><html><body>Sign in</body></html>", {
+      headers: { "content-type": "text/html" },
+    });
+    await expect(responseToImageDataUrl(response)).resolves.toBe("");
+  });
+
+  it("rejects an empty body rather than embedding a zero-byte image", async () => {
+    await expect(responseToImageDataUrl(new Response(new Uint8Array()))).resolves.toBe("");
+  });
+
+  // Outside a browser there is no canvas to re-encode with, so the caller gets
+  // "" and the document prints a labelled placeholder instead of a blank tile.
+  it("returns nothing for a format that cannot be embedded and cannot be converted here", async () => {
+    const gif = new Response(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]));
+    await expect(responseToImageDataUrl(gif)).resolves.toBe("");
+  });
+});

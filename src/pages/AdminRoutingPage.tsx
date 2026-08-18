@@ -59,7 +59,7 @@ import { SP_STATIC } from "../utils/spConfig";
 import { editorial, editorialShadow } from "../theme/editorial";
 import { radius } from "../theme/surfaces";
 import { downloadCsv } from "../utils/csv";
-import { directoryToCsv } from "../utils/approvalDirectoryCsv";
+import { directoryCsvFileName, directoryToCsv } from "../utils/approvalDirectoryCsv";
 import type { DirectoryImportPlan } from "../utils/approvalDirectoryCsv";
 import {
   approvalDirectoryExists,
@@ -494,7 +494,7 @@ export default function AdminRoutingPage() {
                     </Button>
                     <Button
                       startIcon={<DownloadIcon />}
-                      onClick={() => downloadCsv(directoryToCsv(rows), "approval-directory.csv")}
+                      onClick={() => downloadCsv(directoryToCsv(rows), directoryCsvFileName())}
                       disabled={rows.length === 0}
                       sx={{ textTransform: "none" }}
                     >

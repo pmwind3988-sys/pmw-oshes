@@ -1,7 +1,8 @@
-import { Box, Button } from "@mui/material";
+import { Box } from "@mui/material";
 import ReferenceTag from "../../components/ReferenceTag";
 import { DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
+import ExportCsvButton from "../../components/portal/ExportCsvButton";
 import { exportAuditCsv } from "../../utils/portalExport";
 
 /**
@@ -9,7 +10,7 @@ import { exportAuditCsv } from "../../utils/portalExport";
  * same code path as the action it records — never separately.
  */
 export default function AuditScreen() {
-  const { audit, access, toast } = usePortal();
+  const { audit, access } = usePortal();
 
   return (
     <Box sx={{ maxWidth: 1060 }}>
@@ -19,13 +20,11 @@ export default function AuditScreen() {
         meta={audit.length > 0 ? `${audit.length} ${audit.length === 1 ? "entry" : "entries"}` : undefined}
         actions={
           access.canExport ? (
-            <Button
-              variant="outlined"
-              onClick={() => toast(`Exported ${exportAuditCsv(audit)} trail rows.`)}
-              sx={{ minHeight: 40 }}
-            >
-              Export trail to CSV
-            </Button>
+            <ExportCsvButton
+              label="Export trail to CSV"
+              done={(count) => `Exported ${count} trail row${count === 1 ? "" : "s"}, timestamped in Malaysian time.`}
+              run={() => exportAuditCsv(audit)}
+            />
           ) : undefined
         }
       />

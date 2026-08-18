@@ -69,8 +69,15 @@ export function recordLayerResults(record: PortalRecord): PdfLayerResult[] {
       if (fields && Object.keys(fields).length > 0) result.evaluationFields = fields;
       // The questions the evaluator was asked, so their answers print with
       // their real titles rather than as raw column names.
-      if (config?.type === "evaluation" && config.surveyElements.length > 0) {
-        result.evaluationSurveyElements = config.surveyElements;
+      //
+      // `Array.isArray` rather than trusting the type: the layer configuration is
+      // parsed out of a Note column, so an evaluation layer stored without its
+      // questions satisfies the compiler and still has no array to measure. It
+      // threw here, which took the whole record down — its drawer, its PDF and,
+      // once the CSV read the chain this way, its export.
+      const elements = config?.type === "evaluation" ? config.surveyElements : undefined;
+      if (Array.isArray(elements) && elements.length > 0) {
+        result.evaluationSurveyElements = elements;
       }
       if (step.who) result.confirmerName = step.who;
       if (step.email) result.confirmerEmail = step.email;

@@ -9,7 +9,8 @@
  * re-reads the list rather than exporting what the table already had — the
  * alternative is a file that is missing whatever the screen did not need.
  *
- * Reads only. `formResponseCsv.ts` decides what every cell looks like.
+ * Reads only. `formResponseCsv.ts` decides what every cell looks like, and
+ * `exportImageData.ts` fetches the pictures it needs to carry.
  */
 import { spGet } from "./formBuilderSP";
 import { OSHE_LISTS } from "../config/oshe";
@@ -18,6 +19,7 @@ import { layerSequenceFromConfig } from "./layerSequence";
 import { getSelectedCompany } from "./companySelection";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 import { buildFormResponseCsv, type ResponseCsvLayer, type ResponseCsvRow } from "./formResponseCsv";
+import { collectExportImageData } from "./exportImageData";
 import { malaysiaDateStamp } from "./malaysiaTime";
 import { responseAnswerFields } from "./responseSystemFields";
 
@@ -314,6 +316,10 @@ export async function buildFormResponseExport(request: FormResponseExportRequest
         currentLayer: text(item.CurrentLayer) || text(item.CurrentApprovalLayer),
         totalLayers: layers.length || "",
         branch: text(item.SelectedBranch),
+        pdpaConsent: item.PDPAConsent,
+        pdpaNoticeVersion: text(item.PDPANoticeVersion),
+        pdpaConsentAt: item.PDPAConsentAt,
+        retentionUntil: item.RetentionUntil,
         pdfUrl: text(item.PdfUrl),
       },
       // The bookkeeping columns are already spread across the identity block and
@@ -326,8 +332,14 @@ export async function buildFormResponseExport(request: FormResponseExportRequest
     };
   });
 
+  // Pictures last, once every row is known: a signature that appears on forty of
+  // them is fetched once, and the file carries the ink rather than a link into a
+  // site the reader may have no account on.
+  const { imageData, warnings: imageWarnings } = await collectExportImageData(token, rows);
+  warnings.push(...imageWarnings);
+
   return {
-    csv: buildFormResponseCsv(rows, { siteUrl: SP_SITE_URL }),
+    csv: buildFormResponseCsv(rows, { siteUrl: SP_SITE_URL, imageData }),
     fileName: `${safeFileName(formTitle)} responses ${malaysiaDateStamp()}.csv`,
     rowCount: rows.length,
     warnings,

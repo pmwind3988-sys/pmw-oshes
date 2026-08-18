@@ -9,10 +9,12 @@
  * disagreeing with the other about the same submission.
  */
 import type { ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult, LayerStatus, Submission } from "../types";
-import { buildFormResponseCsv, type ResponseCsvLayer, type ResponseCsvRow } from "./formResponseCsv";
+import { buildFormResponseCsv, type ResponseCsvLayer, type ResponseCsvOptions, type ResponseCsvRow } from "./formResponseCsv";
+import { IMAGES_WITHOUT_TOKEN, collectExportImageData } from "./exportImageData";
 import { layerNumberFromValue, layerSequenceFromConfig } from "./layerSequence";
 import { layerStatusLabel } from "./statusConstants";
 import { getSelectedCompany } from "./companySelection";
+import { responseAnswerFields } from "./responseSystemFields";
 
 /** What the layer configuration adds to a result: a name, and the questions asked. */
 interface LayerNaming {
@@ -112,9 +114,7 @@ function layersFromSubmission(submission: Submission): ResponseCsvLayer[] {
 }
 
 export function submissionToCsvRow(submission: Submission, category = ""): ResponseCsvRow {
-  // `PdfUrl` is promoted to the identity block, so it is taken out of the
-  // answers rather than appearing twice under its SharePoint column name.
-  const { PdfUrl, ...answers } = submission.submissionData;
+  const data = submission.submissionData;
 
   return {
     record: {
@@ -128,30 +128,78 @@ export function submissionToCsvRow(submission: Submission, category = ""): Respo
       submitterEmail: submission.submittedByEmail || submission.createdByEmail,
       submittedAt: submission.submittedAt,
       updatedAt: submission.modifiedAt,
-      status: submission.formStatus ?? "",
+      // The list's own `Status` and the workflow's `FormStatus` disagree on
+      // purpose — "Approved Layer 1" against "In Review" — so each is reported
+      // under its own heading rather than one standing in for the other.
+      status: text(data.Status),
+      formStatus: submission.formStatus ?? "",
       currentLayer: submission.currentLayer,
       totalLayers: submission.totalLayers,
       branch: submission.selectedBranch,
-      pdfUrl: text(PdfUrl),
+      pdpaConsent: data.PDPAConsent,
+      pdpaNoticeVersion: text(data.PDPANoticeVersion),
+      pdpaConsentAt: data.PDPAConsentAt,
+      retentionUntil: data.RetentionUntil,
+      pdfUrl: text(data.PdfUrl ?? submission.pdfUrl),
     },
-    answers,
+    // The bookkeeping columns are reported by the blocks above and by the layer
+    // columns. Leaving them in the answers repeats every one of them as though it
+    // were a question — `RawJSON` included, which is the whole submission again
+    // in one cell.
+    answers: responseAnswerFields(data),
     surveyJson: submission.surveyJson,
     layers: layersFromSubmission(submission),
   };
+}
+
+function csvRows(submissions: Submission[], listMetaMap: Record<string, { category?: string }>): ResponseCsvRow[] {
+  return submissions.map((submission) => submissionToCsvRow(submission, listMetaMap[submission.listTitle]?.category ?? ""));
 }
 
 /**
  * The rows on screen, as one CSV. Several forms can be in it at once, so the
  * questions of every form in the selection get a column and a submission of one
  * form leaves the other forms' columns blank.
+ *
+ * Pure, and so pictures stay links. `buildDashboardSubmissionExport` is the one
+ * the screen calls.
  */
 export function buildDashboardSubmissionCsv(
   submissions: Submission[],
   listMetaMap: Record<string, { category?: string }> = {},
-  options: { siteUrl?: string } = {},
+  options: ResponseCsvOptions = {},
 ): string {
-  return buildFormResponseCsv(
-    submissions.map((submission) => submissionToCsvRow(submission, listMetaMap[submission.listTitle]?.category ?? "")),
-    options,
-  );
+  return buildFormResponseCsv(csvRows(submissions, listMetaMap), options);
+}
+
+export interface DashboardSubmissionExport {
+  csv: string;
+  rowCount: number;
+  /** What could not be carried into the file. It is still written. */
+  warnings: string[];
+}
+
+/**
+ * The same file with its pictures in it.
+ *
+ * Signatures and photographs are SharePoint links, which open for the admin who
+ * exported and for nobody they mail the file to — so each is fetched and carried
+ * as base64, exactly as the PDF carries it. Needs a token; without one the caller
+ * can still use `buildDashboardSubmissionCsv` and get links.
+ */
+export async function buildDashboardSubmissionExport(
+  submissions: Submission[],
+  listMetaMap: Record<string, { category?: string }> = {},
+  options: { siteUrl?: string; token?: string } = {},
+): Promise<DashboardSubmissionExport> {
+  const rows = csvRows(submissions, listMetaMap);
+  const { imageData, warnings } = options.token
+    ? await collectExportImageData(options.token, rows)
+    : { imageData: undefined, warnings: [IMAGES_WITHOUT_TOKEN] };
+
+  return {
+    csv: buildFormResponseCsv(rows, { siteUrl: options.siteUrl, imageData }),
+    rowCount: rows.length,
+    warnings,
+  };
 }

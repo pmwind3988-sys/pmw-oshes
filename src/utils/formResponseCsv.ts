@@ -22,8 +22,10 @@
  *     of ratings can be summed. Text stays text however numeric it looks: an IC
  *     or a phone number is an identifier, and `0123456789` turned into
  *     123456789 is a wrong answer, not a tidier one.
- *  4. **Nothing is silently dropped.** A picture becomes its link or its base64
- *     source, a matrix becomes its rows, a value nothing can parse is passed
+ *  4. **Nothing is silently dropped.** A picture becomes the base64 that carries
+ *     it — the same bytes the PDF embeds, fetched by `collectExportImageData`
+ *     before this runs — falling back to its link only when the base64 will not
+ *     fit a cell. A matrix becomes its rows, a value nothing can parse is passed
  *     through as stored. A column empty in every row is the one thing left out,
  *     because it says nothing and costs a screen of scrolling.
  */
@@ -74,11 +76,41 @@ export interface ResponseCsvRecord {
   currentLayer?: unknown;
   totalLayers?: unknown;
   branch?: string;
+  /** "Accepted", or whatever the form recorded. Blank on a form that asks nothing. */
+  pdpaConsent?: unknown;
+  pdpaNoticeVersion?: string;
+  pdpaConsentAt?: unknown;
+  /** When the record may be deleted — the PDPA schedule, per submission. */
+  retentionUntil?: unknown;
   pdfUrl?: string;
+}
+
+/**
+ * One column a screen adds beside the identity block.
+ *
+ * The portal's tables carry things no response list holds — which layer a record
+ * is stuck on, how long it has sat there, whether that is past its SLA — all of
+ * it derived when the submissions were read. An export of that screen has to
+ * carry them or it is not an export of that screen, and inventing a second
+ * opinion about dates and numbers to do it is exactly what this module exists to
+ * prevent. So the screen names its columns and hands over the values; every rule
+ * about quoting, clocks and bare numbers still lives here.
+ */
+export interface ResponseCsvExtra {
+  /** Unique within the row. Becomes the column's identity, not its heading. */
+  key: string;
+  header: string;
+  value: unknown;
+  /** Emit bare when the whole value is a number, so the column can be summed. */
+  numeric?: boolean;
+  /** A stored instant. Converted to Malaysian time, and its header says so. */
+  datetime?: boolean;
 }
 
 export interface ResponseCsvRow {
   record: ResponseCsvRecord;
+  /** Columns this row's screen derived. Same order in the file as in the array. */
+  extra?: ResponseCsvExtra[];
   /** The response's answer columns, as SharePoint returns them. */
   answers: Record<string, unknown>;
   /** The published schema this response was answered against. */
@@ -94,6 +126,17 @@ export interface ResponseCsvOptions {
    * still opens from a file sitting in somebody's Downloads folder.
    */
   siteUrl?: string;
+  /**
+   * Pictures already fetched and re-encoded, keyed by the source they were read
+   * from — what `collectExportImageData` hands back.
+   *
+   * A signature stored in SharePoint is a link nobody outside the site can
+   * follow, so a spreadsheet that carries only the link has not exported the
+   * signature. With this the cell carries the base64 instead, and the file shows
+   * the ink to whoever opens it. Absent, every picture falls back to its link,
+   * which is what a pure test and an export with no token both get.
+   */
+  imageData?: Map<string, string>;
 }
 
 /**
@@ -182,8 +225,12 @@ function numberOrText(value: unknown): Cell {
  * Without them a second form version that adds a question would append it after
  * the whole approval trail, because columns are discovered row by row. The group
  * keeps the answers together and the trail to the right of them.
+ *
+ * `extra` sits beside the identity block rather than out past the answers: a
+ * screen's own columns are what its reader recognises the row by, and they are
+ * useless as filters at column BQ.
  */
-const GROUPS = ["record", "history", "answer", "layer"] as const;
+const GROUPS = ["record", "extra", "history", "answer", "layer"] as const;
 type Group = (typeof GROUPS)[number];
 
 interface Column {
@@ -205,21 +252,6 @@ function newSheet(): Sheet {
   return { columns: new Map(), headersTaken: new Set(), rows: [] };
 }
 
-/**
- * Two questions can carry one title — a form asking "Date" in three sections is
- * ordinary — and two columns under one header is a spreadsheet nobody can read.
- * The internal name disambiguates, since that is what the old export made the
- * admin read for every column anyway.
- */
-function uniqueHeader(sheet: Sheet, header: string, key: string): string {
-  if (!sheet.headersTaken.has(header)) return header;
-  const withKey = `${header} (${key})`;
-  if (!sheet.headersTaken.has(withKey)) return withKey;
-  let suffix = 2;
-  while (sheet.headersTaken.has(`${withKey} ${suffix}`)) suffix++;
-  return `${withKey} ${suffix}`;
-}
-
 interface ColumnSpec {
   key: string;
   header: string;
@@ -227,9 +259,46 @@ interface ColumnSpec {
   rank?: number;
 }
 
+/** What a column is, for a reader who has two of them under one title. */
+const GROUP_WORDS: Record<Group, string> = {
+  record: "record",
+  extra: "view",
+  history: "history",
+  answer: "answer",
+  layer: "layer",
+};
+
+/**
+ * What to put in brackets after a repeated title.
+ *
+ * The internal name, normally: a form asking "Date" twice has a `Start` and an
+ * `End` behind it, and those are the words that tell them apart. Where the
+ * internal name *is* the title — a question called `Location` beside the screen's
+ * own Location column — repeating it says nothing, so the column is named by what
+ * it is instead.
+ */
+function disambiguator(spec: ColumnSpec): string {
+  const internal = spec.key.split(":").pop() ?? spec.key;
+  const human = humanizeKey(internal);
+  return human && human.toLowerCase() !== spec.header.trim().toLowerCase() ? internal : GROUP_WORDS[spec.group];
+}
+
+/**
+ * Two questions can carry one title — a form asking "Date" in three sections is
+ * ordinary — and two columns under one header is a spreadsheet nobody can read.
+ */
+function uniqueHeader(sheet: Sheet, spec: ColumnSpec): string {
+  if (!sheet.headersTaken.has(spec.header)) return spec.header;
+  const labelled = `${spec.header} (${disambiguator(spec)})`;
+  if (!sheet.headersTaken.has(labelled)) return labelled;
+  let suffix = 2;
+  while (sheet.headersTaken.has(`${labelled} ${suffix}`)) suffix++;
+  return `${labelled} ${suffix}`;
+}
+
 function declare(sheet: Sheet, spec: ColumnSpec): void {
   if (sheet.columns.has(spec.key)) return;
-  const header = uniqueHeader(sheet, spec.header, spec.key);
+  const header = uniqueHeader(sheet, spec);
   sheet.headersTaken.add(header);
   sheet.columns.set(spec.key, { key: spec.key, header, group: spec.group, rank: spec.rank ?? 0, index: sheet.columns.size });
 }
@@ -276,28 +345,53 @@ function approximateKb(source: string): number {
   return Math.max(1, Math.round((source.length * 3) / 4 / 1024));
 }
 
+/** What one picture can be put in a cell as. */
+interface Picture {
+  /** Base64 that carries the image itself. Blank when nothing fetched it. */
+  data: string;
+  /** Where it lives, for a reader who has access. Blank when it was only ever base64. */
+  link: string;
+}
+
+function pictures(value: unknown, options: ResponseCsvOptions): Picture[] {
+  return collectImageSources(value).map((raw) => {
+    // Trimmed on both sides of the lookup, so a source with stray whitespace
+    // cannot fetch under one key and be read back under another.
+    const source = raw.trim();
+    if (/^data:/i.test(source)) return { data: source, link: "" };
+    const link = absoluteUrl(source, options.siteUrl);
+    // Keyed either way: the collector reads the source as it was stored, and the
+    // fetcher resolves it to its absolute address before caching it.
+    return { data: options.imageData?.get(source) || options.imageData?.get(link) || "", link };
+  });
+}
+
+function tooLargeNote(data: string): string {
+  return `[image not exported: ${approximateKb(data)} KB of base64 exceeds one spreadsheet cell — see the PDF]`;
+}
+
 /**
  * A picture, in the only forms a CSV can hold one.
  *
- * Excel cannot render a `data:` URI — its `=IMAGE()` takes a public URL and
- * nothing else — so a signature drawn on a phone travels as its base64 source,
- * which renders when pasted into a browser address bar. A picture already in
- * SharePoint travels as its link instead: shorter, and it opens with the
- * reader's own permissions rather than baking a copy into a file that gets
- * mailed on. Anything too large for a cell says so, and says where the rendered
- * copy is.
+ * The base64 is preferred, because it *is* the picture. The file gets mailed on
+ * and opened by somebody with no access to the site, so a spreadsheet whose
+ * signature column holds links has not exported the signatures: pasted into a
+ * browser address bar the base64 cell shows the ink, where SharePoint's own link
+ * shows that reader a sign-in page.
+ *
+ * Base64 that will not fit a cell gives way to the address it came from, since a
+ * reader with access can open that and nobody can open half an image. A picture
+ * that never had an address — ink drawn on a phone and stored inline — has
+ * nothing to fall back to, so the cell says how big it was and where the
+ * rendered copy is.
  */
-function imageText(value: unknown, siteUrl?: string): string {
-  const sources = collectImageSources(value);
-  if (sources.length === 0) return "";
+function imageText(value: unknown, options: ResponseCsvOptions): string {
+  const list = pictures(value, options);
+  if (list.length === 0) return "";
 
-  return sources
-    .map((source) => {
-      if (!/^data:/i.test(source)) return absoluteUrl(source, siteUrl);
-      if (source.length <= EXCEL_CELL_LIMIT) return source;
-      return `[image not exported: ${approximateKb(source)} KB of base64 exceeds one spreadsheet cell — see the PDF]`;
-    })
-    .join("\n");
+  const carried = list.map((picture) => picture.data || picture.link).join("\n");
+  if (carried.length <= EXCEL_CELL_LIMIT) return carried;
+  return list.map((picture) => picture.link || tooLargeNote(picture.data)).join("\n");
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -414,7 +508,7 @@ function answerCell(field: FormSubmissionField, options: ResponseCsvOptions): Ce
     return textCell(typeof field.value === "string" ? matrixHtmlToText(field.value) : formatPdfFieldValue(field.value, field));
   }
   if (IMAGE_TYPES.has(type)) {
-    const image = imageText(field.value, options.siteUrl);
+    const image = imageText(field.value, options);
     return textCell(image || formatPdfFieldValue(field.value, field));
   }
   if (isNumericField(field)) {
@@ -428,7 +522,7 @@ function answerCell(field: FormSubmissionField, options: ResponseCsvOptions): Ce
 
   // A choice, a boolean, a list, a plain answer — and a picture that arrived in
   // a question type this file does not know the name of.
-  const image = imageText(field.value, options.siteUrl);
+  const image = imageText(field.value, options);
   if (image) return textCell(image);
   // Markup reaches here from a rich-text answer, and from a matrix whose schema
   // did not survive so its stored `_Html` table is all that is left. Either way
@@ -510,7 +604,15 @@ function evaluationFields(layer: ResponseCsvLayer): FormSubmissionField[] {
 
 // ── The sheet ──────────────────────────────────────────────────────────────
 
-const RECORD_COLUMNS: { key: keyof ResponseCsvRecord; header: string; numeric?: boolean }[] = [
+/**
+ * The identity block, in this order in every file this module writes.
+ *
+ * `datetime` rather than a list of date-shaped keys checked inside `recordCell`:
+ * the flag is what appends the clock label to the header as well, so a column
+ * cannot be converted to Malaysian time without saying so, or say so without
+ * being converted.
+ */
+const RECORD_COLUMNS: { key: keyof ResponseCsvRecord; header: string; numeric?: boolean; datetime?: boolean }[] = [
   { key: "id", header: "ID", numeric: true },
   { key: "reference", header: "Reference" },
   { key: "form", header: "Form" },
@@ -519,15 +621,26 @@ const RECORD_COLUMNS: { key: keyof ResponseCsvRecord; header: string; numeric?: 
   { key: "company", header: "Company" },
   { key: "submittedBy", header: "Submitted By" },
   { key: "submitterEmail", header: "Submitter Email" },
-  { key: "submittedAt", header: `Submitted At (${MALAYSIA_TIME_LABEL})` },
-  { key: "updatedAt", header: `Last Updated (${MALAYSIA_TIME_LABEL})` },
+  { key: "submittedAt", header: "Submitted At", datetime: true },
+  { key: "updatedAt", header: "Last Updated", datetime: true },
   { key: "status", header: "Status" },
   { key: "formStatus", header: "Form Status" },
   { key: "currentLayer", header: "Current Layer", numeric: true },
   { key: "totalLayers", header: "Total Layers", numeric: true },
   { key: "branch", header: "Branch" },
+  // The consent the submission was taken under. It is on the item, the detail
+  // panel shows it, and a retention date nobody can export is a retention
+  // schedule nobody can act on.
+  { key: "pdpaConsent", header: "PDPA Consent" },
+  { key: "pdpaNoticeVersion", header: "PDPA Notice Version" },
+  { key: "pdpaConsentAt", header: "PDPA Consent At", datetime: true },
+  { key: "retentionUntil", header: "Retention Until", datetime: true },
   { key: "pdfUrl", header: "Signed PDF" },
 ];
+
+function recordHeader(column: (typeof RECORD_COLUMNS)[number]): string {
+  return column.datetime ? `${column.header} (${MALAYSIA_TIME_LABEL})` : column.header;
+}
 
 /** Kept even when every row leaves them blank, so a file always identifies itself. */
 const ALWAYS_KEPT = new Set(["record:id", "record:submittedAt", "record:status"]);
@@ -535,17 +648,33 @@ const ALWAYS_KEPT = new Set(["record:id", "record:submittedAt", "record:status"]
 const LAYER_FIELDS = ["layer", "status", "actedBy", "decidedAt", "remarks", "signature"] as const;
 
 function recordCell(
-  key: keyof ResponseCsvRecord,
+  column: (typeof RECORD_COLUMNS)[number],
   value: unknown,
-  numeric: boolean | undefined,
   options: ResponseCsvOptions,
 ): Cell {
-  if (key === "submittedAt" || key === "updatedAt") return textCell(formatMalaysiaDateTime(value));
+  const { key, numeric, datetime } = column;
+  if (datetime) return textCell(formatMalaysiaDateTime(value));
   // SharePoint stores the PDF as a path from the site root, which opens from the
   // app and nowhere else. A spreadsheet gets mailed on, so the link has to carry
   // its host with it.
   if (key === "pdfUrl") return textCell(typeof value === "string" ? absoluteUrl(value, options.siteUrl) : value);
   return numeric ? numberOrText(value) : textCell(value);
+}
+
+function extraCell(column: ResponseCsvExtra): Cell {
+  if (column.datetime) return textCell(formatMalaysiaDateTime(column.value));
+  return column.numeric ? numberOrText(column.value) : textCell(column.value);
+}
+
+/**
+ * A screen-derived column's heading.
+ *
+ * The clock label is added here rather than trusted to the caller: a header that
+ * does not say whose time it is leaves the reader guessing, and that is not a
+ * thing any one screen should be able to forget.
+ */
+function extraHeader(column: ResponseCsvExtra): string {
+  return column.datetime ? `${column.header} (${MALAYSIA_TIME_LABEL})` : column.header;
 }
 
 /**
@@ -557,9 +686,23 @@ function addRow(sheet: Sheet, row: ResponseCsvRow, options: ResponseCsvOptions):
   const cells = new Map<string, Cell>();
   sheet.rows.push(cells);
 
-  for (const { key, header, numeric } of RECORD_COLUMNS) {
-    put(sheet, cells, { key: `record:${key}`, header, group: "record" }, recordCell(key, row.record[key], numeric, options));
+  for (const column of RECORD_COLUMNS) {
+    put(
+      sheet,
+      cells,
+      { key: `record:${column.key}`, header: recordHeader(column), group: "record" },
+      recordCell(column, row.record[column.key], options),
+    );
   }
+
+  (row.extra ?? []).forEach((column, index) => {
+    put(
+      sheet,
+      cells,
+      { key: `extra:${column.key}`, header: extraHeader(column), group: "extra", rank: index },
+      extraCell(column),
+    );
+  });
 
   const layers = (row.layers ?? []).slice().sort((a, b) => a.layerNumber - b.layerNumber);
   if (layers.length > 0) {
@@ -586,7 +729,7 @@ function addRow(sheet: Sheet, row: ResponseCsvRow, options: ResponseCsvOptions):
       actedBy: textCell(layer.actedBy),
       decidedAt: textCell(formatMalaysiaDateTime(layer.decidedAt)),
       remarks: textCell(layer.remarks),
-      signature: textCell(imageText(layer.signature, options.siteUrl)),
+      signature: textCell(imageText(layer.signature, options)),
     };
     const headers: Record<(typeof LAYER_FIELDS)[number], string> = {
       layer: `${prefix} Layer`,
@@ -626,7 +769,9 @@ export function buildFormResponseCsv(rows: ResponseCsvRow[], options: ResponseCs
   // Declared before any row is read so that a form with no responses still
   // exports a header an admin can look at, and so the identity block keeps one
   // order no matter which of its values the first response happened to carry.
-  for (const { key, header } of RECORD_COLUMNS) declare(sheet, { key: `record:${key}`, header, group: "record" });
+  for (const column of RECORD_COLUMNS) {
+    declare(sheet, { key: `record:${column.key}`, header: recordHeader(column), group: "record" });
+  }
 
   for (const row of rows) addRow(sheet, row, options);
 

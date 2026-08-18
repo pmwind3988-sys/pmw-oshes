@@ -25,6 +25,7 @@ import {
   stuckRecords,
   waitingLongest,
 } from "../../utils/portalRecords";
+import ExportCsvButton from "../../components/portal/ExportCsvButton";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
 import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
@@ -46,7 +47,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   showBottlenecks?: boolean;
 }) {
   const portal = usePortal();
-  const { records, queue, catalogue, access, openDrawer, toast, userEmail } = portal;
+  const { records, queue, catalogue, access, openDrawer, userEmail } = portal;
   const [withdrawTarget, setWithdrawTarget] = useState<PortalRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortalRecord | null>(null);
 
@@ -301,17 +302,13 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
         meta={formatTodayDate()}
         actions={
           access.canExport ? (
-            <Button
-              variant="outlined"
-              onClick={() =>
-                toast(
-                  `Exported ${exportRecordsCsv(records)} rows with the columns you can see, plus approval history.`,
-                )
+            <ExportCsvButton
+              label="Export view to CSV"
+              done={(count) =>
+                `Exported ${count} record${count === 1 ? "" : "s"} in full: every answer, every decision, signatures as images, times in Malaysian time.`
               }
-              sx={{ minHeight: 40 }}
-            >
-              Export view to CSV
-            </Button>
+              run={(token) => exportRecordsCsv(records, { token })}
+            />
           ) : undefined
         }
       />

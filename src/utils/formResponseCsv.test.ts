@@ -313,7 +313,19 @@ describe("buildFormResponseCsv pictures", () => {
     expect(rows[0]["Reporter signature"]).toBe("data:image/png;base64,iVBORw0KGgo=");
   });
 
-  it("turns a stored image into a link that opens from a downloaded file", () => {
+  it("carries a stored image as the base64 that was fetched for it", () => {
+    // A link opens for the admin who exported and for nobody they mail the file
+    // to, so the bytes travel in the cell — the same ones the PDF embeds.
+    const { rows } = readBack(
+      buildFormResponseCsv([row({ answers: { ...row().answers, Sign: "/sites/OSHES/Signature Images/7.png" } })], {
+        siteUrl: "https://pmw.sharepoint.com/sites/OSHES",
+        imageData: new Map([["/sites/OSHES/Signature Images/7.png", "data:image/png;base64,FETCHED"]]),
+      }),
+    );
+    expect(rows[0]["Reporter signature"]).toBe("data:image/png;base64,FETCHED");
+  });
+
+  it("falls back to a link that opens from a downloaded file when nothing fetched it", () => {
     const { rows } = readBack(
       buildFormResponseCsv([row({ answers: { ...row().answers, Sign: "/sites/OSHES/Signature Images/7.png" } })], {
         siteUrl: "https://pmw.sharepoint.com/sites/OSHES",
@@ -322,7 +334,18 @@ describe("buildFormResponseCsv pictures", () => {
     expect(rows[0]["Reporter signature"]).toBe("https://pmw.sharepoint.com/sites/OSHES/Signature Images/7.png");
   });
 
-  it("says why an oversized image is not in the cell rather than truncating it", () => {
+  it("prefers the link over base64 too large for a cell, since half an image opens nowhere", () => {
+    const huge = `data:image/png;base64,${"A".repeat(40_000)}`;
+    const { rows } = readBack(
+      buildFormResponseCsv([row({ answers: { ...row().answers, Sign: "/sites/OSHES/Lists/Incident/1_.000/site.png" } })], {
+        siteUrl: "https://pmw.sharepoint.com/sites/OSHES",
+        imageData: new Map([["/sites/OSHES/Lists/Incident/1_.000/site.png", huge]]),
+      }),
+    );
+    expect(rows[0]["Reporter signature"]).toBe("https://pmw.sharepoint.com/sites/OSHES/Lists/Incident/1_.000/site.png");
+  });
+
+  it("says why an oversized image with no address of its own is not in the cell", () => {
     const huge = `data:image/png;base64,${"A".repeat(40_000)}`;
     const { rows } = readBack(buildFormResponseCsv([row({ answers: { ...row().answers, Sign: huge } })]));
     expect(rows[0]["Reporter signature"]).toMatch(/^\[image not exported: \d+ KB of base64 exceeds one spreadsheet cell/);
@@ -377,7 +400,24 @@ describe("buildFormResponseCsv sheet shape", () => {
       ]),
     );
     expect(headers).toContain("Date");
-    expect(headers).toContain("Date (answer:End)");
+    // The internal name behind the second one, which is what tells them apart.
+    expect(headers).toContain("Date (End)");
+  });
+
+  it("names a repeated title by what the column is when the internal name is the title", () => {
+    // The screen's own Location column and a question called `Location`. Saying
+    // "Location (Location)" tells the reader nothing about which is which.
+    const { headers } = readBack(
+      buildFormResponseCsv([
+        row({
+          extra: [{ key: "location", header: "Location", value: "Berth 4" }],
+          surveyJson: null,
+          answers: { Location: "Berth 4, west end" },
+        }),
+      ]),
+    );
+    expect(headers).toContain("Location");
+    expect(headers).toContain("Location (answer)");
   });
 
   it("names a column after the SharePoint key when no schema survives", () => {

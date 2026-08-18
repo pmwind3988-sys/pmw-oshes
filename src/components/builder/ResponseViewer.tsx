@@ -246,7 +246,7 @@ export default function ResponseViewer() {
       setExportNotice({
         tone: result.warnings.length > 0 ? "warning" : "success",
         message: [
-          `Exported ${result.rowCount} submission${result.rowCount === 1 ? "" : "s"} with every answer, approval decision and timestamp in Malaysian time.`,
+          `Exported ${result.rowCount} submission${result.rowCount === 1 ? "" : "s"} with every answer, approval decision, signature as an image, and timestamp in Malaysian time.`,
           ...result.warnings,
         ].join(" "),
       });

@@ -14,6 +14,7 @@ import {
 } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { StatusPill } from "../../components/portal/PortalPills";
+import ExportCsvButton from "../../components/portal/ExportCsvButton";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import type { PortalRecord, StatFilter } from "../../types";
 import { anySla, recordKey, recordMatchesQuery } from "../../utils/portalRecords";
@@ -58,7 +59,7 @@ function stageLine(record: PortalRecord): string {
  * for.
  */
 export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
-  const { access, records, myRecords, catalogue, openDrawer, toast, prefs, setScreen, focusForm, focusStatus } =
+  const { access, records, myRecords, catalogue, openDrawer, prefs, setScreen, focusForm, focusStatus } =
     usePortal();
 
   const [formFilter, setFormFilter] = useState(focusForm ?? "all");
@@ -228,15 +229,14 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
         />
 
         {access.canExport && (
-          <Button
-            variant="outlined"
-            onClick={() =>
-              toast(`Exported ${exportRecordsCsv(rows)} rows with the columns you can see, plus approval history.`)
+          <ExportCsvButton
+            label={`Export ${rows.length} rows`}
+            done={(count) =>
+              `Exported ${count} record${count === 1 ? "" : "s"} in full: every answer, every decision, signatures as images, times in Malaysian time.`
             }
-            sx={{ minHeight: 40, width: { xs: "100%", sm: "auto" } }}
-          >
-            Export {rows.length} rows
-          </Button>
+            run={(token) => exportRecordsCsv(rows, { token })}
+            sx={{ width: { xs: "100%", sm: "auto" } }}
+          />
         )}
       </Stack>
 

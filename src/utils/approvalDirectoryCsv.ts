@@ -11,6 +11,7 @@
  * finding out afterwards.
  */
 import { csvRow, parseCsv } from "./csv";
+import { malaysiaDateStamp } from "./malaysiaTime";
 import { directoryEmailKey, type ApprovalDirectoryRow } from "./approvalDirectorySchema";
 import type { ApprovalDirectoryInput } from "./approvalDirectory";
 
@@ -254,6 +255,17 @@ export function planDirectoryImport(
 }
 
 /** The directory as a file the admin can edit and import straight back. */
+/**
+ * The file name an export of the directory gets.
+ *
+ * Dated, and dated in Malaysian time: an admin who exports before an import
+ * ends up with several of these in one Downloads folder, and `approval-directory
+ * (3).csv` says nothing about which one is the copy from before the change.
+ */
+export function directoryCsvFileName(): string {
+  return `approval-directory-${malaysiaDateStamp()}.csv`;
+}
+
 export function directoryToCsv(rows: ApprovalDirectoryRow[]): string {
   const lines = [csvRow([...DIRECTORY_CSV_HEADER])];
   for (const row of rows) {

@@ -169,7 +169,10 @@ export function fixtureContext(role: PortalRole, overrides: Partial<PortalContex
     userName: "Sazali Rahim",
     userTitle: "Yard Lead",
     isAdmin: role === "admin",
-    spClient: {} as SharePointClient,
+    // The export button asks for a token so its file can carry its pictures.
+    // The harness has no session to get one from, and no export to send: an
+    // empty token is what the exports treat as "links, and say so".
+    spClient: { acquireToken: async () => "" } as unknown as SharePointClient,
     // PeopleDirectory is Record<email, name> — a plain string, not an object.
     directory: Object.fromEntries(PEOPLE.map((person) => [person.email, person.name])),
     records,

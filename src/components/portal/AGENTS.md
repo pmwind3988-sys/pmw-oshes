@@ -15,6 +15,7 @@
 | Radii and card recipes | `../../theme/surfaces.ts` | `radius`, `panelSx`, `sunkenSx`, `liftSx`, `gridline`. |
 | "What happens after submit" | `FlowStrip.tsx` | `blueprintSteps(entry)` for a form type, `recordSteps(record)` for one record. |
 | Status / severity pills | `PortalPills.tsx` | Also `ProportionBar`. |
+| CSV export button | `ExportCsvButton.tsx` | The one export control. Acquires the token (so pictures travel as pictures), shows it is working, counts the rows, and says out loud whatever the file could not carry. Used by `RecordsScreen`, `TodayScreen` and `AuditScreen` — do not hand-roll a fourth. |
 
 ## One card shape
 Every panel in the portal *and* in `src/components/dashboard/` is `Widget` from

@@ -9,6 +9,9 @@ import {
   TableChartOutlined as TableChartIcon,
   WarningAmberOutlined as WarningIcon,
 } from "@mui/icons-material";
+import { useMsal } from "@azure/msal-react";
+import { loginRequest } from "../auth/msalConfig";
+import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { useDashboard } from "../contexts/DashboardContext";
 import Header from "../components/dashboard/Header";
 import StatsRow from "../components/dashboard/StatsRow";
@@ -27,7 +30,7 @@ import {
   collectPublishProfiles,
 } from "../utils/submissionFilters";
 import { downloadCsv } from "../utils/csv";
-import { buildDashboardSubmissionCsv } from "../utils/dashboardResponseCsv";
+import { buildDashboardSubmissionExport } from "../utils/dashboardResponseCsv";
 import { malaysiaDateStamp } from "../utils/malaysiaTime";
 import type { HardDeleteSubmissionResult, Submission } from "../types";
 import { editorial, editorialShadow, editorialShadowHover } from "../theme/editorial";
@@ -59,12 +62,16 @@ export default function AdminHomePage() {
     onEditForm,
     onHardDeleteSubmission,
   } = useDashboard();
+  const { instance, accounts } = useMsal();
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "deleting">("idle");
   const [deleteError, setDeleteError] = useState("");
   const [deleteResult, setDeleteResult] = useState<HardDeleteSubmissionResult | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportScope, setExportScope] = useState<"current" | "all">("current");
+  const [exporting, setExporting] = useState(false);
+  // Kept on screen after the file is written, so a partial export is not silent.
+  const [exportWarnings, setExportWarnings] = useState<string[]>([]);
   const workspaceLabel = isAdmin ? "Admin workspace" : "Employee workspace";
   const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
   const canExportSubmissions = isAdmin || canUseFormBuilder;
@@ -81,6 +88,11 @@ export default function AdminHomePage() {
       ? "Manage HR forms, review submissions, monitor approval workflows, and maintain form configurations."
       : "Review submissions, monitor approval workflows, and manage HR portal operations."
     : "Submit HR forms, track approval status, and access your submission history.";
+
+  const openExportDialog = () => {
+    setExportWarnings([]);
+    setExportOpen(true);
+  };
 
   const openDeleteDialog = (item: Submission) => {
     setDeleteTarget(item);
@@ -110,13 +122,39 @@ export default function AdminHomePage() {
     }
   };
 
-  const handleExportCsv = () => {
-    const csv = buildDashboardSubmissionCsv(exportRows, listMetaMap, { siteUrl: SP_SITE_URL });
-    const scopePart = exportScope === "all" ? "all" : "filtered";
-    // The Malaysian date, not the UTC one: an export at nine in the evening was
-    // named after tomorrow.
-    downloadCsv(csv, `pmw-hr-submissions-${scopePart}-${malaysiaDateStamp()}.csv`);
-    setExportOpen(false);
+  /**
+   * The export, with its pictures in it.
+   *
+   * A token is acquired first so every signature and photograph travels as the
+   * base64 that carries it rather than as a SharePoint link, which opens for the
+   * admin who exported and for nobody they send the file to. A token that cannot
+   * be had is not a reason to withhold the file: the rows go out with links, and
+   * the dialog says which pictures did not make it.
+   */
+  const handleExportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportWarnings([]);
+    try {
+      const account = instance.getActiveAccount() ?? accounts[0];
+      const token = account
+        ? await acquireAccessTokenSilentOrRedirect(instance, { ...loginRequest, account }).catch(() => "")
+        : "";
+      const { csv, warnings } = await buildDashboardSubmissionExport(exportRows, listMetaMap, {
+        siteUrl: SP_SITE_URL,
+        token,
+      });
+      const scopePart = exportScope === "all" ? "all" : "filtered";
+      // The Malaysian date, not the UTC one: an export at nine in the evening was
+      // named after tomorrow.
+      downloadCsv(csv, `pmw-hr-submissions-${scopePart}-${malaysiaDateStamp()}.csv`);
+      if (warnings.length === 0) setExportOpen(false);
+      else setExportWarnings(warnings);
+    } catch (error) {
+      setExportWarnings([`Export failed: ${error instanceof Error ? error.message : "unknown error"}`]);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -286,7 +324,7 @@ export default function AdminHomePage() {
             fieldCatalog={fieldCatalog}
             isAdmin={isAdmin}
             canExportSubmissions={canExportSubmissions}
-            onOpenExport={() => setExportOpen(true)}
+            onOpenExport={openExportDialog}
             total={submissions.length}
             filtered={sortedSubmissions.length}
           />
@@ -385,8 +423,8 @@ export default function AdminHomePage() {
               Export dashboard submissions
             </Typography>
             <Typography variant="body2" sx={{ color: editorial.muted, fontWeight: 700, textWrap: "pretty" }}>
-              CSV opens in Excel with every submitted answer, the approval trail per layer, and all
-              times in Malaysian time.
+              CSV opens in Excel with every submitted answer, the approval trail per layer, every
+              signature as an image, and all times in Malaysian time.
             </Typography>
           </Box>
         </DialogTitle>
@@ -423,6 +461,12 @@ export default function AdminHomePage() {
           >
             {exportRows.length} submission{exportRows.length === 1 ? "" : "s"} will be exported.
           </Alert>
+
+          {exportWarnings.length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: radius.sm, fontWeight: 700 }}>
+              The file has been saved. {exportWarnings.join(" ")}
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, gap: 1, backgroundColor: editorial.paperSoft }}>
           <Button
@@ -439,8 +483,8 @@ export default function AdminHomePage() {
           <Button
             variant="contained"
             startIcon={<FileDownloadIcon />}
-            onClick={handleExportCsv}
-            disabled={exportRows.length === 0}
+            onClick={() => void handleExportCsv()}
+            disabled={exportRows.length === 0 || exporting}
             sx={{
               minHeight: 40,
               fontWeight: 800,
@@ -451,7 +495,7 @@ export default function AdminHomePage() {
               },
             }}
           >
-            Export CSV
+            {exporting ? "Preparing CSV..." : "Export CSV"}
           </Button>
         </DialogActions>
       </Dialog>
