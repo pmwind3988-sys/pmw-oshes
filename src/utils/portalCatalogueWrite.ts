@@ -1,19 +1,18 @@
-import type { CatalogueEntry, LayerConfig, SeverityCapture, SharePointClient } from "../types";
+import type { CatalogueEntry, LayerConfig, SharePointClient } from "../types";
 
 const MASTER_FORM_LIST = "Master Form";
 
 /**
- * SLA and the public flag live on the form's own LayerConfig — the catalogue is
- * an editor for existing form-builder data, not a parallel store.
+ * SLA lives on the form's own LayerConfig — the catalogue is an editor for
+ * existing form-builder data, not a parallel store.
  *
- * Creating a form type is not done here. The pmw-hrform builder owns every write
- * that brings a form into existence; this module only edits settings on forms
- * that already exist.
+ * SLA is the only thing this module writes. Creating a form type is not done
+ * here, and neither is the public flag: the pmw-hrform builder owns both, and a
+ * second writer for `isPublic` is how `LayerConfig.isPublic` and the `IsPublic`
+ * column came to hold different answers. The catalogue reports that flag now.
  */
 export interface CatalogueSettingsPatch {
   slaDays?: number;
-  isPublic?: boolean;
-  severityCapture?: SeverityCapture;
   /** SLA overrides keyed by layer number, when a layer differs from the form default. */
   layerSlaDays?: Record<number, number>;
 }
@@ -49,8 +48,6 @@ export async function saveCatalogueSettings(
     ...base,
     code: entry.code,
     ...(patch.slaDays !== undefined ? { slaDays: patch.slaDays } : {}),
-    ...(patch.isPublic !== undefined ? { isPublic: patch.isPublic } : {}),
-    ...(patch.severityCapture !== undefined ? { severityCapture: patch.severityCapture } : {}),
     layers: base.layers.map((layer) => {
       const override = patch.layerSlaDays?.[layer.layerNumber];
       return override === undefined ? layer : { ...layer, slaDays: override };
@@ -60,7 +57,6 @@ export async function saveCatalogueSettings(
   await spClient.upsertListItem(MASTER_FORM_LIST, masterFormFilter(entry.listTitle), {
     Title: entry.listTitle,
     LayerConfig: JSON.stringify(next),
-    ...(patch.isPublic !== undefined ? { IsPublic: patch.isPublic } : {}),
   });
 
   return next;

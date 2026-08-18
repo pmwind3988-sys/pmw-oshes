@@ -1,10 +1,9 @@
-import { Box, Button, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { Callout, DataCell, DataRow, DataTable, PageHeader } from "../../components/Widget";
 import ReferenceTag from "../../components/ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
-import { severityCaptureLabel } from "../../utils/portalCatalogue";
 import { saveCatalogueSettings } from "../../utils/portalCatalogueWrite";
 import type { CatalogueEntry } from "../../types";
 
@@ -71,8 +70,10 @@ function WorkflowCell({ entry }: { entry: CatalogueEntry }) {
  * request time, flagging the forms where nobody ever said.
  *
  * The form set itself is authored in the pmw-hrform builder, which owns every
- * write that creates a form. This screen edits operational settings — SLA and
- * the public flag — on forms that already exist.
+ * write that creates a form — including whether its link is public. So "Who can
+ * reach it" is reported here, never set here: this screen used to offer a toggle
+ * that wrote the flag from outside the builder, which is one way the two stores
+ * came to disagree. The only setting this screen still writes is the SLA.
  */
 export default function CatalogueScreen() {
   const { catalogue, spClient, updateCatalogue, toast } = usePortal();
@@ -80,52 +81,19 @@ export default function CatalogueScreen() {
   const unset = catalogue.filter((entry) => entry.visibility.unset);
   const mismatched = catalogue.filter((entry) => entry.visibility.mismatch);
 
-  const persist = async (
-    entry: CatalogueEntry,
-    patch: Parameters<typeof saveCatalogueSettings>[2],
-    optimistic: Partial<CatalogueEntry>,
-  ) => {
-    updateCatalogue(entry.listTitle, optimistic);
-    try {
-      await saveCatalogueSettings(spClient, entry, patch);
-    } catch (error) {
-      updateCatalogue(entry.listTitle, {
-        slaDays: entry.slaDays,
-        isPublic: entry.isPublic,
-        visibility: entry.visibility,
-      });
-      toast(error instanceof Error ? error.message : "Could not save the catalogue change.");
-    }
-  };
-
-  const togglePublic = (entry: CatalogueEntry) => {
-    const isPublic = !entry.isPublic;
-    // Setting it either way also resolves "unset" and any mismatch, because the
-    // write puts the same value in both places the flag is read from.
-    void persist(
-      entry,
-      { isPublic },
-      {
-        isPublic,
-        visibility: {
-          isPublic,
-          declared: isPublic,
-          unset: false,
-          mismatch: false,
-          label: isPublic ? "Public" : "Internal",
-          note: isPublic
-            ? "Anyone with the link or the QR poster can file this form without signing in."
-            : "Only a signed-in account on this tenant can open this form.",
-        },
-      },
-    );
-  };
-
   const setSla = (entry: CatalogueEntry, raw: string) => {
     const digits = raw.replace(/[^0-9]/g, "");
     const slaDays = digits === "" ? 0 : Number(digits);
     updateCatalogue(entry.listTitle, { slaDays });
-    if (slaDays > 0) void persist(entry, { slaDays }, { slaDays });
+    if (slaDays === 0) return;
+    void (async () => {
+      try {
+        await saveCatalogueSettings(spClient, entry, { slaDays });
+      } catch (error) {
+        updateCatalogue(entry.listTitle, { slaDays: entry.slaDays });
+        toast(error instanceof Error ? error.message : "Could not save the catalogue change.");
+      }
+    })();
   };
 
   return (
@@ -141,15 +109,15 @@ export default function CatalogueScreen() {
           {unset.length > 0 && (
             <Typography sx={{ fontSize: 13 }}>
               {unset.length} {unset.length === 1 ? "form has" : "forms have"} never had public or internal set, and an
-              unset form opens for anyone with the link: {unset.map((entry) => entry.name).join(", ")}. Toggling the
-              column below once makes the intent explicit either way.
+              unset form opens for anyone with the link: {unset.map((entry) => entry.name).join(", ")}. Set it either
+              way in the PMW form builder to make the intent explicit.
             </Typography>
           )}
           {mismatched.length > 0 && (
             <Typography sx={{ fontSize: 13, mt: unset.length > 0 ? 0.75 : 0 }}>
               {mismatched.length} {mismatched.length === 1 ? "form has" : "forms have"} a catalogue flag that disagrees
               with the column the form page reads: {mismatched.map((entry) => entry.name).join(", ")}. The link follows
-              the column.
+              the column; re-saving the form in the builder brings both into line.
             </Typography>
           )}
         </Callout>
@@ -163,7 +131,6 @@ export default function CatalogueScreen() {
           { key: "workflow", label: "Workflow" },
           { key: "sla", label: "SLA per layer", width: 120 },
           { key: "reach", label: "Who can reach it", width: 150 },
-          { key: "severity", label: "Severity field", width: 120 },
         ]}
       >
         {catalogue.map((entry) => (
@@ -199,15 +166,16 @@ export default function CatalogueScreen() {
               )}
             </DataCell>
             <DataCell>
+              {/* Reported, not set. The tooltip still carries the note, including
+                  the unset and mismatch cases, because reading why it says what
+                  it says is the whole job of this column now. */}
               <Tooltip title={entry.visibility.note} enterDelay={300}>
-                <Button
-                  size="small"
-                  onClick={() => togglePublic(entry)}
+                <Box
+                  component="span"
                   sx={{
-                    minHeight: 32,
-                    px: 1.25,
+                    ...CHIP_SX,
                     fontSize: 12,
-                    textAlign: "left",
+                    display: "inline-block",
                     color:
                       entry.visibility.unset || entry.visibility.mismatch
                         ? editorial.warning
@@ -219,15 +187,13 @@ export default function CatalogueScreen() {
                         ? editorial.warningWash
                         : entry.isPublic
                           ? editorial.blueWash
-                          : "transparent",
-                    border: editorialHairline,
+                          : editorial.paper,
                   }}
                 >
                   {entry.visibility.label}
-                </Button>
+                </Box>
               </Tooltip>
             </DataCell>
-            <DataCell muted>{severityCaptureLabel(entry.severityCapture)}</DataCell>
           </DataRow>
         ))}
       </DataTable>
@@ -240,14 +206,15 @@ export default function CatalogueScreen() {
       </Typography>
 
       <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>
-        “Who can reach it” reports what an anonymous visitor actually gets on the form link, which the IsPublic column
-        decides at request time — not what the catalogue happens to have stored. A form nobody has set is shown as open,
-        because that is what it is.
+        “Who can reach it” is read-only. It reports what an anonymous visitor actually gets on the form link, which
+        the IsPublic column decides at request time — not what the catalogue happens to have stored. A form nobody has
+        set is shown as open, because that is what it is. It is changed where it is authored: the PMW form builder.
       </Typography>
 
       <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>
-        New form types are built in the PMW form builder, which is the single place any form is authored. Once a form is
-        published there it appears here, and its SLA and public link can be set from this screen.
+        New form types are built in the PMW form builder, which is the single place any form is authored — including
+        whether its link is public. Once a form is published there it appears here, and the SLA is the one setting this
+        screen writes.
       </Typography>
     </Box>
   );

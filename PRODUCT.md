@@ -42,7 +42,7 @@ Make state move where you can see it: a signature advances the record to the nex
 
 Measure age on the current layer only: "overdue" is that age against the layer's own SLA, so it is computable per form type rather than from one global constant.
 
-Keep the form set as data: the catalogue, its approval chain, per-layer SLA and public flag live on each form's `LayerConfig`. Nothing downstream hard-codes a form list.
+Keep the form set as data: the catalogue, its approval chain, per-layer SLA and public flag live on each form's `LayerConfig`. Nothing downstream hard-codes a form list. The public flag is authored in the form builder and only reported by the catalogue.
 
 Write the trail from the same code path as the action, never separately.
 

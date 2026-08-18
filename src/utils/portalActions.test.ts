@@ -50,7 +50,6 @@ function entry(): CatalogueEntry {
     hasSla: false,
     visibility,
     isPublic: visibility.isPublic,
-    severityCapture: "required",
     volume: 0,
     today: 0,
     firstApprover: "Nurul Aziz",
