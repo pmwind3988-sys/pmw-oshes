@@ -374,7 +374,8 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Display",
     description: "Styled info/warning/error/success box",
     spColumnKind: null,
-    defaultProps: { type: "info", icon: true, title: "", body: "", dismissible: false },
+    // Named for what `mapFieldToSurveyJs` reads when it renders the box.
+    defaultProps: { alertType: "info", alertTitle: "", alertBody: "", dismissible: false },
   },
   {
     type: "videoembed",
@@ -383,7 +384,7 @@ export const QUESTION_TYPES: QuestionTypeDefinition[] = [
     group: "Display",
     description: "Embed YouTube/Vimeo or MP4",
     spColumnKind: null,
-    defaultProps: { url: "", autoplay: false, showControls: true, caption: "" },
+    defaultProps: { videoUrl: "", autoplay: false, showControls: true, videoCaption: "" },
   },
   {
     type: "countdown",
@@ -474,6 +475,10 @@ const toCamelCase = schemaNameFromLabel;
 export function createQuestion(td: QuestionTypeDefinition): FormBuilderField {
   const _id = generateFieldId();
   const name = toCamelCase(td.label);
+  // Defaults first, identity second: a palette entry describes how its field
+  // behaves, never which field it is. Spread the other way round and a stray
+  // `type` in `defaultProps` silently creates a question of some other type —
+  // which is what made the Alert item build itself as `info`.
   const base: FormBuilderField = {
     _id,
     type: td.type,
@@ -484,9 +489,20 @@ export function createQuestion(td: QuestionTypeDefinition): FormBuilderField {
     visible: true,
     readOnly: false,
     description: "",
-    ...td.defaultProps,
+    ...omitIdentity(td.defaultProps),
   };
   return base;
+}
+
+/** A palette entry's defaults, minus anything that would rename or retype the field. */
+function omitIdentity(defaults: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!defaults) return {};
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(defaults)) {
+    if (key === "_id" || key === "type" || key === "name" || key === "title") continue;
+    out[key] = val;
+  }
+  return out;
 }
 
 // ── Survey JSON Builder ────────────────────────────────────────────────────────
@@ -505,6 +521,15 @@ const INTERNAL_FIELDS = [
   "isManagedCompanyChoice",
   "managedPlacement",
 ];
+
+/**
+ * The builder's own type for a field the published `type` cannot express.
+ *
+ * `buildSurveyJson` writes it, `buildQuestionTree` consumes it, and nothing
+ * else reads it: the renderers key off the SurveyJS `type` exactly as they did
+ * before it existed, so adding it changes no published form's behaviour.
+ */
+const BUILDER_TYPE_KEY = "builderType";
 
 /** Map builder-only field props to SurveyJS-native equivalents before export. */
 function applySurveyJsChoiceProps(cleaned: Record<string, unknown>, fieldType: string) {
@@ -683,6 +708,17 @@ export function buildSurveyJson(
         if (INTERNAL_FIELDS.includes(key)) continue;
         if (val !== undefined) cleaned[key] = val;
       }
+      // Thirty-nine builder types collapse to sixteen SurveyJS ones, so the
+      // published `type` cannot say which palette item the author picked — a
+      // Number, a Slider and a Counter all publish as `text`+`inputType:number`.
+      // Record the original alongside it so reopening the form restores the
+      // field the author built rather than the type it was flattened to, which
+      // is what used to take its whole settings panel away with it.
+      if (mapped.type !== f.type) {
+        cleaned[BUILDER_TYPE_KEY] = f.type;
+      } else {
+        delete cleaned[BUILDER_TYPE_KEY];
+      }
       // Handle dynamic default markers for date/datetime
       if (cleaned.defaultValue === "__today__") {
         cleaned.defaultValueExpression = "today()";
@@ -700,8 +736,10 @@ export function buildSurveyJson(
         delete cleaned.collapsible;
       }
       applySurveyJsChoiceProps(cleaned, f.type);
-      // Recursively emit nested elements for panels
-      if (f.type === "panel" && Array.isArray(f.elements) && f.elements.length > 0) {
+      // Recursively emit nested elements for every container, not just `panel`:
+      // `columns` and `repeater` hold children too, and publishing those raw
+      // would leave them unmapped and still carrying their builder-only keys.
+      if (Array.isArray(f.elements) && f.elements.length > 0) {
         cleaned.elements = buildElements(f.elements);
       }
       return cleaned;
@@ -1025,48 +1063,79 @@ export function flattenFieldTree(fields: FormBuilderField[]): FormBuilderField[]
 
 // ── Question Tree Builders ─────────────────────────────────────────────────────
 
-/** Load SurveyJS JSON into a tree of FormBuilderField (panels preserve their children) */
+/**
+ * The builder type a form published before `builderType` existed must have had.
+ *
+ * Only reachable where the flattening was reversible. `text` + `inputType:
+ * number` is the ambiguous one — Number, Slider, Counter, Currency and Duration
+ * all publish as exactly that — so it resolves to `number`, the palette item it
+ * is by far most often, and the other four are recovered from `builderType` on
+ * anything published since.
+ */
+function legacyBuilderType(raw: Record<string, unknown>): string {
+  const type = raw.type;
+  const inputType = raw.inputType;
+  if (type === "expression") return "formula";
+  if (type === "text" && (raw._expression || raw.expression)) return "formula";
+  if (type === "matrixdynamic") return "dynamicmatrix";
+  if (type === "paneldynamic") return "repeater";
+  if (type !== "text") return "";
+  if (inputType === "date") return "date";
+  if (inputType === "datetime-local") return "datetime";
+  if (inputType === "number") return "number";
+  return "";
+}
+
+/** Load SurveyJS JSON into a tree of FormBuilderField (containers preserve their children) */
 export function buildQuestionTree(json: SurveyJson): FormBuilderField[] {
   function walk(elements: Record<string, unknown>[]): FormBuilderField[] {
     const result: FormBuilderField[] = [];
     for (const el of elements) {
-      if (el.type === "panel" && Array.isArray(el.elements)) {
-        const panel = { ...el, _id: (el._id as string) || generateFieldId(), elements: walk(el.elements as Record<string, unknown>[]) } as unknown as FormBuilderField;
-        result.push(panel);
-      } else {
-        // Map formula fields saved as text+_expression back to "formula" for the builder
-        // Check _expression (new format) first, then native expression (old format)
-        const exprVal = (el as Record<string, unknown>)._expression || (el as Record<string, unknown>).expression || "";
-        let fieldSrc = el.type === "expression" || (el.type === "text" && exprVal)
-          ? { ...el, type: "formula", expression: exprVal } : el;
-        if (fieldSrc.type === "matrixdynamic") {
-          const savedColumns = Array.isArray(fieldSrc.columns)
-            ? fieldSrc.columns
-            : Array.isArray(fieldSrc.tableConfigColumns)
-              ? fieldSrc.tableConfigColumns
-              : [];
-          fieldSrc = {
-            ...fieldSrc,
-            type: "dynamicmatrix",
-            columns: savedColumns,
-            tableConfigColumns: savedColumns,
-          };
-        } else if (fieldSrc.type === "text" && fieldSrc.inputType === "date") {
-          fieldSrc = { ...fieldSrc, type: "date" };
-        } else if (fieldSrc.type === "text" && fieldSrc.inputType === "datetime-local") {
-          fieldSrc = { ...fieldSrc, type: "datetime", inputType: "datetime" };
-        }
-        const defaultValueExpression = typeof fieldSrc.defaultValueExpression === "string"
-          ? fieldSrc.defaultValueExpression.trim().toLowerCase()
-          : "";
-        if (fieldSrc.type === "date" && defaultValueExpression === "today()") {
-          fieldSrc = { ...fieldSrc, defaultValue: "__today__", defaultValueExpression: undefined };
-        } else if (fieldSrc.type === "datetime" && defaultValueExpression === "now()") {
-          fieldSrc = { ...fieldSrc, defaultValue: "__now__", defaultValueExpression: undefined };
-        }
-        const field = { ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField;
-        result.push(field);
+      const raw = el as Record<string, unknown>;
+      // What the author actually picked in the palette. A form published before
+      // this was recorded falls back to whatever the flattened shape still
+      // reveals; one published since restores exactly, including the four
+      // numeric types that are indistinguishable from `number` on the wire.
+      const stamped = typeof raw[BUILDER_TYPE_KEY] === "string" ? (raw[BUILDER_TYPE_KEY] as string) : "";
+      const builderType = stamped || legacyBuilderType(raw);
+
+      let fieldSrc: Record<string, unknown> = { ...raw };
+      delete fieldSrc[BUILDER_TYPE_KEY];
+      if (builderType) fieldSrc.type = builderType;
+
+      if (builderType === "formula") {
+        fieldSrc.expression = raw._expression || raw.expression || "";
       }
+      if (raw.type === "matrixdynamic") {
+        const savedColumns = Array.isArray(raw.columns)
+          ? raw.columns
+          : Array.isArray(raw.tableConfigColumns)
+            ? raw.tableConfigColumns
+            : [];
+        fieldSrc.columns = savedColumns;
+        fieldSrc.tableConfigColumns = savedColumns;
+      }
+      // The builder's Date & Time field carries `inputType: "datetime"`; only
+      // the published copy says `datetime-local`.
+      if (fieldSrc.type === "datetime" && fieldSrc.inputType === "datetime-local") {
+        fieldSrc.inputType = "datetime";
+      }
+
+      const defaultValueExpression = typeof fieldSrc.defaultValueExpression === "string"
+        ? fieldSrc.defaultValueExpression.trim().toLowerCase()
+        : "";
+      if (fieldSrc.type === "date" && defaultValueExpression === "today()") {
+        fieldSrc = { ...fieldSrc, defaultValue: "__today__", defaultValueExpression: undefined };
+      } else if (fieldSrc.type === "datetime" && defaultValueExpression === "now()") {
+        fieldSrc = { ...fieldSrc, defaultValue: "__now__", defaultValueExpression: undefined };
+      }
+
+      // Every container keeps its children, whichever of the three it is.
+      if (Array.isArray(raw.elements)) {
+        fieldSrc.elements = walk(raw.elements as Record<string, unknown>[]);
+      }
+
+      result.push({ ...fieldSrc, _id: (fieldSrc._id as string) || generateFieldId() } as unknown as FormBuilderField);
     }
     return result;
   }

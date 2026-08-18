@@ -124,6 +124,10 @@ export function applyAutocapitalize(mode: string, text: string): string {
 }
 
 export function TextControl({ element, value, onChange, disabled, invalid, controlId }: ControlProps) {
+  // A date input takes its bounds as date strings; every other input takes the
+  // numeric pair. Handing a number to the first, or a date to the second, is
+  // silently ignored by the browser, so they cannot share one attribute.
+  const dated = element.inputType === "date" || element.inputType === "datetime-local";
   const input = (
     <input
       id={controlId}
@@ -134,8 +138,8 @@ export function TextControl({ element, value, onChange, disabled, invalid, contr
       disabled={disabled}
       data-invalid={invalid}
       maxLength={element.maxLength > 0 ? element.maxLength : undefined}
-      min={element.min}
-      max={element.max}
+      min={dated ? element.minDate || undefined : element.min}
+      max={dated ? element.maxDate || undefined : element.max}
       step={element.step}
       onChange={(e) => onChange(applyAutocapitalize(element.autocapitalize, e.target.value))}
     />

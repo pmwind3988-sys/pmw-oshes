@@ -121,6 +121,104 @@ export interface NativeFormOptions {
   readOnly?: boolean;
 }
 
+/**
+ * How much of the rulebook a check applies.
+ *
+ * "full" is submission: everything runs. "live" runs on each keystroke and
+ * reports only the rules a half-finished answer cannot legitimately fail — a
+ * value over its maximum, or past its character or selection limit, is already
+ * wrong and will still be wrong once the typing stops.
+ *
+ * Everything else waits. "Required", the minimums and the format rules share
+ * one problem live: `4` on its way to `40` is under a minimum of 10, and `a@b`
+ * on its way to an address is not yet an address. Reporting those per keystroke
+ * means telling someone they are wrong for not having finished.
+ */
+export type CheckStage = "live" | "full";
+
+/** One answer's error message, or "" when it passes. */
+export function checkAnswer(q: NativeElement, value: unknown, stage: CheckStage = "full"): string {
+  const full = stage === "full";
+
+  if (q.required && isBlank(value)) {
+    return full ? q.requiredMessage || "This field is required." : "";
+  }
+  if (isBlank(value)) return "";
+
+  if (typeof value === "string") {
+    if (q.maxLength > 0 && value.length > q.maxLength) {
+      return `Use at most ${q.maxLength} characters.`;
+    }
+    if (full && q.inputType === "email" && !EMAIL_RE.test(value.trim())) {
+      return "Enter a valid email address.";
+    }
+    if (full && q.inputType === "url" && !URL_RE.test(value.trim())) {
+      return "Enter a valid link.";
+    }
+  }
+
+  // Both date bounds report live. A date input hands over a whole date or
+  // nothing at all — there is no half-typed date to be unfair to — so the
+  // reason minimums wait elsewhere does not apply here.
+  if ((q.minDate || q.maxDate) && (q.inputType === "date" || q.inputType === "datetime-local")) {
+    // A `datetime-local` answer carries a time the bound does not, so the
+    // comparison is on the date halves alone.
+    const day = String(value).slice(0, 10);
+    if (day.length === 10) {
+      if (q.minDate && day < q.minDate) return `Choose ${q.minDate} or later.`;
+      if (q.maxDate && day > q.maxDate) return `Choose ${q.maxDate} or earlier.`;
+    }
+  }
+
+  if (q.inputType === "number" || q.kind === "slider") {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return full ? "Enter a number." : "";
+    if (full && q.min !== undefined && n < q.min) return `Enter ${q.min} or more.`;
+    if (q.max !== undefined && n > q.max) return `Enter ${q.max} or less.`;
+  }
+
+  if (q.kind === "multi-choice" && Array.isArray(value)) {
+    if (q.maxSelections > 0 && value.length > q.maxSelections) {
+      return `Select at most ${q.maxSelections}.`;
+    }
+  }
+
+  for (const v of q.validators) {
+    const text = v.text || "";
+    if (full && v.type === "regex" && v.regex) {
+      try {
+        if (!new RegExp(v.regex).test(String(value))) return text || "This entry is not in the expected format.";
+      } catch {
+        // An unparseable pattern is an authoring bug, not a respondent error —
+        // never block a submission on it.
+      }
+    }
+    if (full && v.type === "email" && !EMAIL_RE.test(String(value).trim())) {
+      return text || "Enter a valid email address.";
+    }
+    if (v.type === "numeric") {
+      const n = Number(value);
+      if (!Number.isFinite(n)) {
+        if (full) return text || "Enter a number.";
+      } else {
+        if (full && v.minValue !== undefined && n < v.minValue) return text || `Enter ${v.minValue} or more.`;
+        if (v.maxValue !== undefined && n > v.maxValue) return text || `Enter ${v.maxValue} or less.`;
+      }
+    }
+    if (v.type === "text") {
+      const s = String(value);
+      if (full && v.minLength !== undefined && s.length < v.minLength) {
+        return text || `Enter at least ${v.minLength} characters.`;
+      }
+      if (v.maxLength !== undefined && s.length > v.maxLength) {
+        return text || `Use at most ${v.maxLength} characters.`;
+      }
+    }
+  }
+
+  return "";
+}
+
 export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeFormOptions = {}): NativeFormRuntime {
   const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...resolveSeed(seed) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -198,16 +296,32 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
 
   const merged = useMemo(() => ({ ...values, ...computed }), [values, computed]);
 
-  const setValue = useCallback((name: string, value: unknown) => {
-    if (!name) return;
-    setValues((prev) => (Object.is(prev[name], value) ? prev : { ...prev, [name]: value }));
-    setErrors((prev) => {
-      if (!(name in prev)) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-  }, []);
+  const checkOne = useCallback(
+    (q: NativeElement, bag: ValueBag, stage: CheckStage = "full"): string => checkAnswer(q, bag[q.name], stage),
+    [],
+  );
+
+  const setValue = useCallback(
+    (name: string, value: unknown) => {
+      if (!name) return;
+      setValues((prev) => (Object.is(prev[name], value) ? prev : { ...prev, [name]: value }));
+      setErrors((prev) => {
+        const question = form.byName.get(name);
+        // A question already showing an error re-runs the whole rulebook on
+        // every keystroke, so its message tracks what is in the box rather than
+        // vanishing at the first character and returning at submit. A clean one
+        // gets the live rules only.
+        const stage = name in prev ? "full" : "live";
+        const message = question ? checkOne(question, { [name]: value }, stage) : "";
+        if (message === (prev[name] ?? "")) return prev;
+        const next = { ...prev };
+        if (message) next[name] = message;
+        else delete next[name];
+        return next;
+      });
+    },
+    [form, checkOne],
+  );
 
   const getValue = useCallback((name: string) => merged[name], [merged]);
 
@@ -225,76 +339,6 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
     setErrors({});
     setPageIndex(0);
   }, []);
-
-  /** One question's error message, or "" when it passes. */
-  const checkOne = useCallback(
-    (q: NativeElement, bag: ValueBag): string => {
-      const value = bag[q.name];
-
-      if (q.required && isBlank(value)) {
-        return q.requiredMessage || "This field is required.";
-      }
-      if (isBlank(value)) return "";
-
-      if (typeof value === "string") {
-        if (q.maxLength > 0 && value.length > q.maxLength) {
-          return `Use at most ${q.maxLength} characters.`;
-        }
-        if (q.inputType === "email" && !EMAIL_RE.test(value.trim())) {
-          return "Enter a valid email address.";
-        }
-        if (q.inputType === "url" && !URL_RE.test(value.trim())) {
-          return "Enter a valid link.";
-        }
-      }
-
-      if (q.inputType === "number" || q.kind === "slider") {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return "Enter a number.";
-        if (q.min !== undefined && n < q.min) return `Enter ${q.min} or more.`;
-        if (q.max !== undefined && n > q.max) return `Enter ${q.max} or less.`;
-      }
-
-      if (q.kind === "multi-choice" && Array.isArray(value)) {
-        if (q.maxSelections > 0 && value.length > q.maxSelections) {
-          return `Select at most ${q.maxSelections}.`;
-        }
-      }
-
-      for (const v of q.validators) {
-        const text = v.text || "";
-        if (v.type === "regex" && v.regex) {
-          try {
-            if (!new RegExp(v.regex).test(String(value))) return text || "This entry is not in the expected format.";
-          } catch {
-            // An unparseable pattern is an authoring bug, not a respondent
-            // error — never block a submission on it.
-          }
-        }
-        if (v.type === "email" && !EMAIL_RE.test(String(value).trim())) {
-          return text || "Enter a valid email address.";
-        }
-        if (v.type === "numeric") {
-          const n = Number(value);
-          if (!Number.isFinite(n)) return text || "Enter a number.";
-          if (v.minValue !== undefined && n < v.minValue) return text || `Enter ${v.minValue} or more.`;
-          if (v.maxValue !== undefined && n > v.maxValue) return text || `Enter ${v.maxValue} or less.`;
-        }
-        if (v.type === "text") {
-          const s = String(value);
-          if (v.minLength !== undefined && s.length < v.minLength) {
-            return text || `Enter at least ${v.minLength} characters.`;
-          }
-          if (v.maxLength !== undefined && s.length > v.maxLength) {
-            return text || `Use at most ${v.maxLength} characters.`;
-          }
-        }
-      }
-
-      return "";
-    },
-    [],
-  );
 
   /** Questions the respondent can currently see and act on, in page order. */
   const liveQuestions = useMemo(() => {

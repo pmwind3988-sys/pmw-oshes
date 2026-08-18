@@ -937,3 +937,117 @@ describe('buildSurveyJson', () => {
     expect(dropdownEl.renderAs).toBe("select");
   });
 });
+
+// ── Save / reload round trip ─────────────────────────────────────────────────────
+
+describe('save and reload round trip', () => {
+  const reload = (fields: FormBuilderField[]) => buildQuestionTree(buildSurveyJson(fields));
+
+  it('keeps every palette type through a save and a reload', () => {
+    const flattened = QUESTION_TYPES
+      .map(def => {
+        const restored = reload([createQuestion(def)])[0];
+        return restored?.type === def.type ? null : `${def.type} came back as ${restored?.type}`;
+      })
+      .filter(Boolean);
+
+    expect(flattened).toEqual([]);
+  });
+
+  it('keeps a number field a number, with the bounds its author set', () => {
+    const field = createQuestion(QUESTION_TYPES.find(t => t.type === 'number')!);
+    field.min = 1;
+    field.max = 10;
+
+    const restored = reload([field])[0];
+
+    expect(restored.type).toBe('number');
+    expect(restored.min).toBe(1);
+    expect(restored.max).toBe(10);
+  });
+
+  it('tells the four numeric types apart, which the published shape cannot', () => {
+    for (const type of ['number', 'slider', 'counter', 'currency']) {
+      const restored = reload([createQuestion(QUESTION_TYPES.find(t => t.type === type)!)])[0];
+      expect(restored.type).toBe(type);
+    }
+  });
+
+  it('still publishes the SurveyJS type the renderers read', () => {
+    const field = createQuestion(QUESTION_TYPES.find(t => t.type === 'number')!);
+    const published = buildSurveyJson([field]).pages[0].elements[0] as Record<string, unknown>;
+
+    expect(published.type).toBe('text');
+    expect(published.inputType).toBe('number');
+  });
+
+  it('leaves no builder-only marker on the reloaded field', () => {
+    const field = createQuestion(QUESTION_TYPES.find(t => t.type === 'number')!);
+    const restored = reload([field])[0] as unknown as Record<string, unknown>;
+
+    expect(restored.builderType).toBeUndefined();
+  });
+
+  it('settles: a second save produces the same JSON as the first', () => {
+    const field = createQuestion(QUESTION_TYPES.find(t => t.type === 'slider')!);
+    const once = reload([field]);
+    const twice = reload(once);
+
+    expect(twice[0].type).toBe('slider');
+    expect(buildSurveyJson(twice)).toEqual(buildSurveyJson(once));
+  });
+
+  it('recovers a number published before the builder type was recorded', () => {
+    const legacy = makeSurveyJson([
+      { name: 'page1', elements: [{ type: 'text', inputType: 'number', name: 'qty', max: 5 }] },
+    ]);
+
+    const restored = buildQuestionTree(legacy)[0];
+
+    expect(restored.type).toBe('number');
+    expect(restored.max).toBe(5);
+  });
+
+  it('restores fields nested inside a panel too', () => {
+    const panel = createQuestion(QUESTION_TYPES.find(t => t.type === 'panel')!);
+    const number = createQuestion(QUESTION_TYPES.find(t => t.type === 'number')!);
+    number.max = 20;
+    panel.elements = [number];
+
+    const restored = reload([panel])[0];
+
+    expect(restored.type).toBe('panel');
+    expect(restored.elements?.[0].type).toBe('number');
+    expect(restored.elements?.[0].max).toBe(20);
+  });
+});
+
+// ── createQuestion identity ──────────────────────────────────────────────────────
+
+describe('createQuestion identity', () => {
+  it('never lets a palette default rename or retype the field it belongs to', () => {
+    const hijacked = {
+      type: 'text',
+      label: 'Hijack Me',
+      icon: '',
+      group: 'Basic',
+      description: '',
+      spColumnKind: 2,
+      defaultProps: { type: 'info', name: 'stolen', title: '' },
+    } as unknown as QuestionTypeDefinition;
+
+    const field = createQuestion(hijacked);
+
+    expect(field.type).toBe('text');
+    expect(field.name).toBe('hijackMe');
+    expect(field.title).toBe('Hijack Me');
+  });
+
+  it('builds an Alert as an alert', () => {
+    const field = createQuestion(QUESTION_TYPES.find(t => t.type === 'alert')!);
+
+    expect(field.type).toBe('alert');
+    expect(field.title).toBe('Alert / Notice');
+    expect(field.alertType).toBe('info');
+  });
+});

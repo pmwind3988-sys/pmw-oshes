@@ -106,6 +106,15 @@ export interface NativeElement {
   min?: number;
   max?: number;
   step?: number;
+  /**
+   * Date bounds, as the `YYYY-MM-DD` strings the builder writes.
+   *
+   * Separate from `min`/`max` because they are not numbers: routing them
+   * through the numeric pair, which is what used to happen, turned every
+   * authored bound into `NaN` and dropped it.
+   */
+  minDate: string;
+  maxDate: string;
   prefix: string;
   suffix: string;
 
@@ -428,8 +437,10 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
     placeholder: str(raw.placeholder ?? raw.placeHolder),
     rows: num(raw.rows, 4),
     maxLength: num(raw.maxLength, 0),
-    min: optNum(raw.min ?? raw.minValue ?? raw.minDate),
-    max: optNum(raw.max ?? raw.maxValue ?? raw.maxDate),
+    min: optNum(raw.min ?? raw.minValue),
+    max: optNum(raw.max ?? raw.maxValue),
+    minDate: str(raw.minDate),
+    maxDate: str(raw.maxDate),
     step: optNum(raw.step ?? raw.stepValue),
     prefix: str(raw.prefix ?? raw.currencySymbol),
     suffix: str(raw.suffix),
