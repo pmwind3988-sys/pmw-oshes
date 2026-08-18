@@ -227,12 +227,7 @@ export interface LayerConfig {
   slaDays?: number;
   /** Whether this form type is reachable from the signed-out QR poster picker. */
   isPublic?: boolean;
-  /** Whether the form captures a severity/outcome answer. */
-  severityCapture?: SeverityCapture;
 }
-
-/** How a form type treats the severity/outcome question. */
-export type SeverityCapture = "required" | "optional" | "none";
 
 export interface ConditionalRouting {
   conditionField: string;

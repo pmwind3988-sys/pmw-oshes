@@ -22,8 +22,6 @@ interface PublicFormSummary {
   code: string;
   name: string;
   layerCount: number;
-  /** "required" | "optional" | "none" — drives whether the outcome question is asked. */
-  severityCapture: string;
 }
 
 /**
@@ -56,7 +54,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         layers?: { layerNumber?: number }[];
         code?: string;
         isPublic?: boolean;
-        severityCapture?: string;
       } | null = null;
       if (typeof fields.LayerConfig === "string" && fields.LayerConfig.trim()) {
         try {
@@ -91,7 +88,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         layerCount:
           layerConfig?.layers?.length
           ?? (Number.isFinite(declaredLayers) && declaredLayers > 0 ? Math.trunc(declaredLayers) : 0),
-        severityCapture: layerConfig?.severityCapture ?? "none",
       });
     }
 

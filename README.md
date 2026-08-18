@@ -7,7 +7,7 @@ The application is based on the proven `pmw-hrform` architecture. Career, recrui
 ## Included
 
 - Microsoft 365 authentication with MSAL.
-- Role-scoped portal: five derived role views (administrator, evaluator, approver, submitter, auditor), a gated submission drawer where signing advances the record to the next layer, an editable form catalogue with per-layer SLA and public flags, People & roles, and an append-only audit trail.
+- Role-scoped portal: five derived role views (administrator, evaluator, approver, submitter, auditor), a gated submission drawer where signing advances the record to the next layer, a form catalogue with editable per-layer SLA and a read-only public/internal badge, People & roles, and an append-only audit trail.
 - A strictly linear signed-out QR flow — poster → form → reference — with tracking reachable only by reference.
 - SharePoint form discovery, submission dashboards, approvals, evaluations, attachments, signatures, and PDF generation.
 - Workflow layers, conditional routing, SharePoint choice sources, and audit logging — all configured by the `pmw-hrform` builder and consumed here.

@@ -37,7 +37,6 @@ interface PublicForm {
   name: string;
   /** Zero is a real answer: plenty of these forms are records, not requests. */
   layerCount: number;
-  severityCapture: string;
 }
 
 interface TrackStep {
@@ -223,7 +222,6 @@ export default function PublicReportPage() {
                 <Box sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{form.name}</Typography>
                   <Typography sx={{ fontSize: 12, color: editorial.muted }}>
-                    {form.severityCapture === "required" ? "Severity is asked · " : ""}
                     {form.layerCount === 0
                       ? "no approval step"
                       : `${form.layerCount} approval layer${form.layerCount === 1 ? "" : "s"}`}

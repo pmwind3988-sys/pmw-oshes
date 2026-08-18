@@ -127,7 +127,7 @@ export function resolveFormVisibility(args: {
       unset: true,
       mismatch: false,
       label: "Public — not set",
-      note: "IsPublic has never been set on this form, and an unset form opens for anyone with the link. Set it either way to make the intent explicit.",
+      note: "IsPublic has never been set on this form, and an unset form opens for anyone with the link. Set it either way in the form builder to make the intent explicit.",
     };
   }
 
@@ -138,7 +138,7 @@ export function resolveFormVisibility(args: {
       unset: false,
       mismatch: true,
       label: isPublic ? "Public — mismatch" : "Internal — mismatch",
-      note: "The catalogue flag and the IsPublic column disagree. The form link follows the column, which is what this badge reports. Toggle it once here to bring both into line.",
+      note: "The catalogue flag and the IsPublic column disagree. The form link follows the column, which is what this badge reports. Re-saving the form in the builder brings both into line.",
     };
   }
 

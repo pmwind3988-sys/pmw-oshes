@@ -53,7 +53,6 @@ function entry(
     hasSla: workflow.hasWorkflow && slaDays > 0,
     visibility,
     isPublic: visibility.isPublic,
-    severityCapture: "optional",
     volume: 0,
     today: 0,
     firstApprover: PEOPLE[0].name,

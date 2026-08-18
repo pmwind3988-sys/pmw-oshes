@@ -1,11 +1,4 @@
-import type {
-  CatalogueEntry,
-  FormVisibility,
-  LayerConfig,
-  LayerConfigItem,
-  SeverityCapture,
-  Submission,
-} from "../types";
+import type { CatalogueEntry, FormVisibility, LayerConfig, LayerConfigItem, Submission } from "../types";
 import { describeWorkflow, resolveFormVisibility, workflowLayers } from "./formWorkflow";
 import { displayName, layerAssigneeEmail, layerRoleLabel, type PeopleDirectory } from "./portalPeople";
 import { parseDate } from "./portalTime";
@@ -38,16 +31,6 @@ export function layerSlaDays(config: LayerConfig | null | undefined, layer: Laye
   const fromForm = Number(config?.slaDays);
   if (Number.isFinite(fromForm) && fromForm > 0) return fromForm;
   return 0;
-}
-
-export function severityCaptureOf(config: LayerConfig | null | undefined): SeverityCapture {
-  return config?.severityCapture ?? "none";
-}
-
-export function severityCaptureLabel(capture: SeverityCapture): string {
-  if (capture === "required") return "Required";
-  if (capture === "optional") return "Optional";
-  return "—";
 }
 
 /** Layers in chain order — manual branches contribute their layers once, in order. */
@@ -125,7 +108,6 @@ export function buildCatalogue({
         hasSla: workflow.hasWorkflow && slaDays > 0,
         visibility: formVisibility,
         isPublic: formVisibility.isPublic,
-        severityCapture: severityCaptureOf(config),
         volume: bucket.volume,
         today: bucket.today,
         // A form with no chain has nobody to route to. Naming "the first

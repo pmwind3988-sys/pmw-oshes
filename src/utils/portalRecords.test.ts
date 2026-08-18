@@ -39,7 +39,6 @@ function entry(overrides: Partial<CatalogueEntry> = {}): CatalogueEntry {
     hasSla: workflow.hasWorkflow && slaDays > 0,
     visibility,
     isPublic: visibility.isPublic,
-    severityCapture: "required",
     volume: 0,
     today: 0,
     firstApprover: "Nurul Aziz",

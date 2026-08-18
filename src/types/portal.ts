@@ -1,4 +1,4 @@
-import type { LayerConfigItem, SeverityCapture, Submission } from "./index";
+import type { LayerConfigItem, Submission } from "./index";
 
 /**
  * Who is looking at the portal. Derived from group membership plus the
@@ -215,7 +215,6 @@ export interface CatalogueEntry {
   visibility: FormVisibility;
   /** Shorthand for `visibility.isPublic`. */
   isPublic: boolean;
-  severityCapture: SeverityCapture;
   /** Submissions in the last 30 days. */
   volume: number;
   /** Submissions filed today. */

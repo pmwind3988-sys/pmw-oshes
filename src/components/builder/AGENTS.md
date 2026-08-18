@@ -38,9 +38,9 @@ hrform's inline styles when porting a fix across.
 
 ## Where form configuration comes from
 `LayerConfig` (layer sequence, assignees, and the OSHES additions `code` / `slaDays` /
-`isPublic` / `severityCapture`) is JSON on the `Master Form` row, written by the
-pmw-hrform builder. This app reads it via `spConfig.ts` and edits only the operational
-subset — SLA and the public flag — through `portalCatalogueWrite.ts`.
+`isPublic`) is JSON on the `Master Form` row, written by the pmw-hrform builder. This
+app reads it via `spConfig.ts` and edits only the SLA through `portalCatalogueWrite.ts`
+— `isPublic` is read-only here, because the builder owns it.
 
 ## Anti-Patterns
 - `useMemo`/`useCallback` used extensively — unnecessary in React 19; remove when refactoring
