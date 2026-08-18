@@ -1297,11 +1297,7 @@ export default function App() {
   if (showAuthGate && pageState === "choice") {
     return (
       <>
-        <SignInScreen
-          onLogin={handleLogin}
-          onReportSomething={() => navigate("/report")}
-          onTrackReport={() => navigate("/track")}
-        />
+        <SignInScreen onLogin={handleLogin} />
       </>
     );
   }
