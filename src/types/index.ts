@@ -270,6 +270,14 @@ export interface EvaluationLayerResult {
   confirmedAt: string | null;
   fields: Record<string, unknown>;
   notes?: string;
+  /**
+   * The evaluator's signature, where an evaluation keeps it.
+   *
+   * An approval writes its ink to `L{n}_Signature`; an evaluation confirmed
+   * from the review page writes it to `EvaluationData[n].signatureUrl` and
+   * leaves that column empty. Both are the same signature on the same layer.
+   */
+  signatureUrl?: string | null;
 }
 
 export interface ListMetaEntry {

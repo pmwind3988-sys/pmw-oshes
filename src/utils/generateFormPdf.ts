@@ -24,6 +24,12 @@ function evaluationElementsByLayer(layerConfig: unknown, selectedBranch: unknown
   return result;
 }
 
+/** The ink an evaluation layer stored inside its own JSON entry. */
+function evaluationSignatureUrl(entry: Record<string, unknown> | undefined): string {
+  const url = entry?.signatureUrl;
+  return typeof url === "string" ? url.trim() : "";
+}
+
 /**
  * Build layer results array from the raw response item fields.
  * Reads L{n}_Status, L{n}_Email, L{n}_SignedAt, L{n}_Rejection, L{n}_Signature
@@ -61,7 +67,12 @@ export function buildPdfLayerResults(
       email: (rawResponse[`L${n}_ActedBy`] as string) || (rawResponse[`L${n}_Email`] as string) || "",
       signedAt: (rawResponse[`L${n}_SignedAt`] as string) || undefined,
       rejection: (rawResponse[`L${n}_Rejection`] as string) || undefined,
-      signature: (rawResponse[`L${n}_Signature`] as string) || undefined,
+      // An evaluation confirmed from the review page writes its ink to
+      // `EvaluationData[n].signatureUrl` and leaves `L{n}_Signature` empty, so
+      // reading only the column printed a signed evaluation as unsigned.
+      signature: (rawResponse[`L${n}_Signature`] as string)
+        || evaluationSignatureUrl(evalData[n])
+        || undefined,
     };
 
     // For evaluation layers, extract evaluation fields

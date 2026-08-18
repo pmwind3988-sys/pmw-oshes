@@ -57,7 +57,12 @@ export function recordLayerResults(record: PortalRecord): PdfLayerResult[] {
 
     const reason = layer?.rejectionReason ?? (enhanced?.type === "evaluation" ? enhanced.notes : null);
     if (reason) result.rejection = reason;
-    if (layer?.signature) result.signature = layer.signature;
+    // An approval keeps its ink in `L{n}_Signature`; an evaluation confirmed
+    // from the review page keeps it in `EvaluationData[n].signatureUrl` and
+    // leaves the column empty. Reading only the column printed a signed
+    // evaluation as a layer that had signed nothing.
+    const ink = layer?.signature || (enhanced?.type === "evaluation" ? enhanced.signatureUrl : null);
+    if (ink) result.signature = ink;
 
     if (step.type === "evaluation") {
       const fields = enhanced?.type === "evaluation" ? enhanced.fields : undefined;

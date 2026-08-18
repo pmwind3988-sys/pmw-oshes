@@ -152,6 +152,48 @@ describe("recordLayerResults", () => {
     expect(results[1].signedAt).toBe("2026-08-18T12:20:00.000Z");
   });
 
+  it("finds the ink an evaluation kept inside its own stored entry", () => {
+    // An approval writes `L{n}_Signature`; an evaluation confirmed from the
+    // review page writes `EvaluationData[n].signatureUrl` and leaves that column
+    // empty. Reading only the column printed a signed evaluation as a layer that
+    // had signed nothing, under an empty rule with the evaluator's name on it.
+    const confirmed: EvaluationLayerResult = {
+      layerNumber: 2,
+      type: "evaluation",
+      status: "confirmed",
+      email: "faizal@pmw.gov.my",
+      confirmedAt: "2026-08-18T12:20:00.000Z",
+      fields: { ControlsChecked: "Gas test done" },
+      signatureUrl: "/sites/oshes/Signature%20Images/eval-2.png",
+    };
+    const results = recordLayerResults(record({
+      currentLayer: 3,
+      layers: [SIGNED_LAYER, { status: "confirmed", outcome: undefined, email: "faizal@pmw.gov.my", signedAt: "2026-08-18T12:20:00.000Z", rejectionReason: null, signature: null }],
+      enhancedLayers: [null, confirmed],
+    }));
+
+    expect(results[1].signature).toBe("/sites/oshes/Signature%20Images/eval-2.png");
+  });
+
+  it("claims no ink for an evaluation that never gave any", () => {
+    const confirmed: EvaluationLayerResult = {
+      layerNumber: 2,
+      type: "evaluation",
+      status: "confirmed",
+      email: "faizal@pmw.gov.my",
+      confirmedAt: "2026-08-18T12:20:00.000Z",
+      fields: { ControlsChecked: "Gas test done" },
+      signatureUrl: null,
+    };
+    const results = recordLayerResults(record({
+      currentLayer: 3,
+      layers: [SIGNED_LAYER, { status: "confirmed", outcome: undefined, email: "faizal@pmw.gov.my", signedAt: "2026-08-18T12:20:00.000Z", rejectionReason: null, signature: null }],
+      enhancedLayers: [null, confirmed],
+    }));
+
+    expect(results[1].signature).toBeUndefined();
+  });
+
   it("prints a withdrawal on the layer it stopped, with the reason given for it", () => {
     const results = recordLayerResults(record({
       formStatus: "Cancelled",

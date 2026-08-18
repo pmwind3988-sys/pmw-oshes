@@ -483,6 +483,7 @@ function mapSubmission(
           confirmedAt: evalData?.confirmedAt ?? null,
           fields: evalData?.fields ?? {},
           notes: evalData?.notes ?? (isRejectedStatus(statusVal) && statusVal !== "Rejected" ? statusVal ?? undefined : undefined),
+          signatureUrl: evalData?.signatureUrl ?? null,
         });
       } else {
         enhancedLayers.push({
