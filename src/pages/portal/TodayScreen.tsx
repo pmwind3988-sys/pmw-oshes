@@ -15,12 +15,22 @@ import {
 import { usePortal } from "../../contexts/PortalContext";
 import { SeverityPill } from "../../components/portal/PortalPills";
 import { BarRows, StatTile, StatTileRow, type BarRow } from "../../components/portal/PortalStats";
-import { anySla, bottlenecks, recordKey, severeRecords, stuckRecords, waitingLongest } from "../../utils/portalRecords";
+import {
+  anySla,
+  bottlenecks,
+  layerActionLabel,
+  queueVoice,
+  recordKey,
+  severeRecords,
+  stuckRecords,
+  waitingLongest,
+} from "../../utils/portalRecords";
 import { exportRecordsCsv } from "../../utils/portalExport";
 import { formatTodayDate } from "../../utils/portalTime";
-import { nudgeApprover } from "../../utils/portalActions";
+import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
 import type { PortalRecord } from "../../types";
-import ReassignDialog from "../../components/portal/ReassignDialog";
+import WithdrawDialog from "../../components/portal/WithdrawDialog";
+import DeleteRecordDialog from "../../components/portal/DeleteRecordDialog";
 
 /**
  * Today — the admin and evaluator landing screen.
@@ -36,8 +46,9 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   showBottlenecks?: boolean;
 }) {
   const portal = usePortal();
-  const { records, queue, catalogue, access, openDrawer, nudged, markNudged, applyPatch, appendAudit, toast, spClient, userName, userEmail } = portal;
-  const [reassignTarget, setReassignTarget] = useState<PortalRecord | null>(null);
+  const { records, queue, catalogue, access, openDrawer, toast, userEmail } = portal;
+  const [withdrawTarget, setWithdrawTarget] = useState<PortalRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PortalRecord | null>(null);
 
   const severe = useMemo(() => severeRecords(records), [records]);
   // Where no form declares an SLA, "stuck" cannot mean "breached" — so the
@@ -55,7 +66,11 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
     () =>
       people.map((person) => ({
         id: `${person.name}-${person.role}`,
-        label: `${person.name} · ${person.role}`,
+        // A layer pointed at a role rather than a named person has no holder to
+        // name, so the record falls back to the role label for both — and the
+        // bar read "Safety Department Review & Approval · Safety Department
+        // Review & Approval". One name is the whole answer there.
+        label: person.role && person.role !== person.name ? `${person.name} · ${person.role}` : person.name,
         value: person.open,
         hint: person.worstLabel,
         // Only a breach earns the alert hue. Everyone else is a category, not a
@@ -75,19 +90,25 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
     [catalogue],
   );
 
-  const showChase = access.canChase;
+  /**
+   * What the waiting table offers: stand the item down, or remove it outright.
+   *
+   * Both are per-record, so the column appears when anything in view has a
+   * button and stays away when nothing does — a column of empty cells reads as
+   * "you may not", which is a different statement from "there is nothing here
+   * to act on".
+   */
+  const canDelete = canDeleteRecord(access);
+  const showActions = useMemo(
+    () => canDelete || waiting.some((record) => canWithdrawRecord(record, access, userEmail)),
+    [canDelete, waiting, access, userEmail],
+  );
 
-  const handleNudge = async (record: PortalRecord) => {
-    try {
-      const result = await nudgeApprover({ spClient, actorName: userName || userEmail, actorEmail: userEmail }, record);
-      applyPatch(record, result.fields);
-      appendAudit(result.audit);
-      markNudged(record.reference);
-      toast(result.toast);
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not send the reminder.");
-    }
-  };
+  /** How to name this person's own pile — approvals, evaluations, or both. */
+  const voice = useMemo(
+    () => queueVoice(queue, access.isEvaluator ? "evaluation" : "approval"),
+    [queue, access.isEvaluator],
+  );
 
   const severePanel = (
     <Widget
@@ -177,7 +198,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                 <Box component="th" sx={{ width: 170 }}>Waiting on</Box>
                 <Box component="th" sx={{ width: 86 }}>Layer</Box>
                 <Box component="th" sx={{ width: 130 }}>Age on layer</Box>
-                {showChase && <Box component="th" sx={{ width: 170, textAlign: "right !important" }}>Actions</Box>}
+                {showActions && <Box component="th" sx={{ width: 180, textAlign: "right !important" }}>Actions</Box>}
               </Box>
             </Box>
             <Box component="tbody">
@@ -228,26 +249,34 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                       </Typography>
                     )}
                   </Box>
-                  {showChase && (
+                  {showActions && (
                     <Box component="td" sx={{ textAlign: "right" }}>
                       <Stack direction="row" spacing={0.75} sx={{ justifyContent: "flex-end" }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={Boolean(nudged[record.reference])}
-                          onClick={() => void handleNudge(record)}
-                          sx={{ minHeight: 32, px: 1.25 }}
-                        >
-                          {nudged[record.reference] ? "Nudged" : "Nudge"}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => setReassignTarget(record)}
-                          sx={{ minHeight: 32, px: 1.25 }}
-                        >
-                          Reassign
-                        </Button>
+                        {canWithdrawRecord(record, access, userEmail) && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setWithdrawTarget(record)}
+                            sx={{ minHeight: 32, px: 1.25, whiteSpace: "nowrap" }}
+                          >
+                            {withdrawLabel(record, userEmail)}
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setDeleteTarget(record)}
+                            sx={{
+                              minHeight: 32,
+                              px: 1.25,
+                              color: editorial.error,
+                              borderColor: "rgba(198, 40, 40, 0.4)",
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </Stack>
                     </Box>
                   )}
@@ -307,8 +336,8 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
 
         <WidgetGrid min={showBottlenecks ? 340 : 600}>
           <Widget
-            title="Awaiting your signature"
-            caption="signing releases it to the next layer immediately"
+            title={voice.title}
+            caption={voice.caption}
             meta={<WidgetCount value={queue.length} />}
           >
             {queue.length === 0 ? (
@@ -331,7 +360,7 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                         onClick={() => openDrawer(recordKey(record))}
                         sx={{ minHeight: 32 }}
                       >
-                        Review
+                        {layerActionLabel(record)}
                       </Button>
                     }
                   />
@@ -355,7 +384,8 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
         </Widget>
       </Stack>
 
-      <ReassignDialog record={reassignTarget} onClose={() => setReassignTarget(null)} />
+      <WithdrawDialog record={withdrawTarget} onClose={() => setWithdrawTarget(null)} />
+      <DeleteRecordDialog record={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </Box>
   );
 }

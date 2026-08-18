@@ -555,6 +555,11 @@ export function BarRows({
               position: "absolute",
               left: `${(tick / top) * 100}%`,
               transform: index === 0 ? "none" : index === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
+              // The last label starts at the right-hand edge and is pulled back
+              // by its own width, so it has no room to lay itself out in: left
+              // to wrap, "2 filed" came out as one letter per line down the side
+              // of the chart. The transform moves it; only nowrap keeps it a line.
+              whiteSpace: "nowrap",
               fontSize: 10,
               color: editorial.softMuted,
               fontVariantNumeric: "tabular-nums",

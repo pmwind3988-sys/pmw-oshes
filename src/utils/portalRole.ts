@@ -105,6 +105,42 @@ export function derivePortalAccess(input: PortalRoleInput): PortalAccess {
   };
 }
 
+/**
+ * Withdraw / cancel / delete, decided in one place.
+ *
+ * These three questions are asked from the record drawer, from the dashboard's
+ * waiting table, and inside the confirmation dialogs themselves. Written out at
+ * each of those call sites they drifted — one screen offered a withdraw the
+ * other refused — so the rule lives here and every button reads it.
+ */
+
+/**
+ * Withdrawing your own filing is a property of having filed it, not of the role
+ * label: an approver who reports a hazard may withdraw their own report. Anyone
+ * else needs to be an administrator, and a settled record has nothing to stand
+ * down.
+ */
+export function canWithdrawRecord(record: PortalRecord, access: PortalAccess, userEmail: string): boolean {
+  if (access.readOnly || record.done) return false;
+  if (access.isAdmin) return true;
+  return record.submitterEmail === normalizeEmail(userEmail) && record.at === 0;
+}
+
+/** The same action by two different people: you withdraw yours, you cancel theirs. */
+export function withdrawLabel(record: PortalRecord, userEmail: string): string {
+  return record.submitterEmail === normalizeEmail(userEmail) ? "Withdraw" : "Cancel submission";
+}
+
+/**
+ * Deletion is administrators only, and stays available on a settled record — a
+ * wrongly filed report is usually noticed after it has been signed, and "cancel
+ * it instead" is not an answer when the objection is that the photos and
+ * signatures should not exist at all.
+ */
+export function canDeleteRecord(access: PortalAccess): boolean {
+  return !access.readOnly && access.isAdmin;
+}
+
 export interface PortalNavCounts {
   queue: number;
   allRecords: number;

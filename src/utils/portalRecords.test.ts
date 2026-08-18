@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { bottlenecks, queueFor, recordKey, recordMatchesQuery, severeRecords, severityTone, stuckRecords, toPortalRecord } from "./portalRecords";
+import {
+  bottlenecks,
+  currentLayerType,
+  layerActionLabel,
+  queueFor,
+  queueVoice,
+  recordKey,
+  recordMatchesQuery,
+  severeRecords,
+  severityTone,
+  stuckRecords,
+  toPortalRecord,
+} from "./portalRecords";
 import { describeWorkflow, resolveFormVisibility } from "./formWorkflow";
-import type { ApprovalLayerConfig, CatalogueEntry, ListMetaEntry, Submission } from "../types";
+import type {
+  ApprovalLayerConfig,
+  CatalogueEntry,
+  EvaluationLayerConfig,
+  ListMetaEntry,
+  Submission,
+} from "../types";
 
 const META: ListMetaEntry = { icon: "Description", color: "#000", pale: "#fff", category: "General" };
 
@@ -384,5 +402,54 @@ describe("queue and dashboard selectors", () => {
     expect(rows[0].open).toBe(3);
     expect(rows[0].breached).toBe(1);
     expect(rows[0].barPercent).toBe(100);
+  });
+});
+
+describe("queueVoice", () => {
+  const evaluationLayer: EvaluationLayerConfig = {
+    layerNumber: 1,
+    type: "evaluation",
+    authMode: "365",
+    assignee: { type: "user", value: "nurul@pmw.gov.my" },
+    surveyElements: [],
+    roleLabel: "Clinic Assessor",
+  };
+
+  const approvalItem = toPortalRecord(submission(), entry(), {}, {}, NOW);
+  const evaluationItem = toPortalRecord(
+    submission({ id: "21", listTitle: "Health Screening", totalLayers: 1 }),
+    entry({ listTitle: "Health Screening", code: "HS", name: "Health Screening", layers: [evaluationLayer] }),
+    {},
+    {},
+    NOW,
+  );
+
+  it("reads the demand off the layer that is waiting, not off the account's role", () => {
+    expect(currentLayerType(approvalItem)).toBe("approval");
+    expect(currentLayerType(evaluationItem)).toBe("evaluation");
+    expect(queueVoice([approvalItem]).title).toBe("Awaiting your approval");
+    expect(queueVoice([evaluationItem]).title).toBe("Awaiting your evaluation");
+  });
+
+  it("names both where one person holds both kinds of layer", () => {
+    expect(queueVoice([approvalItem, evaluationItem]).title).toBe("Awaiting your approval or evaluation");
+  });
+
+  it("falls back to what the account is named on when the queue is empty", () => {
+    expect(queueVoice([]).title).toBe("Awaiting your approval");
+    expect(queueVoice([], "evaluation").title).toBe("Awaiting your evaluation");
+  });
+
+  it("gives an evaluation row its own verb", () => {
+    expect(layerActionLabel(approvalItem)).toBe("Review");
+    expect(layerActionLabel(evaluationItem)).toBe("Evaluate");
+  });
+
+  it("asks nothing of a settled record", () => {
+    const settled = toPortalRecord(submission({ formStatus: "Approved" }), entry(), {}, {}, NOW);
+    expect(currentLayerType(settled)).toBeNull();
+    // A settled record must not drag the panel title back to "approval" — the
+    // fallback is what speaks when nothing is actually waiting.
+    expect(queueVoice([settled], "evaluation").title).toBe("Awaiting your evaluation");
   });
 });

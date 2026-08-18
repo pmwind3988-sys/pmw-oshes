@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Box,
   Button,
   ButtonGroup,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Drawer,
   IconButton,
   ListItemText,
@@ -30,15 +25,16 @@ import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
 import { normalizeEmail } from "../../utils/portalPeople";
 import {
-  cancelSubmission,
-  deleteSubmission,
   regenerateSubmissionPdf,
   returnForInformation,
   signLayer,
 } from "../../utils/portalActions";
+import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
 import { downloadRecordPdf } from "../../utils/portalPdf";
 import { recordKey } from "../../utils/portalRecords";
 import { SeverityPill, StatusPill } from "./PortalPills";
+import WithdrawDialog from "./WithdrawDialog";
+import DeleteRecordDialog from "./DeleteRecordDialog";
 import { AnswersTab, ApprovalsTab, OverviewTab, TimelineTab } from "./RecordDetail";
 
 type TabId = "overview" | "answers" | "approvals" | "timeline";
@@ -104,7 +100,6 @@ export default function SubmissionDrawer() {
     userName,
     spClient,
     applyPatch,
-    removeRecord,
     appendAudit,
     toast,
     surveyJsonByForm,
@@ -118,10 +113,7 @@ export default function SubmissionDrawer() {
   const [pdfBusy, setPdfBusy] = useState<"" | "download" | "regenerate">("");
   const [pdfMenu, setPdfMenu] = useState<HTMLElement | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [deleteError, setDeleteError] = useState("");
 
   const record = records.find((item) => recordKey(item) === drawerRef) ?? null;
   const open = Boolean(record);
@@ -143,18 +135,10 @@ export default function SubmissionDrawer() {
   // what the record already says — so it is open to the people the record is
   // actually about: whoever filed it, whoever is holding it, and administrators.
   const canRegenerate = !readOnly && Boolean(record) && (access.isAdmin || isMyLayer || isMine);
-  // Withdrawing your own filing is a property of having filed it, not of the
-  // role label — an approver who reports a hazard may withdraw it too.
-  const canCancel =
-    !readOnly &&
-    Boolean(record) &&
-    !record!.done &&
-    (access.isAdmin || (isMine && record!.at === 0));
-  // Deletion is administrators only, and stays available on a settled record —
-  // a wrongly filed report is usually noticed after it has been signed, and
-  // "cancel it instead" is not an answer when the objection is that the photos
-  // and signatures should not exist at all.
-  const canDelete = !readOnly && access.isAdmin && Boolean(record);
+  // Both gates come from the shared rule, so this drawer and the dashboard's
+  // waiting table offer the same two actions on the same record.
+  const canCancel = Boolean(record) && canWithdrawRecord(record!, access, userEmail);
+  const canDelete = Boolean(record) && canDeleteRecord(access);
 
   const trail = useMemo(
     () => (record ? audit.filter((entry) => entry.reference === record.reference) : []),
@@ -197,52 +181,6 @@ export default function SubmissionDrawer() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!record) return;
-    setBusy(true);
-    try {
-      const result = await cancelSubmission(actor, record, cancelReason);
-      applyPatch(record, result.fields);
-      appendAudit(result.audit);
-      toast(result.toast);
-      setCancelOpen(false);
-      setCancelReason("");
-      closeDrawer();
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not cancel this submission.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const closeDeleteDialog = () => {
-    if (busy) return;
-    setDeleteOpen(false);
-    setDeleteConfirm("");
-    setDeleteError("");
-  };
-
-  const handleDelete = async () => {
-    if (!record) return;
-    setBusy(true);
-    setDeleteError("");
-    try {
-      const result = await deleteSubmission(actor, record);
-      appendAudit(result.audit);
-      // Order matters: the trail entry is appended before the record leaves,
-      // so the drawer closing does not race the only remaining evidence.
-      removeRecord(record);
-      toast(result.toast);
-      setDeleteOpen(false);
-      setDeleteConfirm("");
-      closeDrawer();
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Could not delete this submission.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const formSurveyJson = record ? surveyJsonByForm[record.listTitle] ?? record.submission.surveyJson ?? null : null;
 
   const handlePdf = async () => {
@@ -272,12 +210,8 @@ export default function SubmissionDrawer() {
     }
   };
 
-  const cancelLabel = isMine ? "Withdraw" : "Cancel submission";
+  const cancelLabel = record ? withdrawLabel(record, userEmail) : "Withdraw";
   const hasActions = canSign || canCancel || canDelete;
-  // Typing the reference is the gate. A record with signatures and photos
-  // against it is worth more than one misplaced click, and this is the only
-  // action in the portal with nothing left to undo it from.
-  const deleteArmed = Boolean(record) && deleteConfirm.trim().toLowerCase() === record!.reference.toLowerCase();
 
   return (
     <>
@@ -472,11 +406,7 @@ export default function SubmissionDrawer() {
                     )}
                     {canDelete && (
                       <Button
-                        onClick={() => {
-                          setDeleteError("");
-                          setDeleteConfirm("");
-                          setDeleteOpen(true);
-                        }}
+                        onClick={() => setDeleteOpen(true)}
                         disabled={busy}
                         startIcon={<DeleteForeverIcon fontSize="small" />}
                         sx={{ minHeight: 40, color: editorial.error }}
@@ -517,94 +447,17 @@ export default function SubmissionDrawer() {
         </MenuItem>
       </Menu>
 
-      <Dialog open={cancelOpen} onClose={busy ? undefined : () => setCancelOpen(false)} fullWidth maxWidth="sm" transitionDuration={120}>
-        <DialogTitle sx={{ fontWeight: 800 }}>
-          {cancelLabel} {record?.reference}?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
-            The record stays and keeps its reference — it is marked cancelled with your name against it, and it stays
-            readable to everyone who can see it now.
-            {record?.hasWorkflow && !record?.done
-              ? ` The layer it is sitting on is closed, and ${record.currentAssignee || "the approver"} stops being asked to sign it — including the automatic reminders.`
-              : ""}
-            {" "}This cannot be undone from here.
-          </Typography>
-          <TextField
-            label="Reason, for the record"
-            placeholder="Duplicate of an earlier report"
-            value={cancelReason}
-            onChange={(event) => setCancelReason(event.target.value)}
-            fullWidth
-            autoFocus
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setCancelOpen(false)} disabled={busy}>
-            Keep it open
-          </Button>
-          <Button variant="contained" onClick={() => void handleCancel()} disabled={busy}>
-            {busy ? "Withdrawing…" : `Mark ${cancelLabel === "Withdraw" ? "withdrawn" : "cancelled"}`}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <WithdrawDialog
+        record={cancelOpen ? record : null}
+        onClose={() => setCancelOpen(false)}
+        onDone={closeDrawer}
+      />
 
-      <Dialog
-        open={deleteOpen}
-        onClose={closeDeleteDialog}
-        fullWidth
-        maxWidth="sm"
-        transitionDuration={120}
-        slotProps={{ paper: { sx: { border: `1px solid rgba(198, 40, 40, 0.28)` } } }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, color: editorial.error, pb: 1 }}>
-          Delete {record?.reference} and everything with it?
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: editorial.ink, fontWeight: 700, mb: 1 }}>
-            This deletes the whole record, not just the row:
-          </Typography>
-          <Box component="ul" sx={{ m: 0, mb: 2, pl: 2.5, color: editorial.muted, fontSize: 13.5, lineHeight: 1.9 }}>
-            <li>every answer filed on the form, and the SharePoint item holding them</li>
-            <li>every signature image from the approval chain</li>
-            <li>every photo and uploaded attachment in this form's library</li>
-            <li>any PDF generated from it, and any table rows filed with it</li>
-          </Box>
-          <Typography variant="body2" sx={{ color: editorial.muted, mb: 2 }}>
-            Nothing in the portal brings it back. The reference keeps one line in the audit trail — that you deleted it,
-            and when — and that line is all that will be left.
-            {canCancel ? ` To keep the record and mark it void instead, close this and use “${cancelLabel}”.` : ""}
-          </Typography>
-          <TextField
-            label={`Type ${record?.reference ?? "the reference"} to confirm`}
-            placeholder={record?.reference ?? ""}
-            value={deleteConfirm}
-            onChange={(event) => setDeleteConfirm(event.target.value)}
-            fullWidth
-            autoFocus
-            autoComplete="off"
-          />
-          {deleteError && (
-            <Alert severity="error" sx={{ mt: 2, fontWeight: 700 }}>
-              {deleteError}
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button variant="outlined" onClick={closeDeleteDialog} disabled={busy}>
-            Keep it
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            startIcon={<DeleteForeverIcon fontSize="small" />}
-            onClick={() => void handleDelete()}
-            disabled={busy || !deleteArmed}
-          >
-            {busy ? "Deleting…" : "Delete permanently"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteRecordDialog
+        record={deleteOpen ? record : null}
+        onClose={() => setDeleteOpen(false)}
+        onDone={closeDrawer}
+      />
     </>
   );
 }

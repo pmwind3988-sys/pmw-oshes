@@ -29,7 +29,7 @@ export interface PortalContextValue {
   records: PortalRecord[];
   /** Records this account filed itself, whatever else it can see. */
   myRecords: PortalRecord[];
-  /** Items waiting on this account's signature. */
+  /** Items on this account's layer — awaiting its approval, or its evaluation. */
   queue: PortalRecord[];
   catalogue: CatalogueEntry[];
   audit: AuditEntry[];

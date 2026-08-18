@@ -349,6 +349,65 @@ export function queueFor(records: PortalRecord[], userEmail: string): PortalReco
     .sort((a, b) => b.hoursOnLayer - a.hoursOnLayer);
 }
 
+/**
+ * What the layer waiting on someone asks for: a signature, or an assessment.
+ *
+ * Null where nothing is being asked — no chain, already settled, or sent back
+ * to the submitter — so a caller can tell "not waiting" from "waiting to be
+ * approved" rather than reading a settled record as an approval.
+ */
+export function currentLayerType(record: PortalRecord): "approval" | "evaluation" | null {
+  if (!record.hasWorkflow || record.done || record.returned) return null;
+  return record.chain[record.at]?.type ?? null;
+}
+
+/** The verb for the button that settles one row of a queue. */
+export function layerActionLabel(record: PortalRecord): string {
+  return currentLayerType(record) === "evaluation" ? "Evaluate" : "Review";
+}
+
+export interface QueueVoice {
+  /** Panel title — "Awaiting your approval" / "Awaiting your evaluation". */
+  title: string;
+  /** What finishing one of them does. */
+  caption: string;
+}
+
+/**
+ * How to name the pile of work sitting on one person's layer.
+ *
+ * "Awaiting your signature" was wrong for half the deployment: an evaluation
+ * layer is assessed and never signed, so an evaluator was told to sign
+ * something that has no signature on it. The name is read off the layers
+ * actually waiting — every one of them, not the account's role label, because
+ * one person is routinely an approver on one form and an evaluator on another
+ * and only the records know which is in front of them today.
+ *
+ * An empty queue has no layers to read, so it falls back to what the account is
+ * named on; "your queue is clear" should still be clear of the right thing.
+ */
+export function queueVoice(queue: PortalRecord[], fallback: "approval" | "evaluation" = "approval"): QueueVoice {
+  const kinds = new Set(queue.map(currentLayerType).filter((type): type is "approval" | "evaluation" => Boolean(type)));
+  const kind = kinds.size === 0 ? fallback : kinds.size > 1 ? "mixed" : [...kinds][0];
+
+  if (kind === "evaluation") {
+    return {
+      title: "Awaiting your evaluation",
+      caption: "your assessment releases it to the layer after yours",
+    };
+  }
+  if (kind === "mixed") {
+    return {
+      title: "Awaiting your approval or evaluation",
+      caption: "each one moves to the layer after yours as you finish it",
+    };
+  }
+  return {
+    title: "Awaiting your approval",
+    caption: "signing releases it to the next layer immediately",
+  };
+}
+
 /** High-severity, filed in the last 24 hours, not closed. */
 export function severeRecords(records: PortalRecord[]): PortalRecord[] {
   return records
