@@ -51,8 +51,11 @@ export interface PortalStats {
   overdue: number;
   /** Whether anything in this set has an SLA to miss. */
   hasSla: boolean;
+  /** Filed on today's date. */
   filedToday: number;
+  /** Filed within the last 7 calendar days, today included — the tail of `daily`. */
   last7: number;
+  /** Filed within the last 30 calendar days, today included. */
   last30: number;
   /** Median hours from filing to the last signature, over settled records. */
   medianHoursToSettle: number;
@@ -73,25 +76,54 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
+/** Local midnight of the day a moment falls on — the day boundary the viewer reads it against. */
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** Whole calendar days between two local midnights. Rounded, so a daylight-saving day still counts as one. */
+function daysApart(earlier: Date, later: Date): number {
+  return Math.round((later.getTime() - earlier.getTime()) / DAY_MS);
+}
+
+/**
+ * `2026-08-19` from the local date parts.
+ *
+ * `toISOString().slice(0, 10)` is the UTC day, which for a local midnight east
+ * of Greenwich is yesterday — the bar would key itself to the day before the
+ * one it draws.
+ */
+function isoDay(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
 /** Intake per day for the last `days` days, oldest first. Empty days are kept — a gap is data. */
 function dailyIntake(records: PortalRecord[], days: number, now: Date): DayPoint[] {
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = startOfDay(now);
   const counts = new Array<number>(days).fill(0);
 
   for (const record of records) {
-    const filed = record.filedAt?.getTime();
-    if (filed === undefined) continue;
-    // Days back from today, floored — today is 0, yesterday 1.
-    const back = Math.floor((startOfToday - filed) / DAY_MS);
+    if (!record.filedAt) continue;
+    // Which day it was filed on, not how long ago it was filed. Measuring from
+    // midnight to the filing instant put anything filed after 00:00 yesterday
+    // less than a day back, so it landed on today's bar — and pushed today's
+    // own intake off the end of the fortnight entirely.
+    const back = daysApart(startOfDay(record.filedAt), today);
     const index = days - 1 - back;
     if (index >= 0 && index < days) counts[index] += 1;
   }
 
   const busiest = Math.max(1, ...counts);
   return counts.map((count, index) => {
-    const date = new Date(startOfToday - (days - 1 - index) * DAY_MS);
+    // Stepping the day number rather than subtracting milliseconds keeps every
+    // bar on its own midnight where a zone observes daylight saving.
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1 - index));
     return {
-      key: date.toISOString().slice(0, 10),
+      key: isoDay(date),
       label: DAY_LABEL.format(date),
       short: DAY_SHORT.format(date),
       count,
@@ -117,7 +149,7 @@ export interface PortalStatsInput {
  */
 export function portalStats({ records, userEmail, catalogue, now = new Date() }: PortalStatsInput): PortalStats {
   const email = normalizeEmail(userEmail);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const today = startOfDay(now);
 
   let mine = 0;
   let queue = 0;
@@ -149,11 +181,15 @@ export function portalStats({ records, userEmail, catalogue, now = new Date() }:
     else if (record.status === "Cancelled") cancelled += 1;
     else if (!record.hasWorkflow) recorded += 1;
 
-    const filed = record.filedAt?.getTime();
-    if (filed !== undefined) {
-      if (filed >= startOfToday) filedToday += 1;
-      if (now.getTime() - filed <= 7 * DAY_MS) last7 += 1;
-      if (now.getTime() - filed <= 30 * DAY_MS) last30 += 1;
+    if (record.filedAt) {
+      // Which day it was filed on, counted the same way the chart counts it, so
+      // "last 7 days" is the sum of the last seven bars rather than a rolling
+      // 168 hours that cuts yesterday in half. Today is 0, so the last seven
+      // days are 0 to 6 back; a date still in the future is in neither window.
+      const back = daysApart(startOfDay(record.filedAt), today);
+      if (back === 0) filedToday += 1;
+      if (back >= 0 && back < 7) last7 += 1;
+      if (back >= 0 && back < 30) last30 += 1;
     }
     if (record.done && record.hasWorkflow && record.hoursSinceFiled > 0) {
       settleHours.push(record.hoursSinceFiled);
