@@ -16,13 +16,20 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ForwardToInboxIcon from "@mui/icons-material/ForwardToInbox";
 import LinkIcon from "@mui/icons-material/Link";
 import { editorial, editorialHairline } from "../theme/editorial";
+import { appBaseUrl } from "../config/appBaseUrl";
 
 /**
  * Only ever hand back a link into this app. The `u` parameter arrives from an
  * email, so treating it as trusted would turn this page into a tidy way to
  * dress up someone else's URL in PMW branding.
+ *
+ * Two origins count as this app: the one being browsed, and the configured one
+ * the email was addressed from. They are normally the same string, and differ
+ * only when the page is opened somewhere other than where the link was built —
+ * a preview deployment, or a local run pointed at production. Accepting both
+ * keeps that case working without widening the check to anybody else's host.
  */
-function readSameOriginLink(raw: string | null): string {
+function readOwnOriginLink(raw: string | null): string {
   if (!raw) return "";
   let parsed: URL;
   try {
@@ -30,7 +37,13 @@ function readSameOriginLink(raw: string | null): string {
   } catch {
     return "";
   }
-  if (parsed.origin !== window.location.origin) return "";
+  const ownOrigins = new Set([window.location.origin]);
+  try {
+    ownOrigins.add(new URL(appBaseUrl()).origin);
+  } catch {
+    /* A malformed VITE_APP_BASE_URL widens nothing; the current origin still stands. */
+  }
+  if (!ownOrigins.has(parsed.origin)) return "";
   return parsed.toString();
 }
 
@@ -66,7 +79,7 @@ async function copyText(value: string): Promise<boolean> {
 export default function ShareLinkPage() {
   const [searchParams] = useSearchParams();
   const reviewLink = useMemo(
-    () => readSameOriginLink(searchParams.get("u")),
+    () => readOwnOriginLink(searchParams.get("u")),
     [searchParams],
   );
   const [copied, setCopied] = useState(false);

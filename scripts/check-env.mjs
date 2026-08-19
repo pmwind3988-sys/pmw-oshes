@@ -76,6 +76,25 @@ if (site) {
   }
 }
 
+// Every link in a workflow email is built from this, in the browser and in the
+// API alike. Unset, each side falls back to the origin it happens to be on, so a
+// send from a preview deployment or a local run mails out a URL the recipient
+// cannot open. The mail still sends; nothing errors.
+console.log("\nEmailed links");
+const appBase = env.VITE_APP_BASE_URL || "";
+advise(appBase !== "",
+  "VITE_APP_BASE_URL set  (unset falls back to whichever origin the sender was on)");
+if (appBase) {
+  advise(!appBase.endsWith("/"), "no trailing slash  (tolerated — both readers strip it)");
+  try {
+    const parsed = new URL(appBase);
+    check(parsed.pathname === "/", "an origin only — the app appends the path");
+    console.log(`  INFO  emailed links -> ${parsed.origin}/eval/...`);
+  } catch {
+    check(false, "VITE_APP_BASE_URL is a valid URL");
+  }
+}
+
 // Compared as literal strings against SharePoint group names. A trailing space
 // reads as "no such group", which renders as an empty catalogue, not an error.
 console.log("\nAccess groups (exact string match)");

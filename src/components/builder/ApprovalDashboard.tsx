@@ -26,6 +26,7 @@ import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
 import { OSHE_LISTS } from "../../config/oshe";
+import { appBaseUrl } from "../../config/appBaseUrl";
 import {
   getScheduledWorkflowEmail,
   isValidFutureScheduleDate,
@@ -1244,7 +1245,7 @@ export default function ApprovalDashboard() {
         // A public next layer is reached only by its own token — the mailbox it
         // is sent to forwards the link on to whoever actually signs.
         nextReviewLink = buildLayerReviewLink({
-          baseUrl: window.location.origin,
+          baseUrl: appBaseUrl(),
           layer: nextLayerConfig,
           formSlug: valueToText(formConfig?.Slug),
           responseItemId: respId,
@@ -1369,7 +1370,7 @@ export default function ApprovalDashboard() {
         // The branch's own first layer decides the link — a public one is
         // reachable only by its token, never by the admin workspace.
         const branchReviewLink = buildLayerReviewLink({
-          baseUrl: window.location.origin,
+          baseUrl: appBaseUrl(),
           layer: bLayers[0],
           formSlug: valueToText(formConfig?.Slug),
           responseItemId: respId,
@@ -1444,7 +1445,7 @@ export default function ApprovalDashboard() {
 
       const cfg = await getFormConfigByTitle(token, item.Title) as FormConfig | null;
       const reviewLink = buildLayerReviewLink({
-        baseUrl: window.location.origin,
+        baseUrl: appBaseUrl(),
         layer: currentLayer,
         formSlug: valueToText(cfg?.Slug),
         responseItemId: item.Id,
@@ -1642,7 +1643,7 @@ export default function ApprovalDashboard() {
 
       const cfg = await getFormConfigByTitle(token, selectedItem.Title) as FormConfig | null;
       const reviewLink = buildLayerReviewLink({
-        baseUrl: window.location.origin,
+        baseUrl: appBaseUrl(),
         layer: currentLayer,
         formSlug: valueToText(cfg?.Slug),
         responseItemId: selectedItem.Id,
@@ -1866,7 +1867,7 @@ export default function ApprovalDashboard() {
         // is sent to forwards the link on to whoever actually signs.
         if (nextLayer) {
           nextReviewLink = buildLayerReviewLink({
-            baseUrl: window.location.origin,
+            baseUrl: appBaseUrl(),
             layer: nextLayer,
             formSlug: valueToText(formConfig?.Slug),
             responseItemId: selectedItem.Id,

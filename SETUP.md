@@ -186,7 +186,7 @@ of assigning an online reviewer. Blank disables it entirely.
 | `VITE_APP_NAME` | Defaults to `PMW OSHE Forms` |
 | `VITE_DEPARTMENT_NAME` | Defaults to `OSHE` |
 | `VITE_PDPA_CONTACT_EMAIL` | Shown in the privacy notice |
-| `VITE_APP_BASE_URL` | Production origin. Approval links in email are built from it — a wrong value 404s every emailed link |
+| `VITE_APP_BASE_URL` | Production origin, no trailing path. Every link in a workflow email is built from it — the browser through `src/config/appBaseUrl.ts`, the API through `getApplicationBaseUrl()`. Set it on Preview and Development too: unset, each side falls back to the origin the sender was on, and a send from a preview deployment mails a link only that deployment's signed-in users can open |
 | `VITE_BUILDER_URL` | Origin of the pmw-hrform deployment. **Origin only** — the app appends `/admin/builder?site=oshes`. Blank hides the link |
 
 ### Optional — defaults apply when unset
@@ -221,7 +221,7 @@ app uses today, so leaving them unset is a supported configuration.
     literal.
 
     Because of that, `Access-Control-Allow-Origin` in `vercel.json` is the hard-coded
-    string `https://pmw-oshes.vercel.app`. **Attaching a custom domain means editing
+    string `https://pmw-oshe.vercel.app`. **Attaching a custom domain means editing
     that literal** — no env var will do it for you.
 
 ### The cron schedule

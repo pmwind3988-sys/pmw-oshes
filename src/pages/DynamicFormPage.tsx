@@ -20,6 +20,7 @@ import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { isFixedAssignee, layerRecipients, routedAssigneeEmail, validFixedAssigneeEmails } from "../utils/layerAssignees";
 import { buildLayerReviewLink } from "../utils/layerReviewLink";
+import { appBaseUrl } from "../config/appBaseUrl";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
@@ -1293,7 +1294,7 @@ export default function DynamicFormPage() {
           const firstLayerNumber = layerConfigParsed?.layers?.[0]?.layerNumber ?? 1;
           const firstLayerManualPaper = String(body[`L${firstLayerNumber}_Status`] || "").toLowerCase().startsWith("manual ");
           const formSlug = (cfg.Slug as string) || (cfg.slug as string) || "";
-          const baseUrl = window.location.origin;
+          const baseUrl = appBaseUrl();
           const firstLayer = layerConfigParsed?.layers?.[0];
           // A public first layer is reachable only by its own token; the signed-in
           // route and the admin link both wall off the outside reviewer.

@@ -13,6 +13,7 @@ import "../native/native-form.css";
 
 import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import { buildLayerReviewLink, describeMissingReviewLink } from "../utils/layerReviewLink";
+import { appBaseUrl } from "../config/appBaseUrl";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
 import { buildRejectedWorkflowPatch } from "../utils/workflowStatus";
@@ -568,7 +569,7 @@ export default function EvaluationPage() {
       // broken workflow, and advancing into it strands the submission.
       const nextReviewLink = !isFinal && nextLayer
         ? buildLayerReviewLink({
-            baseUrl: window.location.origin,
+            baseUrl: appBaseUrl(),
             layer: nextLayer,
             formSlug: formSlug || "",
             responseItemId: respId,

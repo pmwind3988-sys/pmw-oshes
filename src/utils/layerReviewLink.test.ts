@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { LayerConfigItem } from "../types";
 import { buildLayerReviewLink, describeMissingReviewLink } from "./layerReviewLink";
 
-const BASE = "https://pmw-oshes.vercel.app";
+const BASE = "https://pmw-oshe.vercel.app";
 
 function layer(overrides: Partial<LayerConfigItem>): LayerConfigItem {
   return {

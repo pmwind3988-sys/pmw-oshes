@@ -31,6 +31,12 @@ interface ImportMetaEnv {
    * Blank hides the "Form builder" link entirely.
    */
   readonly VITE_BUILDER_URL?: string;
+  /**
+   * Origin this deployment is reachable at. Every link that goes out in an email
+   * is built from it — see `src/config/appBaseUrl.ts`. Unset falls back to the
+   * current origin, which is only the right answer on production itself.
+   */
+  readonly VITE_APP_BASE_URL?: string;
 }
 
 interface ImportMeta {

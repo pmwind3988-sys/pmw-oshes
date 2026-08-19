@@ -3,6 +3,7 @@ import { resolveEvaluationEmailDueAt, setScheduledWorkflowEmail } from "./workfl
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { SharePointHttpError } from "./sharepointClient";
 import { OSHE_LISTS } from "../config/oshe";
+import { appBaseUrl } from "../config/appBaseUrl";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
@@ -1293,7 +1294,7 @@ function absolutePdfUrl(pdfUrl: string): string {
  * link and does the clipboard write on click.
  */
 export function buildShareLinkUrl(reviewLink: string): string {
-  return `${window.location.origin}/share-link?u=${encodeURIComponent(reviewLink)}`;
+  return `${appBaseUrl()}/share-link?u=${encodeURIComponent(reviewLink)}`;
 }
 
 interface EmailDetail {
@@ -1510,7 +1511,7 @@ export async function triggerApprovalNotification(
   // Blank detail values are dropped by emailBody, so this row simply disappears
   // on forms that do not issue references.
   const referenceDetail: EmailDetail = { label: "Reference no.", value: referenceNo };
-  const requestLink = reviewLink || `${window.location.origin}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
+  const requestLink = reviewLink || `${appBaseUrl()}/admin/submissions?form=${encodeURIComponent(formTitle)}&item=${responseItemId}`;
   const isEmailAddress = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   // Only a fresh submission knows when it was submitted; a later layer's email
   // leaves the row out rather than showing the hand-off time as a submit time.
