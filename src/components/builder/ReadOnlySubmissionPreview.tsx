@@ -90,6 +90,51 @@ function sectionTitle(element: Record<string, unknown>, fallback: string): strin
   return typeof name === "string" && name.trim() ? formatFieldLabel(name) : fallback;
 }
 
+/** "repeater" in the builder, `paneldynamic` once published. */
+function isRepeaterType(type: string): boolean {
+  const normalized = type.toLowerCase();
+  return normalized === "paneldynamic" || normalized === "repeater";
+}
+
+const MATRIX_LIKE_TYPES = ["dynamicmatrix", "matrixdynamic", "tableinput"];
+
+/**
+ * A repeating panel's template questions, as the columns of its table.
+ *
+ * Layout containers inside the template arrange one entry's fields; they are
+ * not entries of their own, so they are flattened rather than counted.
+ */
+function repeaterTemplateColumns(element: Record<string, unknown>): unknown[] {
+  const columns: Record<string, unknown>[] = [];
+  const visit = (elements: unknown): void => {
+    if (!Array.isArray(elements)) return;
+    for (const raw of elements) {
+      if (!isRecord(raw)) continue;
+      const type = typeof raw.type === "string" ? raw.type.toLowerCase() : "";
+      if (type === "panel" || type === "columns") {
+        visit(raw.elements);
+        continue;
+      }
+      if (type === "html" || type === "expression" || type === "formula") continue;
+      const name = typeof raw.name === "string" ? raw.name : "";
+      if (!name) continue;
+      columns.push({ name, title: fieldTitle(raw) });
+    }
+  };
+  visit(element.templateElements ?? element.elements);
+  return columns;
+}
+
+/**
+ * A second copy of an answer that already has a row of its own.
+ *
+ * A matrix writes its rendered form beside its rows; listing those again would
+ * print the same table twice, once as markup.
+ */
+function isCompanionKey(key: string): boolean {
+  return /_(Response|Html|Json|RowIds|childRows)$/i.test(key);
+}
+
 function getSurveyRoot(surveyJson: unknown): Record<string, unknown> | null {
   if (!isRecord(surveyJson)) return null;
   if (isRecord(surveyJson.surveyJson)) return surveyJson.surveyJson;
@@ -101,12 +146,17 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
   const pages = root && Array.isArray(root.pages) ? root.pages : [];
   const sections: PreviewSection[] = [];
   const dataKeys = new Set(Object.keys(data ?? {}));
+  /** Response keys a question on the published form accounted for. */
+  const claimed = new Set<string>();
 
   const collectFields = (elements: unknown, target: PreviewField[]) => {
     if (!Array.isArray(elements)) return;
     for (const raw of elements) {
       if (!isRecord(raw)) continue;
       const type = typeof raw.type === "string" ? raw.type : "";
+      // A repeating panel is walked past, not into: its template questions are
+      // never answered in their own right, so the panel itself is the field and
+      // its template supplies the columns of the table its rows are drawn in.
       if (type === "panel") {
         const panelFields: PreviewField[] = [];
         collectFields(raw.elements, panelFields);
@@ -118,13 +168,14 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
       if (type === "html" || type === "expression" || type === "formula") continue;
       const name = typeof raw.name === "string" ? raw.name : "";
       if (!name || !dataKeys.has(name)) continue;
+      claimed.add(name);
       target.push({
         name,
         title: fieldTitle(raw),
         type,
         inputType: typeof raw.inputType === "string" ? raw.inputType : undefined,
         choices: Array.isArray(raw.choices) ? raw.choices : undefined,
-        columns: Array.isArray(raw.columns) ? raw.columns : undefined,
+        columns: isRepeaterType(type) ? repeaterTemplateColumns(raw) : Array.isArray(raw.columns) ? raw.columns : undefined,
         rateMin: typeof raw.rateMin === "number" ? raw.rateMin : undefined,
         rateMax: typeof raw.rateMax === "number" ? raw.rateMax : undefined,
         minRateDescription: typeof raw.minRateDescription === "string" ? raw.minRateDescription : undefined,
@@ -145,6 +196,18 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
     if (fields.length > 0) {
       sections.push({ title: sectionTitle(page, "Submitted Form"), fields });
     }
+  }
+
+  // Anything stored against the record that the published form does not
+  // mention. A question added after this version was published, or renamed
+  // since, is still an answer somebody gave, and an approver deciding on the
+  // record has to be shown it rather than have it quietly withheld.
+  const unclaimed = [...dataKeys].filter((key) => !claimed.has(key) && !isCompanionKey(key));
+  if (sections.length > 0 && unclaimed.length > 0) {
+    sections.push({
+      title: "Other stored answers",
+      fields: unclaimed.map((key) => ({ name: key, title: formatFieldLabel(key), type: "text" })),
+    });
   }
 
   return sections;
@@ -496,7 +559,7 @@ function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: Pre
       </div>
     );
   }
-  if (["dynamicmatrix", "matrixdynamic", "tableinput"].includes(field.type)) {
+  if (MATRIX_LIKE_TYPES.includes(field.type) || isRepeaterType(field.type)) {
     return <MatrixValue field={field} value={value} />;
   }
   if (field.type === "rating") {

@@ -125,16 +125,57 @@ function buildSubmissions(): Submission[] {
       totalLayers: total,
       currentLayer: total === 0 ? 0 : onMe ? total : 1,
       layers: [],
+      surveyJson: RECORD_SURVEY,
       submissionData: {
         WhatHappened: SUBJECTS[index % SUBJECTS.length],
         Location: LOCATIONS[index % LOCATIONS.length],
         Severity: SEVERITIES[index % SEVERITIES.length],
+        // Stored the way a SharePoint text column holds it, which is the shape
+        // the reader actually has to cope with.
+        WorkPerformers: JSON.stringify(WORK_PERFORMERS.slice(0, (index % 3) + 1)),
       },
     } as unknown as Submission);
   }
 
   return rows;
 }
+
+/**
+ * A form that asks for a list of people as well as a set of answers.
+ *
+ * A repeating panel is how nearly every permit collects its crew, and it reads
+ * nothing like a scalar answer, so the harness carries one — otherwise the part
+ * of the record detail that draws a table is the part nobody can look at.
+ */
+const WORK_PERFORMERS = [
+  { PerformerType: "Internal", PerformerName: "Sazali Rahim", PerformerCompany: "PMW" },
+  { PerformerType: "External", PerformerName: "Ah Meng", PerformerCompany: "Marine Kita Sdn Bhd" },
+  { PerformerType: "External", PerformerName: "Ravi Kumar", PerformerCompany: "Marine Kita Sdn Bhd" },
+];
+
+const RECORD_SURVEY = {
+  pages: [
+    {
+      name: "page1",
+      title: "Work details",
+      elements: [
+        { type: "comment", name: "WhatHappened", title: "What happened" },
+        { type: "text", name: "Location", title: "Location of work" },
+        { type: "text", name: "Severity", title: "Severity" },
+        {
+          type: "paneldynamic",
+          name: "WorkPerformers",
+          title: "Work performers",
+          templateElements: [
+            { type: "radiogroup", name: "PerformerType", title: "Internal / external", choices: ["Internal", "External"] },
+            { type: "text", name: "PerformerName", title: "Name of work performer" },
+            { type: "text", name: "PerformerCompany", title: "Company" },
+          ],
+        },
+      ],
+    },
+  ],
+};
 
 const AUDIT: AuditEntry[] = Array.from({ length: 9 }, (_, index) => ({
   at: new Date(NOW.getTime() - index * 5_400_000).toISOString(),

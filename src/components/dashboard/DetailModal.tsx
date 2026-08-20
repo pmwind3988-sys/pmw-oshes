@@ -44,6 +44,7 @@ import { getActiveLayers } from "../builder/approvalDashboardLayerProgress";
 import DOMPurify from "dompurify";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { getSelectedCompany, isCompanyResponseKey } from "../../utils/companySelection";
+import { buildAnswerClassifier, isGeneratedPdfColumn, type AnswerClassifier } from "./answerClassification";
 import { loginRequest } from "../../auth/msalConfig";
 import {
   buildFormSubmissionSections,
@@ -305,13 +306,6 @@ function collectLinks(value: unknown): LinkValue[] {
   return link ? [link] : [];
 }
 
-function isSignatureField(key: string): boolean {
-  return /signature/i.test(key);
-}
-
-function isPdfField(key: string): boolean {
-  return /^pdfurl$/i.test(key) || (/pdf/i.test(key) && /(url|link|file|document)/i.test(key));
-}
 
 function signatureValueToSrc(value: unknown): string {
   const normalized = normalizeMaybeJson(value);
@@ -327,13 +321,17 @@ function hasDisplayValue(value: unknown): boolean {
   return true;
 }
 
-function shouldSkipField(key: string, value: unknown): boolean {
+function shouldSkipField(key: string, value: unknown, answers: AnswerClassifier): boolean {
   if (SYSTEM_FIELDS.has(key)) return true;
   if (key.startsWith("odata.") || key.startsWith("@odata.")) return true;
   if (/^L\d+_/i.test(key)) return true;
   if (/_Json$/i.test(key) || /^Json$/i.test(key)) return true;
   if (isCompanyResponseKey(key)) return true;
-  if (isSignatureField(key) || isPdfField(key)) return true;
+  // Signatures get drawn in their own gallery and the generated PDF gets its
+  // own card, so neither is repeated as a row. A stored document is not
+  // excluded here — it is an answer, and the row filter below drops it only
+  // because it is already rendered as a link.
+  if (answers.isSignature(key) || isGeneratedPdfColumn(key)) return true;
   return !hasDisplayValue(value);
 }
 
@@ -367,6 +365,7 @@ function buildSupportingDetails(
   item: Submission,
   entries: [string, unknown][],
   renderedSignatureKeys: Set<string>,
+  answers: AnswerClassifier,
 ): SupportingDetail[] {
   const details = new Map<string, SupportingDetail>();
 
@@ -380,52 +379,12 @@ function buildSupportingDetails(
       continue;
     }
 
-    if (isSignatureField(key) && !renderedSignatureKeys.has(key)) {
+    if (answers.isSignature(key) && !renderedSignatureKeys.has(key)) {
       addSupportingDetail(details, key, formatFieldName(key), value);
     }
   }
 
   return sortSupportingDetails([...details.values()]);
-}
-
-function textRecordValue(record: Record<string, unknown>, key: string): string {
-  const value = record[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function collectSurveyFieldKeysByType(surveyJson: unknown, targetTypes: Set<string>): Set<string> {
-  const keys = new Set<string>();
-  const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
-  const pages = isRecord(root) && Array.isArray(root.pages) ? root.pages.filter(isRecord) : [];
-  const childKeys = ["elements", "templateElements", "questions"] as const;
-
-  const visit = (element: Record<string, unknown>) => {
-    const type = textRecordValue(element, "type").toLowerCase();
-    const name = textRecordValue(element, "name");
-    if (name && targetTypes.has(type)) keys.add(name);
-
-    for (const childKey of childKeys) {
-      const children = element[childKey];
-      if (Array.isArray(children)) children.filter(isRecord).forEach(visit);
-    }
-
-    if (type !== "dynamicmatrix" && type !== "matrixdynamic" && type !== "tableinput") {
-      const columns = element.columns;
-      if (Array.isArray(columns)) {
-        for (const column of columns.filter(isRecord)) {
-          const columnElements = column.elements;
-          if (Array.isArray(columnElements)) columnElements.filter(isRecord).forEach(visit);
-        }
-      }
-    }
-  };
-
-  for (const page of pages) {
-    const elements = page.elements;
-    if (Array.isArray(elements)) elements.filter(isRecord).forEach(visit);
-  }
-
-  return keys;
 }
 
 function formatFieldName(key: string): string {
@@ -1270,13 +1229,13 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
   const selectedCompany = getSelectedCompany(item?.submissionData, item?.surveyJson);
   const submissionData = item?.submissionData ?? {};
   const entries = Object.entries(submissionData);
-  const signatureFieldKeys = item ? collectSurveyFieldKeysByType(item.surveyJson, new Set(["signaturepad"])) : new Set<string>();
+  const answers = buildAnswerClassifier(item?.surveyJson);
 
-  const pdfLink = entries.find(([key, value]) => isPdfField(key) && collectLinks(value).length > 0);
+  const pdfLink = entries.find(([key, value]) => isGeneratedPdfColumn(key) && collectLinks(value).length > 0);
   const generatedPdf = pdfLink ? collectLinks(pdfLink[1])[0] : null;
 
   const documentGroups = entries
-    .filter(([key, value]) => !isPdfField(key) && !isSignatureField(key) && !signatureFieldKeys.has(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
+    .filter(([key, value]) => !isGeneratedPdfColumn(key) && !answers.isSignature(key) && !SYSTEM_FIELDS.has(key) && collectLinks(value).length > 0)
     .map(([key, value]) => ({
       key,
       title: formatFieldName(key),
@@ -1284,7 +1243,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     }));
 
   const signatureFields = entries
-    .filter(([key, value]) => (isSignatureField(key) || signatureFieldKeys.has(key)) && hasDisplayValue(value))
+    .filter(([key, value]) => answers.isSignature(key) && hasDisplayValue(value))
     .map(([key, value]) => ({
       key,
       label: formatFieldName(key),
@@ -1298,10 +1257,10 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
     ? buildFormSubmissionSections(item.surveyJson, submissionData, {
         fallbackSectionTitle: "Submitted answers",
         formatFallbackLabel: formatFieldName,
-        shouldIncludeField: (key, value) => shouldSkipField(key, value) === false && collectLinks(value).length === 0,
+        shouldIncludeField: (key, value) => shouldSkipField(key, value, answers) === false && collectLinks(value).length === 0,
       })
     : [];
-  const supportingDetails = item ? buildSupportingDetails(item, entries, renderedSignatureKeys) : [];
+  const supportingDetails = item ? buildSupportingDetails(item, entries, renderedSignatureKeys, answers) : [];
   const displayTitle = item ? getSubmissionDisplayTitle(item) : "";
   const submitterDisplay = item ? getSubmittedByDisplayName(item) : "Unknown submitter";
   const formReference = item ? getFormReference(item) : "Not available";

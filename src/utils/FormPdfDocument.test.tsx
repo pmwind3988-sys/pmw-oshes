@@ -621,3 +621,70 @@ describe("layer signatures and pictures survive the trip", () => {
     expect(collectImageSources([WIDE_PNG, WIDE_PNG])).toHaveLength(2);
   });
 });
+
+describe("a repeating panel on a printed permit", () => {
+  const performerSurvey = {
+    title: "Permit To Work",
+    pages: [{
+      name: "page1",
+      title: "Work details",
+      elements: [
+        { type: "text", name: "Location", title: "Location of Work" },
+        {
+          type: "paneldynamic",
+          name: "WorkPerformers",
+          title: "Work performers",
+          templateElements: [
+            { type: "radiogroup", name: "PerformerType", title: "Internal / external", choices: ["Internal", "External"] },
+            { type: "text", name: "PerformerName", title: "Name of work performer" },
+          ],
+        },
+      ],
+    }],
+  } as unknown as PdfFormData["surveyJson"];
+
+  const performers = [
+    { PerformerType: "Internal", PerformerName: "Ali bin Osman" },
+    { PerformerType: "External", PerformerName: "Ah Meng" },
+  ];
+
+  it("prints every performer, under the questions the panel asked", async () => {
+    const raw = await renderPdf(baseData({
+      surveyJson: performerSurvey,
+      responseData: { Location: "Bay 3", WorkPerformers: performers },
+    }));
+    const text = flatText(raw);
+
+    expect(text).toContain("WORK PERFORMERS");
+    expect(text).toContain("NAME OF WORK PERFORMER");
+    expect(text).toContain("ALI BIN OSMAN");
+    expect(text).toContain("AH MENG");
+    // The names, not the shape of the column that held them.
+    expect(text).not.toContain("PERFORMERNAME");
+  });
+
+  it("prints them the same from the JSON the response column stored", async () => {
+    const raw = await renderPdf(baseData({
+      surveyJson: performerSurvey,
+      responseData: { Location: "Bay 3", WorkPerformers: JSON.stringify(performers) },
+    }));
+    const text = flatText(raw);
+
+    expect(text).toContain("ALI BIN OSMAN");
+    expect(text).toContain("AH MENG");
+    expect(text).not.toContain("PERFORMERNAME");
+  });
+
+  it("keeps printing what the panel asks when nobody filled it in", async () => {
+    // The blank record, for signing by hand: no entries to tabulate, so the
+    // questions are what the page has to carry.
+    const raw = await renderPdf(baseData({
+      surveyJson: performerSurvey,
+      responseData: { Location: "Bay 3" },
+    }));
+    const text = flatText(raw);
+
+    expect(text).toContain("WORK PERFORMERS");
+    expect(text).toContain("NAME OF WORK PERFORMER");
+  });
+});

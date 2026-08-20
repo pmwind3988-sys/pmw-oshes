@@ -110,6 +110,47 @@ export type Seed = ValueBag | (() => ValueBag);
 
 const resolveSeed = (seed?: Seed): ValueBag => (typeof seed === "function" ? seed() : (seed ?? {}));
 
+/** The kinds whose answer is a list of rows rather than a single value. */
+const ROW_KINDS = new Set(["repeater", "table"]);
+
+/**
+ * Seeded answers, in the shape the control that renders them reads.
+ *
+ * A repeater and a table both hold an array of rows, and their controls test
+ * for exactly that. The response list holds those rows as JSON text — only a
+ * MultiChoice column takes an array, and a table is neither — so seeding a
+ * stored record straight through handed both controls a string, which reads as
+ * no rows at all. A permit opened in the response viewer showed no crew.
+ *
+ * Only the questions the form declares as row-holding are touched, so a text
+ * answer that happens to look like JSON stays the text somebody typed.
+ */
+export function seedForForm(form: NativeForm, seed: ValueBag): ValueBag {
+  let coerced: ValueBag | null = null;
+  for (const question of form.questions) {
+    if (!ROW_KINDS.has(question.kind)) continue;
+    const value = seed[question.name];
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      const rows = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === "object" && Array.isArray((parsed as { rows?: unknown }).rows)
+          ? (parsed as { rows: unknown[] }).rows
+          : null;
+      if (!rows) continue;
+      coerced ??= { ...seed };
+      coerced[question.name] = rows;
+    } catch {
+      // Not JSON after all. The stored text is kept: an answer nobody can
+      // parse is still an answer, and dropping it would be the worse report.
+    }
+  }
+  return coerced ?? seed;
+}
+
 export interface NativeFormOptions {
   /**
    * Show the answers without letting anyone change them.
@@ -220,7 +261,7 @@ export function checkAnswer(q: NativeElement, value: unknown, stage: CheckStage 
 }
 
 export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeFormOptions = {}): NativeFormRuntime {
-  const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...resolveSeed(seed) }));
+  const [values, setValues] = useState<ValueBag>(() => ({ ...initialValues(form), ...seedForForm(form, resolveSeed(seed)) }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pageIndex, setPageIndex] = useState(0);
 
@@ -230,7 +271,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
   useEffect(() => {
     if (formRef.current === form) return;
     formRef.current = form;
-    setValues({ ...initialValues(form), ...resolveSeed(seed) });
+    setValues({ ...initialValues(form), ...seedForForm(form, resolveSeed(seed)) });
     setErrors({});
     setPageIndex(0);
   }, [form, seed]);
@@ -335,7 +376,7 @@ export function useNativeForm(form: NativeForm, seed?: Seed, options: NativeForm
   }, []);
 
   const reset = useCallback((next?: ValueBag) => {
-    setValues({ ...initialValues(formRef.current), ...next });
+    setValues({ ...initialValues(formRef.current), ...seedForForm(formRef.current, next ?? {}) });
     setErrors({});
     setPageIndex(0);
   }, []);

@@ -444,3 +444,49 @@ describe("buildFormResponseCsv sheet shape", () => {
     expect(rows[0]["What happened"]).toBe("+60 12-345 6789");
   });
 });
+
+describe("a repeating panel in the export", () => {
+  const PERFORMER_SURVEY = {
+    pages: [{
+      name: "page1",
+      title: "Work details",
+      elements: [
+        { type: "text", name: "StaffName", title: "Staff name" },
+        {
+          type: "paneldynamic",
+          name: "WorkPerformers",
+          title: "Work performers",
+          templateElements: [
+            { type: "radiogroup", name: "PerformerType", title: "Internal / external", choices: ["Internal", "External"] },
+            { type: "text", name: "PerformerName", title: "Name of work performer" },
+          ],
+        },
+      ],
+    }],
+  };
+
+  const performers = [
+    { PerformerType: "Internal", PerformerName: "Ali bin Osman" },
+    { PerformerType: "External", PerformerName: "Ah Meng" },
+  ];
+
+  it("gives the panel a column of its own, naming every entry inside it", () => {
+    const { headers, rows } = readBack(buildFormResponseCsv([
+      row({ surveyJson: PERFORMER_SURVEY, answers: { StaffName: "Ali Bakar", WorkPerformers: performers } }),
+    ]));
+
+    expect(headers).toContain("Work performers");
+    const cell = rows[0]["Work performers"];
+    expect(cell).toContain("1. Internal / external: Internal | Name of work performer: Ali bin Osman");
+    expect(cell).toContain("2. Internal / external: External | Name of work performer: Ah Meng");
+  });
+
+  it("reads it back the same from the JSON the response column stored", () => {
+    const { rows } = readBack(buildFormResponseCsv([
+      row({ surveyJson: PERFORMER_SURVEY, answers: { StaffName: "Ali Bakar", WorkPerformers: JSON.stringify(performers) } }),
+    ]));
+
+    expect(rows[0]["Work performers"]).toContain("Ali bin Osman");
+    expect(rows[0]["Work performers"]).toContain("Ah Meng");
+  });
+});

@@ -65,6 +65,19 @@ const LAYOUT_TYPES = new Set([
 
 const MATRIX_TYPES = new Set(["dynamicmatrix", "matrixdynamic", "tableinput"]);
 
+/**
+ * Repeating panels — "repeater" in the builder, `paneldynamic` on the wire.
+ *
+ * A repeater is not a heading with questions under it, which is how it used to
+ * be read here. It is one question whose answer is a list of rows: the work
+ * performers on a permit, the crew signing on, the attendees at a briefing. Its
+ * template questions are never answered in their own right, so walking into
+ * them printed a filled-in panel as a run of blank questions while the rows
+ * themselves fell through to "Additional data" as raw JSON — the crew missing
+ * from the record of the job they did.
+ */
+const REPEATER_TYPES = new Set(["paneldynamic", "repeater"]);
+
 const CHILD_ELEMENT_KEYS = ["elements", "templateElements", "questions"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -167,20 +180,77 @@ function matrixColumns(element: SurveyElement): { name: string; title: string; c
   }).filter((column) => column.name);
 }
 
+/**
+ * The rows inside a stored value, whatever wrapping it arrived in.
+ *
+ * A table of rows reaches a reader in three shapes: the array itself, straight
+ * off the form; `{ rows: [...] }`, the way matrix child items are attached; and
+ * the JSON text a SharePoint single-line column holds, because only a
+ * MultiChoice column takes an array and a table is neither. Reading only the
+ * first two is what left a repeating panel read back from SharePoint looking
+ * like a wall of JSON rather than a list of people.
+ */
+function rowsWithin(value: unknown): Record<string, unknown>[] {
+  const unwrapped = typeof value === "string" ? parseJsonValue(value) : value;
+  if (Array.isArray(unwrapped)) return unwrapped.filter(isRecord);
+  if (isRecord(unwrapped) && Array.isArray(unwrapped.rows)) return unwrapped.rows.filter(isRecord);
+  return [];
+}
+
+function parseJsonValue(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
 function matrixRows(key: string, responseData: Record<string, unknown>, lookup: Map<string, string>): Record<string, unknown>[] {
   const childRowsKey = resolveResponseKey(responseData, lookup, `${key}_childRows`);
   const childRows = childRowsKey ? responseData[childRowsKey] : undefined;
-  if (isRecord(childRows) && Array.isArray(childRows.rows)) {
-    return childRows.rows.filter(isRecord);
-  }
+  const childRowsParsed = rowsWithin(childRows);
+  if (childRowsParsed.length > 0) return childRowsParsed;
 
   const directKey = resolveResponseKey(responseData, lookup, key);
-  const directValue = directKey ? responseData[directKey] : undefined;
-  if (Array.isArray(directValue)) {
-    return directValue.filter(isRecord);
-  }
+  return rowsWithin(directKey ? responseData[directKey] : undefined);
+}
 
-  return [];
+/**
+ * A repeating panel's columns: the questions its template asks, flattened.
+ *
+ * A template may group its questions in a panel or a column set for the sake of
+ * the layout on screen. Those are arrangements of one row's fields, not rows of
+ * their own, so they are walked through rather than treated as columns.
+ */
+function repeaterColumns(element: SurveyElement): { name: string; title: string; cellType?: string; choices?: unknown[] }[] {
+  const columns: { name: string; title: string; cellType?: string; choices?: unknown[] }[] = [];
+
+  const visit = (elements: SurveyElement[]): void => {
+    for (const child of elements) {
+      const type = textValue(child.type).toLowerCase();
+      const name = textValue(child.name);
+      const grandChildren = getChildElements(child);
+      if (grandChildren.length > 0 && !REPEATER_TYPES.has(type) && !MATRIX_TYPES.has(type)) {
+        visit(grandChildren);
+        continue;
+      }
+      if (!name || LAYOUT_TYPES.has(type)) continue;
+      columns.push({
+        name,
+        title: textValue(child.title) || name,
+        // The cell is formatted by what it holds, and for a text question that
+        // is its `inputType` — `date` rather than `text` — so a date in a row
+        // prints the way the same date prints outside one.
+        cellType: textValue(child.inputType) || type || undefined,
+        choices: Array.isArray(child.choices) ? child.choices : undefined,
+      });
+    }
+  };
+
+  visit(getChildElements(element));
+  return columns;
 }
 
 function responseValueForElement(
@@ -284,6 +354,39 @@ export function buildFormSubmissionSections(
       const key = textValue(element.name);
       const children = getChildElements(element);
 
+      if (REPEATER_TYPES.has(type) && key) {
+        const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
+        const rows = rowsWithin(value);
+        if (rows.length > 0 || hasDisplayValue(value)) {
+          if (!options.shouldIncludeField || options.shouldIncludeField(key, value, element)) {
+            usedKeys.add(key);
+            for (const matchedKey of matchedResponseKeys) usedKeys.add(matchedKey);
+            const target = run.current ?? openSection(sections, run, currentSectionTitle || fallbackSectionTitle);
+            target.fields.push({
+              key,
+              label: elementLabel(element, formatFallbackLabel(key)),
+              type,
+              value,
+              // A value that held no rows keeps its own row rather than an
+              // empty table: whatever is stored against the question is what
+              // the record has to show, even when it cannot be read as a list.
+              kind: rows.length > 0 ? "matrix" : "field",
+              matrixColumns: repeaterColumns(element),
+              matrixRows: rows.length > 0 ? rows : undefined,
+            });
+          }
+          continue;
+        }
+        // Nothing stored: the panel is a heading over the questions it asks,
+        // which is what a blank record printed for signing by hand needs.
+        const emptyPanelTitle = elementLabel(element, currentSectionTitle || fallbackSectionTitle);
+        visitElements(children, emptyPanelTitle, { current: null, titled: false });
+        run.current = null;
+        continue;
+      }
+
+      // A plain panel, and a repeating one with no name of its own to store an
+      // answer under — both are headings over the questions they hold.
       if (type === "panel" || type === "paneldynamic") {
         const nextSectionTitle = elementLabel(element, currentSectionTitle || fallbackSectionTitle);
         visitElements(children, nextSectionTitle, { current: null, titled: false });

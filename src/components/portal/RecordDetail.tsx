@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { Box, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
-import { buildFormSubmissionSections } from "../../utils/formSubmissionLayout";
-import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "../../utils/submissionDisplay";
+import { buildFormSubmissionSections, type FormSubmissionField } from "../../utils/formSubmissionLayout";
+import { formatPdfFieldValue } from "../../utils/pdfFieldFormatting";
+import { isPlaceholderDisplayValue } from "../../utils/submissionDisplay";
 import { formatDisplayDayMonthTime } from "../../utils/displayDateTime";
 import FlowStrip, { recordSteps } from "./FlowStrip";
 import type { AuditEntry, PortalRecord, SurveyJson } from "../../types";
@@ -167,6 +168,97 @@ export function OverviewTab({ record }: { record: PortalRecord }) {
 }
 
 /**
+ * One answer as text, formatted by what its question is.
+ *
+ * The same formatter the PDF and the CSV use, rather than a second one here:
+ * a date is a date, a choice shows its label not its stored code, and a file
+ * shows its name. The reader who checks the record against the printed permit
+ * is checking the same words.
+ */
+function answerText(field: FormSubmissionField): string {
+  return formatPdfFieldValue(field.value, field);
+}
+
+/**
+ * Whether there is anything to show.
+ *
+ * Asked of the formatted text, never of the raw value. A list of rows and a
+ * SharePoint file reference are both objects that carry no readable name of
+ * their own, and testing those directly reported them as empty — which is how
+ * a permit's whole work-performer list came to be missing from this tab while
+ * sitting in the record all along.
+ */
+function hasAnswerToShow(field: FormSubmissionField): boolean {
+  if (field.kind === "matrix") return (field.matrixRows?.length ?? 0) > 0;
+  return !isPlaceholderDisplayValue(answerText(field));
+}
+
+/**
+ * A repeating panel or a matrix: one row per entry, one column per question.
+ *
+ * Set full width rather than in the label/value grid the scalar answers use —
+ * a crew of six squeezed into the right-hand column is unreadable, and this is
+ * usually the part of a permit somebody opened the record to check.
+ */
+function AnswerTable({ field }: { field: FormSubmissionField }) {
+  const rows = field.matrixRows ?? [];
+  const columns = field.matrixColumns?.length
+    ? field.matrixColumns
+    : [...new Set(rows.flatMap((row) => Object.keys(row)))].map((name) => ({ name, title: name, cellType: undefined, choices: undefined }));
+
+  return (
+    <Box sx={{ py: 1.25, borderBottom: editorialHairline, "&:last-of-type": { borderBottom: "none" } }}>
+      <Typography sx={{ fontSize: 13, color: editorial.muted, mb: 0.75 }}>{field.label}</Typography>
+      <Box sx={{ overflowX: "auto" }}>
+        <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+          <Box component="thead">
+            <Box component="tr">
+              {columns.map((column) => (
+                <Box
+                  component="th"
+                  key={column.name}
+                  sx={{
+                    textAlign: "left",
+                    fontWeight: 700,
+                    color: editorial.softMuted,
+                    padding: "6px 10px 6px 0",
+                    borderBottom: editorialHairline,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {column.title || column.name}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+          <Box component="tbody">
+            {rows.map((row, index) => (
+              <Box component="tr" key={index}>
+                {columns.map((column) => (
+                  <Box
+                    component="td"
+                    key={column.name}
+                    sx={{
+                      padding: "6px 10px 6px 0",
+                      borderBottom: editorialHairline,
+                      color: editorial.ink,
+                      verticalAlign: "top",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {formatPdfFieldValue(row[column.name], { type: column.cellType, inputType: column.cellType, choices: column.choices }) || "—"}
+                  </Box>
+                ))}
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+/**
  * Every answer on the form, in the order it was asked.
  *
  * Rendered from the published schema where there is one, so questions keep
@@ -187,7 +279,7 @@ export function AnswersTab({ record, surveyJson }: { record: PortalRecord; surve
   const rendered = sections
     .map((section) => ({
       ...section,
-      fields: section.fields.filter((field) => !isPlaceholderDisplayValue(coerceFieldDisplayText(field.value))),
+      fields: section.fields.filter(hasAnswerToShow),
     }))
     .filter((section) => section.fields.length > 0);
 
@@ -215,9 +307,13 @@ export function AnswersTab({ record, surveyJson }: { record: PortalRecord; surve
           >
             {section.title}
           </Typography>
-          {section.fields.map((field) => (
-            <DetailRow key={field.key} label={field.label} value={coerceFieldDisplayText(field.value)} />
-          ))}
+          {section.fields.map((field) =>
+            field.kind === "matrix" ? (
+              <AnswerTable key={field.key} field={field} />
+            ) : (
+              <DetailRow key={field.key} label={field.label} value={answerText(field)} />
+            ),
+          )}
         </Box>
       ))}
     </Stack>
