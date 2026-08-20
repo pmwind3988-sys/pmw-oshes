@@ -69,7 +69,6 @@ describe("PDF field formatting", () => {
       Travel_x0020_Date: "2026-06-17",
       Satisfaction_x0020_Score: 8,
     }, {
-      includeAdditionalFields: false,
     });
 
     expect(sections[0]?.fields.map((field) => ({
@@ -98,7 +97,6 @@ describe("PDF field formatting", () => {
       managerNotes: "Detailed note",
       accepted: true,
     }, {
-      includeAdditionalFields: false,
     });
 
     expect(sections[0]?.fields.map((field) => ({
@@ -139,7 +137,6 @@ describe("PDF field formatting", () => {
       employeeSignature: "signature.png",
     }, {
       fallbackSectionTitle: "Main Page",
-      includeAdditionalFields: false,
     });
 
     expect(sections.map((section) => [section.title, section.fields.map((field) => field.key)])).toEqual([
@@ -169,7 +166,6 @@ describe("PDF field formatting", () => {
       objectivesMet: 4,
       trainer: "Lim",
     }, {
-      includeAdditionalFields: false,
     });
 
     expect(sections.map((section) => [section.title, section.fields.map((field) => field.key)])).toEqual([
@@ -192,7 +188,6 @@ describe("PDF field formatting", () => {
       overallRating: "Excellent",
     }, {
       fallbackSectionTitle: "Main Page",
-      includeAdditionalFields: false,
     });
 
     expect(sections[0]?.title).toBe("Main Page");

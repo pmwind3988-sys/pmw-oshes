@@ -34,6 +34,7 @@
 | Image → base64 | `sharepointImageData.ts` | `imageSourceToDataUrl()`, `hydrateImageValue()`, `imageSourceFromString()`, the byte sniffers. Shared by the PDF and the CSV so one signature cannot render two ways |
 | Export clock | `malaysiaTime.ts` | `formatMalaysiaDateTime()`, `malaysiaDateStamp()` — fixed UTC+8, same reasoning as `referenceNumber.ts`. Wall-clock text is never shifted; only stored instants convert |
 | Layer sequence | `layerSequence.ts` | `layerSequenceFromConfig()` — which layers a submission went through, manual branches resolved. Shared by the PDF and the CSV so they cannot disagree |
+| Question name / stored key | `responseKeys.ts` | `createResponseKeyResolver()` (name to key) and `createQuestionNameResolver()` (key back to name) — the one place that knows a SharePoint column's internal name stops at 32 characters, so `workPerformerNameInternalExternal` is stored as `workPerformerNameInternalExterna`. Used by `formSubmissionLayout.ts`, `ReadOnlySubmissionPreview.tsx` and `answerClassification.ts` |
 | Answer vs. plumbing | `responseSystemFields.ts` | `responseAnswerFields()`, `isResponseSystemField()` — the one list of workflow/SharePoint columns. Layer columns match by pattern, so a fourth layer is not mistaken for a question |
 | Job apply PDF | `JobApplyPdfDocument.tsx` | React-PDF document for job application PDF |
 

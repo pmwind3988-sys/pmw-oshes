@@ -3,6 +3,9 @@ import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { editorial } from "../../theme/editorial";
 import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime } from "../../utils/displayDateTime";
+import { createResponseKeyResolver } from "../../utils/responseKeys";
+// Shared with the PDF and the detail panel, so a page reads the same in all three.
+import { MAIN_PAGE_TITLE, isDefaultPageName } from "../../utils/formSubmissionLayout";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -22,6 +25,11 @@ const C = {
 
 interface PreviewField {
   name: string;
+  /**
+   * The response key this question's answer is filed under, which is not always
+   * its name: SharePoint shortens a column's internal name to 32 characters.
+   */
+  dataKey: string;
   title: string;
   type: string;
   inputType?: string;
@@ -87,7 +95,8 @@ function sectionTitle(element: Record<string, unknown>, fallback: string): strin
   const title = element.title;
   if (typeof title === "string" && title.trim()) return title.trim();
   const name = element.name;
-  return typeof name === "string" && name.trim() ? formatFieldLabel(name) : fallback;
+  if (typeof name !== "string" || !name.trim() || isDefaultPageName(name)) return fallback;
+  return formatFieldLabel(name);
 }
 
 /** "repeater" in the builder, `paneldynamic` once published. */
@@ -125,16 +134,6 @@ function repeaterTemplateColumns(element: Record<string, unknown>): unknown[] {
   return columns;
 }
 
-/**
- * A second copy of an answer that already has a row of its own.
- *
- * A matrix writes its rendered form beside its rows; listing those again would
- * print the same table twice, once as markup.
- */
-function isCompanionKey(key: string): boolean {
-  return /_(Response|Html|Json|RowIds|childRows)$/i.test(key);
-}
-
 function getSurveyRoot(surveyJson: unknown): Record<string, unknown> | null {
   if (!isRecord(surveyJson)) return null;
   if (isRecord(surveyJson.surveyJson)) return surveyJson.surveyJson;
@@ -145,9 +144,7 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
   const root = getSurveyRoot(surveyJson);
   const pages = root && Array.isArray(root.pages) ? root.pages : [];
   const sections: PreviewSection[] = [];
-  const dataKeys = new Set(Object.keys(data ?? {}));
-  /** Response keys a question on the published form accounted for. */
-  const claimed = new Set<string>();
+  const resolveDataKey = createResponseKeyResolver(data);
 
   const collectFields = (elements: unknown, target: PreviewField[]) => {
     if (!Array.isArray(elements)) return;
@@ -167,10 +164,12 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
       }
       if (type === "html" || type === "expression" || type === "formula") continue;
       const name = typeof raw.name === "string" ? raw.name : "";
-      if (!name || !dataKeys.has(name)) continue;
-      claimed.add(name);
+      if (!name) continue;
+      const dataKey = resolveDataKey(name);
+      if (!dataKey) continue;
       target.push({
         name,
+        dataKey,
         title: fieldTitle(raw),
         type,
         inputType: typeof raw.inputType === "string" ? raw.inputType : undefined,
@@ -189,26 +188,17 @@ function collectPreviewSections(surveyJson: unknown, data: Record<string, unknow
     }
   };
 
-  for (const page of pages) {
-    if (!isRecord(page)) continue;
+  pages.forEach((page, pageIndex) => {
+    if (!isRecord(page)) return;
     const fields: PreviewField[] = [];
     collectFields(page.elements, fields);
     if (fields.length > 0) {
-      sections.push({ title: sectionTitle(page, "Submitted Form"), fields });
+      sections.push({
+        title: sectionTitle(page, pageIndex === 0 ? MAIN_PAGE_TITLE : `Page ${pageIndex + 1}`),
+        fields,
+      });
     }
-  }
-
-  // Anything stored against the record that the published form does not
-  // mention. A question added after this version was published, or renamed
-  // since, is still an answer somebody gave, and an approver deciding on the
-  // record has to be shown it rather than have it quietly withheld.
-  const unclaimed = [...dataKeys].filter((key) => !claimed.has(key) && !isCompanionKey(key));
-  if (sections.length > 0 && unclaimed.length > 0) {
-    sections.push({
-      title: "Other stored answers",
-      fields: unclaimed.map((key) => ({ name: key, title: formatFieldLabel(key), type: "text" })),
-    });
-  }
+  });
 
   return sections;
 }
@@ -420,7 +410,8 @@ function useAuthenticatedMediaSource(source: string, accessToken?: string | null
 }
 
 function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByField?: Record<string, string | string[]>): string[] {
-  const override = mediaSrcByField?.[field.name];
+  // Keyed by the stored key, since that is what the API walked to build it.
+  const override = mediaSrcByField?.[field.dataKey] ?? mediaSrcByField?.[field.name];
   if (typeof override === "string") return [override];
   if (Array.isArray(override)) return override;
   if (["signaturepad", "imageupload", "file"].includes(field.type)) return mediaSourcesFromValue(value);
@@ -573,7 +564,7 @@ function fallbackSections(fallbackData: Record<string, unknown> | undefined): Pr
   if (entries.length === 0) return [];
   return [{
     title: "Submitted Fields",
-    fields: entries.map(([key]) => ({ name: key, title: formatFieldLabel(key), type: "text" })),
+    fields: entries.map(([key]) => ({ name: key, dataKey: key, title: formatFieldLabel(key), type: "text" })),
   }];
 }
 
@@ -607,7 +598,7 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
                   {field.title}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0 }}>
-                  <FieldValue field={field} value={data?.[field.name]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
+                  <FieldValue field={field} value={data?.[field.dataKey]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
                 </div>
               </div>
             ))}

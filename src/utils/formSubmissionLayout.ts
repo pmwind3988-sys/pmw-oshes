@@ -1,4 +1,5 @@
 import { isManagedCompanyQuestion } from "./companySelection";
+import { createResponseKeyResolver, type ResponseKeyResolver } from "./responseKeys";
 
 type SurveyElement = Record<string, unknown>;
 
@@ -35,7 +36,6 @@ export interface FormSubmissionSection {
 interface BuildFormSubmissionSectionsOptions {
   fallbackSectionTitle?: string;
   formatFallbackLabel?: (key: string) => string;
-  includeAdditionalFields?: boolean;
   /**
    * Keep a question nobody answered.
    *
@@ -102,41 +102,26 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function decodeSharePointKey(key: string): string {
-  return key.replace(/_x([0-9a-fA-F]{4})_/g, (_match, hex: string) => {
-    return String.fromCharCode(parseInt(hex, 16));
-  });
-}
-
-function lookupKey(value: string): string {
-  return decodeSharePointKey(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function buildResponseKeyLookup(responseData: Record<string, unknown>): Map<string, string> {
-  const lookup = new Map<string, string>();
-  for (const key of Object.keys(responseData)) {
-    const normalized = lookupKey(key);
-    if (normalized && !lookup.has(normalized)) lookup.set(normalized, key);
-  }
-  return lookup;
-}
-
-function resolveResponseKey(
-  responseData: Record<string, unknown>,
-  lookup: Map<string, string>,
-  key: string,
-): string | undefined {
-  if (Object.prototype.hasOwnProperty.call(responseData, key)) return key;
-  return lookup.get(lookupKey(key));
-}
-
 function elementLabel(element: SurveyElement, fallback: string): string {
   return textValue(element.title) || textValue(element.name) || fallback;
 }
 
-function isDefaultPageName(value: string): boolean {
+/**
+ * `page1` and its siblings are the builder's own bookkeeping, not a heading
+ * anybody wrote, so a reader supplies its own name for the page rather than
+ * printing the bookkeeping.
+ */
+export function isDefaultPageName(value: string): boolean {
   return /^page\d*$/i.test(value.trim());
 }
+
+/**
+ * What the first page is called when the builder never named it.
+ *
+ * Exported so every reader of a record agrees: a printed permit and the panel
+ * it was approved from carry the same section title.
+ */
+export const MAIN_PAGE_TITLE = "Main Page";
 
 function pageTitle(page: SurveyElement, fallback: string): string {
   const title = textValue(page.title);
@@ -207,13 +192,13 @@ function parseJsonValue(value: string): unknown {
   }
 }
 
-function matrixRows(key: string, responseData: Record<string, unknown>, lookup: Map<string, string>): Record<string, unknown>[] {
-  const childRowsKey = resolveResponseKey(responseData, lookup, `${key}_childRows`);
+function matrixRows(key: string, responseData: Record<string, unknown>, resolveKey: ResponseKeyResolver): Record<string, unknown>[] {
+  const childRowsKey = resolveKey(`${key}_childRows`);
   const childRows = childRowsKey ? responseData[childRowsKey] : undefined;
   const childRowsParsed = rowsWithin(childRows);
   if (childRowsParsed.length > 0) return childRowsParsed;
 
-  const directKey = resolveResponseKey(responseData, lookup, key);
+  const directKey = resolveKey(key);
   return rowsWithin(directKey ? responseData[directKey] : undefined);
 }
 
@@ -256,25 +241,22 @@ function repeaterColumns(element: SurveyElement): { name: string; title: string;
 function responseValueForElement(
   element: SurveyElement,
   responseData: Record<string, unknown>,
-  lookup: Map<string, string>,
-): { value: unknown; usedKeys: string[] } {
+  resolveKey: ResponseKeyResolver,
+): unknown {
   const key = textValue(element.name);
   const type = textValue(element.type).toLowerCase();
-  if (!key) return { value: undefined, usedKeys: [] };
+  if (!key) return undefined;
 
   if (MATRIX_TYPES.has(type)) {
     for (const suffix of ["_childRows", "_Response", "_Html"]) {
-      const resolvedKey = resolveResponseKey(responseData, lookup, `${key}${suffix}`);
+      const resolvedKey = resolveKey(`${key}${suffix}`);
       const resolvedValue = resolvedKey ? responseData[resolvedKey] : undefined;
-      if (resolvedKey && hasDisplayValue(resolvedValue)) return { value: resolvedValue, usedKeys: [resolvedKey] };
+      if (resolvedKey && hasDisplayValue(resolvedValue)) return resolvedValue;
     }
   }
 
-  const resolvedKey = resolveResponseKey(responseData, lookup, key);
-  return {
-    value: resolvedKey ? responseData[resolvedKey] : undefined,
-    usedKeys: resolvedKey ? [resolvedKey] : [],
-  };
+  const resolvedKey = resolveKey(key);
+  return resolvedKey ? responseData[resolvedKey] : undefined;
 }
 
 /**
@@ -321,10 +303,10 @@ function openSection(
  * Companion columns: a second copy of an answer that already has a row.
  *
  * `_Response` and `_Html` hold the rendered form of a matrix the table above
- * has already drawn, so listing them again prints the same answer twice - once
+ * has already drawn, so listing them again prints the same answer twice — once
  * as a table and once as a wall of markup.
  */
-function shouldSkipAdditionalKey(key: string): boolean {
+function isCompanionKey(key: string): boolean {
   return key.endsWith("_Json")
     || key.endsWith("_RowIds")
     || key.endsWith("_childRows")
@@ -338,12 +320,10 @@ export function buildFormSubmissionSections(
   options: BuildFormSubmissionSectionsOptions = {},
 ): FormSubmissionSection[] {
   const sections: FormSubmissionSection[] = [];
-  const usedKeys = new Set<string>();
   const fallbackSectionTitle = options.fallbackSectionTitle ?? "Submitted answers";
-  const includeAdditionalFields = options.includeAdditionalFields ?? true;
   const includeUnansweredFields = options.includeUnansweredFields ?? false;
   const formatFallbackLabel = options.formatFallbackLabel ?? ((key: string) => key);
-  const responseKeyLookup = buildResponseKeyLookup(responseData);
+  const resolveResponseKey = createResponseKeyResolver(responseData);
 
   const root = isRecord(surveyJson) && isRecord(surveyJson.surveyJson) ? surveyJson.surveyJson : surveyJson;
   const pages = isRecord(root) && Array.isArray(root.pages) ? root.pages.filter(isRecord) : [];
@@ -355,12 +335,10 @@ export function buildFormSubmissionSections(
       const children = getChildElements(element);
 
       if (REPEATER_TYPES.has(type) && key) {
-        const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
+        const value = responseValueForElement(element, responseData, resolveResponseKey);
         const rows = rowsWithin(value);
         if (rows.length > 0 || hasDisplayValue(value)) {
           if (!options.shouldIncludeField || options.shouldIncludeField(key, value, element)) {
-            usedKeys.add(key);
-            for (const matchedKey of matchedResponseKeys) usedKeys.add(matchedKey);
             const target = run.current ?? openSection(sections, run, currentSectionTitle || fallbackSectionTitle);
             target.fields.push({
               key,
@@ -405,19 +383,11 @@ export function buildFormSubmissionSections(
 
       if (!key || LAYOUT_TYPES.has(type) || isManagedCompanyQuestion(element)) continue;
 
-      const { value, usedKeys: matchedResponseKeys } = responseValueForElement(element, responseData, responseKeyLookup);
+      const value = responseValueForElement(element, responseData, resolveResponseKey);
       if (!hasDisplayValue(value) && !includeUnansweredFields) continue;
       if (options.shouldIncludeField && !options.shouldIncludeField(key, value, element)) continue;
 
-      usedKeys.add(key);
-      for (const matchedKey of matchedResponseKeys) usedKeys.add(matchedKey);
-      usedKeys.add(`${key}_Response`);
-      usedKeys.add(`${key}_Html`);
-      usedKeys.add(`${key}_Json`);
-      usedKeys.add(`${key}_RowIds`);
-      usedKeys.add(`${key}_childRows`);
-
-      const rows = MATRIX_TYPES.has(type) ? matrixRows(key, responseData, responseKeyLookup) : [];
+      const rows = MATRIX_TYPES.has(type) ? matrixRows(key, responseData, resolveResponseKey) : [];
       const target = run.current ?? openSection(sections, run, currentSectionTitle || fallbackSectionTitle);
       target.fields.push({
         key,
@@ -446,18 +416,26 @@ export function buildFormSubmissionSections(
   };
 
   pages.forEach((page, pageIndex) => {
-    const defaultTitle = pageIndex === 0 ? fallbackSectionTitle : `Page ${pageIndex + 1}`;
+    const defaultTitle = pageIndex === 0 ? MAIN_PAGE_TITLE : `Page ${pageIndex + 1}`;
     const title = pageTitle(page, defaultTitle);
     const elements = Array.isArray(page.elements) ? page.elements.filter(isRecord) : [];
     visitElements(elements, title, { current: null, titled: false });
   });
 
-  if (includeAdditionalFields) {
-    const extra: SectionRun = { current: null, titled: false };
+  // No schema reached this reader — a version deleted, or a record read before
+  // its form loaded. The stored keys are all there is to go on, and a
+  // readable-but-ugly answer beats an empty record.
+  //
+  // Only when the form laid out nothing at all. A form that did lay out has
+  // already said what it asks, and appending whatever else the list item
+  // happens to carry printed SharePoint's own bookkeeping — content type ids,
+  // author ids, version strings — as though a respondent had answered it.
+  if (sections.length === 0) {
+    const fallback: SectionRun = { current: null, titled: false };
     for (const [key, value] of Object.entries(responseData)) {
-      if (usedKeys.has(key) || shouldSkipAdditionalKey(key) || !hasDisplayValue(value)) continue;
+      if (isCompanionKey(key) || !hasDisplayValue(value)) continue;
       if (options.shouldIncludeField && !options.shouldIncludeField(key, value)) continue;
-      const target = extra.current ?? openSection(sections, extra, "Additional data");
+      const target = fallback.current ?? openSection(sections, fallback, fallbackSectionTitle);
       target.fields.push({
         key,
         label: formatFallbackLabel(key),

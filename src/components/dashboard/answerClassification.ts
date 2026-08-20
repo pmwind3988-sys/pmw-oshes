@@ -12,7 +12,15 @@
  * load, and a question asking for a method statement be relabelled as the
  * document this app generates. Both guesses take a filled-in answer off the
  * page, which is the one thing a record must never do.
+ *
+ * A record's keys are column names, not question names, and SharePoint cuts a
+ * column's internal name at 32 characters. So a key is read back to the
+ * question it was asked under before the schema is consulted — otherwise a
+ * long-named question is a key no question accounts for, and falls through to
+ * exactly the guess this module exists to avoid.
  */
+
+import { createQuestionNameResolver } from "../../utils/responseKeys";
 
 const CONTAINER_TYPES = new Set(["panel", "paneldynamic", "page", "columns"]);
 
@@ -100,7 +108,14 @@ export interface AnswerClassifier {
 export function buildAnswerClassifier(surveyJson: unknown): AnswerClassifier {
   const questionKeys = collectSurveyFieldKeysByType(surveyJson, null);
   const signatureKeys = collectSurveyFieldKeysByType(surveyJson, new Set(["signaturepad", "signature"]));
+  const questionName = createQuestionNameResolver(questionKeys);
   return {
-    isSignature: (key) => signatureKeys.has(key) || (!questionKeys.has(key) && looksLikeSignatureName(key)),
+    isSignature: (key) => {
+      // The question this key was stored under, where the form still asks it.
+      // A key the form has no question for stands for itself, and is the only
+      // kind left to be identified by what it is called.
+      const asked = questionName(key) ?? key;
+      return signatureKeys.has(asked) || (!questionKeys.has(asked) && looksLikeSignatureName(key));
+    },
   };
 }

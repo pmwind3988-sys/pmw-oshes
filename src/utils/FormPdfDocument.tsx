@@ -626,7 +626,6 @@ function evaluationFieldsForLayer(layer: PdfLayerResult, includeEmpty: boolean):
     return buildFormSubmissionSections({ pages: [{ name: "Evaluation", elements }] }, fields, {
       fallbackSectionTitle: "Evaluation",
       formatFallbackLabel: fallbackPdfLabel,
-      includeAdditionalFields: true,
       // The evaluator's own questions are held to the same standard as the
       // form's: one that was put to them and left blank is part of what the
       // layer says, and dropping it shortens the evaluation on the page.
@@ -934,11 +933,9 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Main Page",
     // The document is the record of the form, so it carries the whole form: the
-    // questions nobody answered as well as the ones somebody did, and any
-    // column stored against the item that the published survey no longer
-    // mentions. A record that silently drops both reads as a shorter form than
-    // the one that was actually signed.
-    includeAdditionalFields: true,
+    // questions nobody answered as well as the ones somebody did. A record that
+    // silently drops the blanks reads as a shorter form than the one that was
+    // actually signed.
     includeUnansweredFields: true,
     formatFallbackLabel: fallbackPdfLabel,
     shouldIncludeField: (key) => !isBookkeepingColumn(key),

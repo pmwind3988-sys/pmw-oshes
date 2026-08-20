@@ -129,3 +129,70 @@ describe("buildFormSubmissionSections — matrices stored as text", () => {
     expect(field.matrixRows).toEqual(rows);
   });
 });
+
+/**
+ * What a record shows is the form that was published: the questions it asked
+ * and the answers given to them. A SharePoint list item carries more than that
+ * — content type ids, author ids, version strings, and any column left behind
+ * by an edit to the form — and appending all of it to the end of every record
+ * put the list's own bookkeeping in front of an approver as though somebody had
+ * answered it.
+ */
+describe("buildFormSubmissionSections — the form, and only the form", () => {
+  const permitSurvey = {
+    pages: [
+      {
+        name: "page1",
+        elements: [
+          { type: "text", name: "location", title: "Location of work" },
+          {
+            type: "text",
+            name: "workPerformerNameInternalExternal",
+            title: "Work Performer Name (Internal / External)",
+          },
+        ],
+      },
+    ],
+  };
+
+  it("calls an untitled first page the main page rather than page1", () => {
+    const sections = buildFormSubmissionSections(permitSurvey, { location: "Berth 3" });
+
+    expect(sections[0].title).toBe("Main Page");
+  });
+
+  it("reads an answer filed under the column name SharePoint shortened", () => {
+    // A column's internal name stops at 32 characters, so this question's
+    // 33-character name loses its last letter on the way into the list.
+    const sections = buildFormSubmissionSections(permitSurvey, {
+      location: "Berth 3",
+      workPerformerNameInternalExterna: "Ali bin Osman",
+    });
+    const field = onlyField(sections, "workPerformerNameInternalExternal");
+
+    expect(field.label).toBe("Work Performer Name (Internal / External)");
+    expect(field.value).toBe("Ali bin Osman");
+    expect(sections).toHaveLength(1);
+    expect(sections[0].title).toBe("Main Page");
+  });
+
+  it("leaves the list's own bookkeeping off the record", () => {
+    const sections = buildFormSubmissionSections(permitSurvey, {
+      location: "Berth 3",
+      ContentTypeId: "0x0100D1173C4683C8334EB3FC0F631517CFD6",
+      OData__UIVersionString: "4.0",
+      GUID: "b21ed150-4a30-402f-8a39-38047a113ed1",
+    });
+    const keys = sections.flatMap((section) => section.fields).map((field) => field.key);
+
+    expect(keys).toEqual(["location"]);
+  });
+
+  it("falls back to the stored keys when no schema reached the reader", () => {
+    // An old version deleted, or a record read before its form loaded. A
+    // readable-but-ugly answer beats an empty record.
+    const sections = buildFormSubmissionSections(null, { Staff_x0020_Name: "Ali Bakar" });
+
+    expect(sections.flatMap((section) => section.fields).map((field) => field.key)).toEqual(["Staff_x0020_Name"]);
+  });
+});

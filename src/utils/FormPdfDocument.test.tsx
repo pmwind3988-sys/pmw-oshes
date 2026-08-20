@@ -537,12 +537,42 @@ describe("a record of the whole form, not only the parts that were filled in", (
     expect(text).toContain("NOT SIGNED");
   });
 
-  it("keeps a stored answer the published survey no longer asks about", async () => {
-    // A form edited after this record was filed leaves answers behind that no
-    // element claims. They were still given, so they are still printed.
-    const text = flatText(await renderPdf(partlyFilled({ Location: "Bay 3", Supervisor_x0020_Notes: "Isolated at 08:40" })));
-    expect(text).toContain("ISOLATED AT 08:40");
-    expect(text).toContain("SUPERVISOR NOTES");
+  it("prints the form that was published and nothing the list happens to hold beside it", async () => {
+    // A list item carries SharePoint's own bookkeeping alongside the answers.
+    // Printing every column the item holds put content type ids and version
+    // strings on the page as though somebody had answered them, so the record
+    // is the form: what it asked, and what was said back.
+    const text = flatText(await renderPdf(partlyFilled({
+      Location: "Bay 3",
+      ContentTypeId: "0x0100D1173C4683C8334EB3FC0F631517CFD6",
+      OData__UIVersionString: "4.0",
+    })));
+    expect(text).toContain("LOCATION OF WORK");
+    expect(text).not.toContain("0X0100D1173C4683C8334EB3FC0F631517CFD6");
+    expect(text).not.toContain("UIVERSIONSTRING");
+  });
+
+  it("prints an answer whose column name SharePoint had to shorten", async () => {
+    // A column's internal name stops at 32 characters, so the answer to a
+    // longer question is filed under a cut-down key. Matching by name alone
+    // left it orphaned — printed as a stray key rather than under the question
+    // that asked for it.
+    const data = baseData({
+      surveyJson: {
+        title: "Permit To Work",
+        pages: [{
+          name: "page1",
+          elements: [
+            { type: "text", name: "workPerformerNameInternalExternal", title: "Work Performer Name (Internal / External)" },
+          ],
+        }],
+      },
+      responseData: { workPerformerNameInternalExterna: "Ali bin Osman" },
+    });
+    const text = flatText(await renderPdf(data));
+    expect(text).toContain("WORK PERFORMER NAME (INTERNAL / EXTERNAL)");
+    expect(text).toContain("ALI BIN OSMAN");
+    expect(text).not.toContain("WORK PERFORMER NAME INTERNAL EXTERNA ");
   });
 
   it("leaves the plumbing off the page", async () => {
