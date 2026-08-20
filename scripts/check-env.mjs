@@ -100,7 +100,7 @@ if (appBase) {
 console.log("\nAccess groups (exact string match)");
 for (const key of ["VITE_OSHES_ADMIN_GROUP", "VITE_OSHES_AUDITOR_GROUP"]) {
   if (!(key in env)) {
-    // There is no default to fall back to — src/config/oshe.ts leaves both
+    // There is no default to fall back to — src/config/oshes.ts leaves both
     // blank on purpose, so unset means nobody resolves into the role.
     console.log(key === "VITE_OSHES_ADMIN_GROUP"
       ? `  WARN  ${key} unset — no account resolves as an admin, and every appearance save returns 403`

@@ -25,7 +25,7 @@
 ## Conventions
 - **Import paths**: API routes import from `./_utils/...` (relative, `_` prefix convention).
 - **OData**: Uses `odata=nometadata` — responses use `data.value` not `data.d.results`.
-- **CORS**: `vercel.json` restricts `Access-Control-Allow-Origin` to `https://pmw-oshe.vercel.app` for `/api/*`. Vercel does not interpolate env vars into header values, so it is a literal — a custom domain means editing it.
+- **CORS**: `vercel.json` restricts `Access-Control-Allow-Origin` to `https://pmw-oshes.vercel.app` for `/api/*`. Vercel does not interpolate env vars into header values, so it is a literal — a custom domain means editing it.
 - **Environment**: API routes run server-side in Vercel (Node.js runtime). Use `process.env` for secrets, NOT `import.meta.env.VITE_*`.
 - **Graph API**: Raw `fetch` to `graph.microsoft.com/v1.0` with client credentials flow. No SP REST SDK.
 

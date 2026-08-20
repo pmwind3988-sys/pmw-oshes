@@ -1,7 +1,7 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, getSharePointToken, queryListItems, queryListItemById, queryMasterFormByTitle, queryWebFormVersion, resolveResponseListName, updateListItemFields } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
-import { OSHE_LISTS } from "./_utils/osheConfig.js";
+import { OSHES_LISTS } from "./_utils/oshesConfig.js";
 import {
   buildWorkflowActionEmail,
   getApplicationBaseUrl,
@@ -305,7 +305,7 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     const graphToken = await getGraphToken();
 
     // Find the token in all Master Form items
-    const masterItems = await queryListItems(graphToken, OSHE_LISTS.masterForm, { top: 500 });
+    const masterItems = await queryListItems(graphToken, OSHES_LISTS.masterForm, { top: 500 });
     let foundToken: Record<string, unknown> | null = null;
     let foundFormTitle = "";
     let foundLayerNumber = 0;

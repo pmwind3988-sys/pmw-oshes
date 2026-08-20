@@ -1427,7 +1427,7 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                     FYI: Branch still needs to be decided
                   </Typography>
                   <Typography variant="caption" sx={{ color: editorial.muted, display: "block", fontWeight: 700 }}>
-                    An OSHE Forms Owner needs to choose the branch before approval or evaluation starts.
+                    An OSHES Forms Owner needs to choose the branch before approval or evaluation starts.
                   </Typography>
                 </Alert>
               )}

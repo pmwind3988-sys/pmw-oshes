@@ -171,7 +171,7 @@ async function listExistsViaSPRest(token: string, listName: string): Promise<boo
  *
  * So provisioning runs as a person. The delegated token carries
  * `AllSites.Manage`, and the only callers are admin actions already gated on
- * OSHE admin membership — someone who may create a list in SharePoint anyway.
+ * OSHES admin membership — someone who may create a list in SharePoint anyway.
  */
 export async function ensureListViaSPRest(
   token: string,

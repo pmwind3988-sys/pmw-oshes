@@ -3,7 +3,7 @@ import { getGraphToken } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import {
   deliverWorkflowEmail,
-  resolveOsheFormSender,
+  resolveOshesFormSender,
   sendGraphEmail,
   type WorkflowEmailAttachment,
   type WorkflowEmailContext,
@@ -58,10 +58,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { to, subject, body, workflow, sendToConfiguredSender, attachments } = req.body as Record<string, unknown>;
-  const configuredSender = resolveOsheFormSender();
+  const configuredSender = resolveOshesFormSender();
 
   // A manual-paper workflow has no online reviewer to address, so it is sent to the
-  // configured OSHE mailbox instead of a caller-supplied recipient.
+  // configured OSHES mailbox instead of a caller-supplied recipient.
   const recipients = sendToConfiguredSender === true && configuredSender
     ? [configuredSender]
     : typeof to === "string"

@@ -28,13 +28,13 @@ import Logo from "../Logo";
 import AppearancePicker from "./AppearancePicker";
 import { editorial, editorialHairline, editorialShadowHover } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
-import { builderUrl } from "../../config/oshe";
+import { builderUrl } from "../../config/oshes";
 
 interface HeaderProps {
   userEmail: string;
   isAdmin: boolean;
   /**
-   * Whether this account owns the shared form builder. Being an OSHE admin and
+   * Whether this account owns the shared form builder. Being an OSHES admin and
    * being allowed to author forms are separate grants — the builder writes to a
    * site this app only reads — so the link is gated on the second, not the first.
    */
@@ -180,7 +180,7 @@ export default function Header({
                 display: { xs: "none", sm: "block" },
               }}
             >
-              OSHE Forms
+              OSHES Forms
             </Typography>
           </Stack>
         </Box>
@@ -327,7 +327,7 @@ export default function Header({
                     <Typography variant="body2">Approval routing</Typography>
                   </MenuItem>
                   {/* Leaves this app: the builder is shared with pmw-hrform and
-                      writes to the OSHE site. Same tenant, so SSO is silent.
+                      writes to the OSHES site. Same tenant, so SSO is silent.
                       Offered only to accounts that actually own it, so the rest
                       are not sent to a page that will refuse them. */}
                   {builder && canUseFormBuilder && (

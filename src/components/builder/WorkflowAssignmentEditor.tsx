@@ -169,7 +169,7 @@ export default function WorkflowAssignmentEditor({
             label="Position"
             value={position}
             onChange={(event) => setPosition(event.target.value)}
-            placeholder="e.g. OSHE Manager"
+            placeholder="e.g. OSHES Manager"
           />
 
           <TextField

@@ -61,7 +61,7 @@ function Shell({ stage, children, onExit }: { stage: Stage; children: React.Reac
         spacing={2}
         sx={{ maxWidth: 430, mx: "auto", alignItems: "center", justifyContent: "space-between", mb: 2 }}
       >
-        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>PMW OSHE</Typography>
+        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>PMW OSHES</Typography>
         <Typography sx={{ fontSize: 11, color: editorial.muted }}>{STAGE_LABEL[stage]}</Typography>
         <Button onClick={onExit} sx={{ minHeight: 44, color: editorial.muted, px: 1 }}>
           Exit

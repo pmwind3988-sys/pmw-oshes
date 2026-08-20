@@ -1,6 +1,6 @@
 import { createHash, createSign, randomUUID, X509Certificate } from "node:crypto";
 import forge from "node-forge";
-import { OSHE_LISTS } from "./osheConfig.js";
+import { OSHES_LISTS } from "./oshesConfig.js";
 import { toListChoiceOptions, type ListChoiceOption } from "./listChoiceOptions.js";
 
 // Microsoft Graph client for serverless API (Sites.Selected compatible)
@@ -385,11 +385,11 @@ export async function queryListItemByFields(
 }
 
 export function queryMasterFormByTitle(token: string, title: string): Promise<GraphListItem | null> {
-  return queryListItemByFields(token, OSHE_LISTS.masterForm, { Title: title });
+  return queryListItemByFields(token, OSHES_LISTS.masterForm, { Title: title });
 }
 
 export function queryMasterFormBySlug(token: string, slug: string): Promise<GraphListItem | null> {
-  return queryListItemByFields(token, OSHE_LISTS.masterForm, { Slug: slug });
+  return queryListItemByFields(token, OSHES_LISTS.masterForm, { Slug: slug });
 }
 
 /**
@@ -408,12 +408,12 @@ export function queryWebFormVersion(
   formVersion: string,
   publishKey?: string,
 ): Promise<GraphListItem | null> {
-  const unkeyed = () => queryListItemByFields(token, OSHE_LISTS.versions, {
+  const unkeyed = () => queryListItemByFields(token, OSHES_LISTS.versions, {
     FormTitle: formTitle,
     FormVersion: formVersion,
   });
   if (publishKey) {
-    return queryListItemByFields(token, OSHE_LISTS.versions, {
+    return queryListItemByFields(token, OSHES_LISTS.versions, {
       FormTitle: formTitle,
       FormVersion: formVersion,
       PublishKey: publishKey,

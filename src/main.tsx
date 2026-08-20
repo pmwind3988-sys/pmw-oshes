@@ -10,7 +10,7 @@ if (typeof globalThis !== "undefined") {
 const REQUIRED_VITE_VARS = ["VITE_AZURE_CLIENT_ID", "VITE_AZURE_TENANT_ID", "VITE_SP_SITE_URL"] as const;
 const missing = REQUIRED_VITE_VARS.filter((name) => !import.meta.env[name]);
 if (missing.length > 0) {
-  const msg = `PMW OSHE Forms: Missing required environment variables: ${missing.join(", ")}. Check .env.local or .env.`;
+  const msg = `PMW OSHES Forms: Missing required environment variables: ${missing.join(", ")}. Check .env.local or .env.`;
   document.body.textContent = msg;
   throw new Error(msg);
 }

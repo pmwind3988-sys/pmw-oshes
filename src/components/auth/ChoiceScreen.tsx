@@ -179,7 +179,7 @@ export default function ChoiceScreen({ onLogin }: ChoiceScreenProps) {
                 lineHeight: 0.98,
               }}
             >
-              PMW OSHE Forms
+              PMW OSHES Forms
             </Typography>
 
             <Typography

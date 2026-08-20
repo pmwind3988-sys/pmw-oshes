@@ -13,7 +13,7 @@
  * `exportImageData.ts` fetches the pictures it needs to carry.
  */
 import { spGet } from "./formBuilderSP";
-import { OSHE_LISTS } from "../config/oshe";
+import { OSHES_LISTS } from "../config/oshes";
 import { getDynamicMatrixFields } from "./matrixData";
 import { layerSequenceFromConfig } from "./layerSequence";
 import { getSelectedCompany } from "./companySelection";
@@ -111,7 +111,7 @@ async function readVersionSchemas(token: string, formTitle: string): Promise<Map
   const items = await readAllPages(
     token,
     listItemsUrl(
-      OSHE_LISTS.versions,
+      OSHES_LISTS.versions,
       `$filter=FormTitle eq '${encodeURIComponent(formTitle)}'&$select=FormVersion,SurveyJSON&$top=100`,
     ),
   );

@@ -30,8 +30,8 @@ a:hover { color: var(--color-accent); }
     <div style="min-height:100vh; display:grid; grid-template-columns:1fr 1fr">
       <div style="padding:var(--space-8); display:flex; flex-direction:column; justify-content:space-between; border-right:1px solid var(--color-divider)">
         <div>
-          <div style="font-family:var(--font-heading); font-weight:600; font-size:22px">PMW OSHE</div>
-          <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Safety · Health · Environment · Security</div>
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:22px">PMW OSHES</div>
+          <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">Occupational Safety · Health · Environmental Services</div>
         </div>
         <div style="position:relative; flex:1; margin:var(--space-8) 0; overflow:hidden">
           <div style="position:absolute; inset:-40px 0; background-image:linear-gradient(to right, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--color-text) 7%, transparent) 1px, transparent 1px); background-size:40px 40px; animation:gridDrift 14s linear infinite"></div>
@@ -102,7 +102,7 @@ a:hover { color: var(--color-accent); }
   <sc-if value="{{ inPublic }}" hint-placeholder-val="{{ false }}">
     <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:var(--space-6) var(--space-4) var(--space-8)">
       <div style="width:100%; max-width:430px; display:flex; align-items:center; gap:8px; margin-bottom:var(--space-4)">
-        <span style="font-family:var(--font-heading); font-weight:600; font-size:15px">PMW OSHE</span>
+        <span style="font-family:var(--font-heading); font-weight:600; font-size:15px">PMW OSHES</span>
         <span style="margin-left:auto; font-size:11px; color:var(--color-neutral-600)">{{ pubStageLabel }}</span>
         <button onClick="{{ leavePublic }}" class="btn btn-ghost" style="font-size:12px">Exit</button>
       </div>
@@ -246,7 +246,7 @@ a:hover { color: var(--color-accent); }
     <div style="display:flex; min-height:100vh">
       <nav style="width:222px; flex:none; border-right:1px solid var(--color-divider); display:flex; flex-direction:column; padding:var(--space-4) 0">
         <div style="padding:0 var(--space-4) var(--space-6)">
-          <div style="font-family:var(--font-heading); font-weight:600; font-size:19px">PMW OSHE</div>
+          <div style="font-family:var(--font-heading); font-weight:600; font-size:19px">PMW OSHES</div>
           <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--color-neutral-600)">{{ roleLabel }}</div>
         </div>
         <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
@@ -850,7 +850,7 @@ const PEOPLE = {
 };
 
 const ACCOUNTS = [
-  { role: "admin", roleLabel: "Administrator", email: "aminah.yusof@pmw.gov.my", name: "Aminah Yusof", title: "OSHE Administrator", approvalRole: null },
+  { role: "admin", roleLabel: "Administrator", email: "aminah.yusof@pmw.gov.my", name: "Aminah Yusof", title: "OSHES Administrator", approvalRole: null },
   { role: "evaluator", roleLabel: "Evaluator · Safety Officer", email: "nurul.aziz@pmw.gov.my", name: "Nurul Aziz", title: "Safety Officer · Port Klang", approvalRole: "Safety Officer" },
   { role: "approver", roleLabel: "Approver · Ops Manager", email: "faizal.mokhtar@pmw.gov.my", name: "Faizal Mokhtar", title: "Operations Manager", approvalRole: "Ops Manager" },
   { role: "user", roleLabel: "Staff / submitter", email: "sazali.rahim@marinekita.com", name: "Sazali Rahim", title: "Fitter · Marine Kita Sdn Bhd", approvalRole: null },

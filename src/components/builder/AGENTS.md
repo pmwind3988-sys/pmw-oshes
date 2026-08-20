@@ -37,7 +37,7 @@ in standalone grey chrome, this app renders them in PMW Editorial. Do not re-imp
 hrform's inline styles when porting a fix across.
 
 ## Where form configuration comes from
-`LayerConfig` (layer sequence, assignees, and the OSHE additions `code` / `slaDays` /
+`LayerConfig` (layer sequence, assignees, and the OSHES additions `code` / `slaDays` /
 `isPublic`) is JSON on the `Master Form` row, written by the pmw-hrform builder. This
 app reads it via `spConfig.ts` and edits only the SLA through `portalCatalogueWrite.ts`
 — `isPublic` is read-only here, because the builder owns it.

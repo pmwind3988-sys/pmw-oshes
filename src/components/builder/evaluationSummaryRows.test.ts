@@ -41,7 +41,7 @@ describe("collectDisplayRows", () => {
   const elements = [
     { type: "text", name: "from", title: "PTW Valid From", inputType: "datetime-local" },
     { type: "text", name: "till", title: "PTW Valid Till", inputType: "datetime-local" },
-    { type: "signaturepad", name: "sig", title: "Issued By OSHE (Signature)" },
+    { type: "signaturepad", name: "sig", title: "Issued By OSHES (Signature)" },
   ];
 
   it("lists every declared field, including the ones left blank", () => {
@@ -50,7 +50,7 @@ describe("collectDisplayRows", () => {
     expect(rows.map((row) => row.field.title)).toEqual([
       "PTW Valid From",
       "PTW Valid Till",
-      "Issued By OSHE (Signature)",
+      "Issued By OSHES (Signature)",
     ]);
     expect(rows[0].value).toBeUndefined();
     expect(rows[1].value).toBe("2026-08-12T23:31");

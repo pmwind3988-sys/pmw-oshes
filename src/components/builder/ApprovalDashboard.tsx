@@ -25,7 +25,7 @@ import { getSelectedCompany } from "../../utils/companySelection";
 import { formatDisplayDateTimeLong } from "../../utils/displayDateTime";
 import { getDepartmentApproverLookupConfig } from "../../utils/departmentApproverLookup";
 import { getWorkflowEmailStatus } from "../../utils/workflowEmailLog";
-import { OSHE_LISTS } from "../../config/oshe";
+import { OSHES_LISTS } from "../../config/oshes";
 import { appBaseUrl } from "../../config/appBaseUrl";
 import {
   getScheduledWorkflowEmail,
@@ -506,7 +506,7 @@ export default function ApprovalDashboard() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
-  useEffect(() => { document.title = "Submissions — PMW OSHE"; }, []);
+  useEffect(() => { document.title = "Submissions — PMW OSHES"; }, []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1839,7 +1839,7 @@ export default function ApprovalDashboard() {
         if (!storedNextEmail && !nextIsShared) {
           const approvers = await spGet(
             token,
-            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHE_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(selectedItem.Title)}' and LayerNumber eq ${nextLayerNumber}&$select=ApproverEmail&$top=1`
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(OSHES_LISTS.approvers)}')/items?$filter=FormTitle eq '${encodeURIComponent(selectedItem.Title)}' and LayerNumber eq ${nextLayerNumber}&$select=ApproverEmail&$top=1`
           ) as { value?: { ApproverEmail: string }[] };
           storedNextEmail = approvers.value?.[0]?.ApproverEmail || "";
         }
@@ -2028,7 +2028,7 @@ export default function ApprovalDashboard() {
         tone="error"
         icon={<BlockIcon sx={{ fontSize: 28 }} />}
         title="Access denied"
-        message="This workspace is limited to the OSHE admin group. Ask an administrator to add you if you need to review submissions."
+        message="This workspace is limited to the OSHES admin group. Ask an administrator to add you if you need to review submissions."
       />
     );
   }
@@ -2052,7 +2052,7 @@ export default function ApprovalDashboard() {
     <>
       <WorkspacePage>
         <WorkspaceHeader
-          eyebrow="OSHE admin workspace"
+          eyebrow="OSHES admin workspace"
           title="Submissions"
           subtitle="Review submissions, approvals, and evaluation layers. Signing a layer releases the item to the next one immediately."
           account={accounts[0]?.username || undefined}

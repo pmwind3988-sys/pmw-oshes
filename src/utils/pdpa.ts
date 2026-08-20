@@ -13,10 +13,10 @@ export const PDPA_CONTACT_EMAIL =
   "pdpa@pmw-group.com";
 
 export const PDPA_SUMMARY =
-  "Your personal data will be processed for OSHE reporting, inspections, permits, approvals, evaluations, record keeping, audit, incident management, and related legal or operational requirements.";
+  "Your personal data will be processed for OSHES reporting, inspections, permits, approvals, evaluations, record keeping, audit, incident management, and related legal or operational requirements.";
 
 export const PDPA_RETENTION_SUMMARY =
-  "We keep personal data only for as long as needed for the stated purpose, legal requirements, investigations, audit, dispute handling, or legitimate OSHE administration, then delete, anonymise, or securely archive it.";
+  "We keep personal data only for as long as needed for the stated purpose, legal requirements, investigations, audit, dispute handling, or legitimate OSHES administration, then delete, anonymise, or securely archive it.";
 
 export function getPdpaRetentionUntil(from: Date = new Date()): string {
   const retentionUntil = new Date(from);
@@ -25,7 +25,7 @@ export function getPdpaRetentionUntil(from: Date = new Date()): string {
 }
 
 export const PDPA_CONSENT_LABEL =
-  "I have read and understood the Privacy Notice, and I consent to the processing of my personal data for the stated OSHE purpose.";
+  "I have read and understood the Privacy Notice, and I consent to the processing of my personal data for the stated OSHES purpose.";
 
 export const PDPA_NOTICE_SECTIONS = [
   {
@@ -38,7 +38,7 @@ export const PDPA_NOTICE_SECTIONS = [
   },
   {
     title: "Disclosure",
-    body: "Personal data may be disclosed to authorised OSHE personnel, assigned approvers or evaluators, system administrators, Microsoft 365 or SharePoint service providers, auditors, regulators, and other parties where required by law or necessary for the stated purpose.",
+    body: "Personal data may be disclosed to authorised OSHES personnel, assigned approvers or evaluators, system administrators, Microsoft 365 or SharePoint service providers, auditors, regulators, and other parties where required by law or necessary for the stated purpose.",
   },
   {
     title: "Security",

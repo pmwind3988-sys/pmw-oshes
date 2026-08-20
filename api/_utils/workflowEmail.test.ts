@@ -104,8 +104,8 @@ describe("workflow email schedules", () => {
 
 describe("isPublicReviewLink", () => {
   it("recognises a token link and rejects a slug/item/layer link", () => {
-    expect(isPublicReviewLink("https://pmw-oshe.vercel.app/eval/abc123?item=42")).toBe(true);
-    expect(isPublicReviewLink("https://pmw-oshe.vercel.app/eval/hira-form/42/2")).toBe(false);
+    expect(isPublicReviewLink("https://pmw-oshes.vercel.app/eval/abc123?item=42")).toBe(true);
+    expect(isPublicReviewLink("https://pmw-oshes.vercel.app/eval/hira-form/42/2")).toBe(false);
     expect(isPublicReviewLink("not a url")).toBe(false);
   });
 });
@@ -123,7 +123,7 @@ describe("buildWorkflowActionEmail", () => {
   };
 
   beforeEach(() => {
-    process.env.APP_BASE_URL = "https://pmw-oshe.vercel.app";
+    process.env.APP_BASE_URL = "https://pmw-oshes.vercel.app";
   });
   afterEach(() => {
     delete process.env.APP_BASE_URL;
@@ -132,7 +132,7 @@ describe("buildWorkflowActionEmail", () => {
   it("puts the reference in the subject and body", () => {
     const email = buildWorkflowActionEmail({
       ...base,
-      reviewLink: "https://pmw-oshe.vercel.app/eval/abc/42/2",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/abc/42/2",
       authMode: "365",
       referenceNo: "OSH-040826-0007",
     });
@@ -144,7 +144,7 @@ describe("buildWorkflowActionEmail", () => {
   it("carries the reference into a public layer's subject too", () => {
     const email = buildWorkflowActionEmail({
       ...base,
-      reviewLink: "https://pmw-oshe.vercel.app/eval/abc123?item=42",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/abc123?item=42",
       authMode: "public",
       referenceNo: "OSH-040826-0007",
     });
@@ -154,7 +154,7 @@ describe("buildWorkflowActionEmail", () => {
   it("leaves the subject and body unchanged when the form issues no reference", () => {
     const email = buildWorkflowActionEmail({
       ...base,
-      reviewLink: "https://pmw-oshe.vercel.app/eval/abc/42/2",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/abc/42/2",
       authMode: "365",
     });
     expect(email.subject).not.toContain("[");
@@ -164,7 +164,7 @@ describe("buildWorkflowActionEmail", () => {
   it("treats a blank reference as absent rather than printing empty brackets", () => {
     const email = buildWorkflowActionEmail({
       ...base,
-      reviewLink: "https://pmw-oshe.vercel.app/eval/abc/42/2",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/abc/42/2",
       authMode: "365",
       referenceNo: "   ",
     });
@@ -173,14 +173,14 @@ describe("buildWorkflowActionEmail", () => {
   });
 
   it("leads a public layer with a copy button pointing at the share page", () => {
-    const reviewLink = "https://pmw-oshe.vercel.app/eval/abc123?item=42";
+    const reviewLink = "https://pmw-oshes.vercel.app/eval/abc123?item=42";
     const email = buildWorkflowActionEmail({ ...base, reviewLink, authMode: "public" });
 
     expect(email.subject).toBe(
       "Action required: share the approval link for HIRA Assessment",
     );
     expect(email.body).toContain(
-      `href="https://pmw-oshe.vercel.app/share-link?u=${encodeURIComponent(reviewLink)}"`,
+      `href="https://pmw-oshes.vercel.app/share-link?u=${encodeURIComponent(reviewLink)}"`,
     );
     expect(email.body).toContain("Copy review link");
     // The raw link is printed too, so a reader can copy it without leaving the mail.
@@ -189,7 +189,7 @@ describe("buildWorkflowActionEmail", () => {
   });
 
   it("centres a single open button for a 365 layer and never offers the share page", () => {
-    const reviewLink = "https://pmw-oshe.vercel.app/eval/hira-form/42/2";
+    const reviewLink = "https://pmw-oshes.vercel.app/eval/hira-form/42/2";
     const email = buildWorkflowActionEmail({ ...base, reviewLink, authMode: "365" });
 
     expect(email.subject).toBe("Action required: HIRA Assessment needs your approval");
@@ -197,13 +197,13 @@ describe("buildWorkflowActionEmail", () => {
     expect(email.body).not.toContain("Copy review link");
     expect(email.body).toContain(`<td align="center" style="padding:22px 0 0">`);
     expect(email.body).toContain(">Open approval</a>");
-    expect(email.body).toContain("PMW OSHE account sign-in");
+    expect(email.body).toContain("PMW OSHES account sign-in");
   });
 
   it("falls back to the link shape when a stored schedule entry has no authMode", () => {
     const email = buildWorkflowActionEmail({
       ...base,
-      reviewLink: "https://pmw-oshe.vercel.app/eval/abc123?item=42",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/abc123?item=42",
     });
 
     expect(email.body).toContain("/share-link?u=");
@@ -213,7 +213,7 @@ describe("buildWorkflowActionEmail", () => {
     const email = buildWorkflowActionEmail({
       ...base,
       layerType: "evaluation",
-      reviewLink: "https://pmw-oshe.vercel.app/eval/hira-form/42/2",
+      reviewLink: "https://pmw-oshes.vercel.app/eval/hira-form/42/2",
       authMode: "365",
     });
 

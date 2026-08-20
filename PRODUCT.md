@@ -6,17 +6,17 @@ product
 
 ## Users
 
-PMW factory staff, OSHE team members, approvers, read-only viewers, and form owners use this application during operational work. They are submitting safety, permit, maintenance, quality, environment, security, and audit forms, then reviewing status or administering the SharePoint-backed form library.
+PMW factory staff, OSHES team members, approvers, read-only viewers, and form owners use this application during operational work. They are submitting safety, permit, maintenance, quality, environment, security, and audit forms, then reviewing status or administering the SharePoint-backed form library.
 
 The portal is organised around **who is looking at it**. Five role views are derived — never stored on the user — from Entra group membership plus the submission set:
 
 | Role | Signal | Sidebar |
 |---|---|---|
-| Administrator | member of the OSHE Forms Owner group | Today · Submissions · Form catalogue · People & roles · Audit trail |
+| Administrator | member of the OSHES Forms Owner group | Today · Submissions · Form catalogue · People & roles · Audit trail |
 | Evaluator (Safety Officer) | assignee of an `evaluation` layer | Today · To evaluate · Submissions |
 | Approver | assignee of an `approval` layer | My approvals · All records |
 | Staff / submitter | neither admin nor an assignee | My submissions · File a form |
-| Auditor | member of the OSHE Auditors group | Records · Audit trail |
+| Auditor | member of the OSHES Auditors group | Records · Audit trail |
 
 Someone who is both an evaluator and an approver resolves to `evaluator` — the superset view — and their approval items appear in the same queue. Auditors are read-only by construction: the role never renders an action, and no write path exists for it.
 

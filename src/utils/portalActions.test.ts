@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { cancelSubmission, deleteSubmission, type PortalActionContext } from "./portalActions";
 import { describeWorkflow, resolveFormVisibility } from "./formWorkflow";
 import { toPortalRecord } from "./portalRecords";
-import { OSHE_LISTS } from "../config/oshe";
+import { OSHES_LISTS } from "../config/oshes";
 import type {
   ApprovalLayerConfig,
   CatalogueEntry,
@@ -186,7 +186,7 @@ describe("deleteSubmission", () => {
 
     expect(upsertListItem).toHaveBeenCalledTimes(1);
     const [listTitle, , body] = upsertListItem.mock.calls[0] as [string, string, Record<string, unknown>];
-    expect(listTitle).toBe(OSHE_LISTS.auditTrail);
+    expect(listTitle).toBe(OSHES_LISTS.auditTrail);
     expect(body.Reference).toBe("INC-300726-0142");
     expect(body.Actor).toBe("Aina Zulkifli");
     expect(String(body.EventSummary)).toContain("Deleted permanently");

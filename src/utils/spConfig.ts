@@ -1,16 +1,16 @@
 import type { DiscoveredList, ListMetaEntry, LoadedConfig, SharePointClient, LayerConfig, SurveyJson } from "../types";
-import { OSHE_APP, OSHE_LISTS } from "../config/oshe";
+import { OSHES_APP, OSHES_LISTS } from "../config/oshes";
 import { resolveFormVisibility, type FormVisibility } from "./formWorkflow";
 
-const ADMIN_GROUP = OSHE_APP.adminGroup;
-const AUDITOR_GROUP = OSHE_APP.auditorGroup;
-const FORM_BUILDER_GROUP = OSHE_APP.formBuilderGroup;
+const ADMIN_GROUP = OSHES_APP.adminGroup;
+const AUDITOR_GROUP = OSHES_APP.auditorGroup;
+const FORM_BUILDER_GROUP = OSHES_APP.formBuilderGroup;
 
 const EXCLUDE_ALWAYS = [
   "Style Library",
   "Site Assets",
-  OSHE_LISTS.approvers,
-  OSHE_LISTS.masterForm,
+  OSHES_LISTS.approvers,
+  OSHES_LISTS.masterForm,
   "Submission Log",
   "Approval Log",
   "Site Pages",
@@ -70,9 +70,9 @@ const ICON_POOL = [
   "Gavel",
   "Policy",
   "Security",
-  OSHE_LISTS.dashboardSettings,
-  OSHE_LISTS.versions,
-  OSHE_LISTS.builderLog,
+  OSHES_LISTS.dashboardSettings,
+  OSHES_LISTS.versions,
+  OSHES_LISTS.builderLog,
   "WorkOutline",
   "BusinessCenter",
   "Engineering",
@@ -130,17 +130,17 @@ const MASTER_FORM_EXTRA_SELECT = ["IsPublic", "Slug"];
 
 async function queryMasterForm(spClient: SharePointClient): Promise<Record<string, unknown>[]> {
   try {
-    return await spClient.queryList(OSHE_LISTS.masterForm, {
+    return await spClient.queryList(OSHES_LISTS.masterForm, {
       select: [...MASTER_FORM_BASE_SELECT, ...MASTER_FORM_EXTRA_SELECT],
     });
   } catch {
-    return spClient.queryList(OSHE_LISTS.masterForm, { select: MASTER_FORM_BASE_SELECT });
+    return spClient.queryList(OSHES_LISTS.masterForm, { select: MASTER_FORM_BASE_SELECT });
   }
 }
 
 /**
  * How many approval layers a form declares. Zero is a real answer: plenty of
- * OSHE forms are records, not requests, and nobody signs them. Defaulting the
+ * OSHES forms are records, not requests, and nobody signs them. Defaulting the
  * absent case to 1 is what made the dashboard invent an approval chain for
  * every one of them.
  */
@@ -218,7 +218,7 @@ export async function loadConfig(
   }
 
   try {
-    const versionItems = await spClient.queryList(OSHE_LISTS.versions, {
+    const versionItems = await spClient.queryList(OSHES_LISTS.versions, {
       select: ["FormTitle", "FormVersion", "SurveyJSON"],
       top: 5000,
     });

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { LayerConfigItem } from "../types";
 import { buildLayerReviewLink, describeMissingReviewLink } from "./layerReviewLink";
 
-const BASE = "https://pmw-oshe.vercel.app";
+const BASE = "https://pmw-oshes.vercel.app";
 
 function layer(overrides: Partial<LayerConfigItem>): LayerConfigItem {
   return {
@@ -21,7 +21,7 @@ describe("buildLayerReviewLink", () => {
     expect(buildLayerReviewLink({
       baseUrl: BASE,
       layer: layer({ authMode: "public", publicToken: "abc123" }),
-      formSlug: "oshe-permit-to-work",
+      formSlug: "oshes-permit-to-work",
       responseItemId: 11,
     })).toBe(`${BASE}/eval/abc123?item=11`);
   });
@@ -30,9 +30,9 @@ describe("buildLayerReviewLink", () => {
     expect(buildLayerReviewLink({
       baseUrl: BASE,
       layer: layer({ layerNumber: 3 }),
-      formSlug: "oshe-permit-to-work",
+      formSlug: "oshes-permit-to-work",
       responseItemId: 11,
-    })).toBe(`${BASE}/eval/oshe-permit-to-work/11/3`);
+    })).toBe(`${BASE}/eval/oshes-permit-to-work/11/3`);
   });
 
   it("never falls back to the signed-in route for a public layer", () => {
@@ -40,7 +40,7 @@ describe("buildLayerReviewLink", () => {
     expect(buildLayerReviewLink({
       baseUrl: BASE,
       layer: layer({ authMode: "public", publicToken: "  " }),
-      formSlug: "oshe-permit-to-work",
+      formSlug: "oshes-permit-to-work",
       responseItemId: 11,
     })).toBeUndefined();
   });

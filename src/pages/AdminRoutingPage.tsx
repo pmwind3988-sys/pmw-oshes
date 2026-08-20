@@ -146,14 +146,14 @@ export default function AdminRoutingPage() {
     if (inProgress !== InteractionStatus.None || !isAuthenticated) return;
 
     const origin = new URL(import.meta.env.VITE_SP_SITE_URL || "https://placeholder.sharepoint.com").origin;
-    // Gated on the OSHE admins, not the form-builder group: routing decides where
+    // Gated on the OSHES admins, not the form-builder group: routing decides where
     // this deployment's own records go, which is an administration concern rather
     // than an authoring one.
     createSpClient(instance, accounts)
       .isGroupMember(SP_STATIC.adminGroup)
       .then((admin) => {
         if (!admin) {
-          setTokenError("Only OSHE administrators can manage approval routing.");
+          setTokenError("Only OSHES administrators can manage approval routing.");
           setLoading(false);
           return null;
         }

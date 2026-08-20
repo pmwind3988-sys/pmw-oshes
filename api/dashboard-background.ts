@@ -7,7 +7,7 @@ import {
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { ensureAdminPanelSettingsList } from "./_utils/provisioning.js";
-import { OSHE_LISTS } from "./_utils/osheConfig.js";
+import { OSHES_LISTS } from "./_utils/oshesConfig.js";
 
 interface ApiRequest {
   body: unknown;
@@ -56,9 +56,9 @@ const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "local";
 /**
  * The SharePoint group whose members may change the appearance.
  *
- * Read from the same variable the browser reads (`src/config/oshe.ts`), and
+ * Read from the same variable the browser reads (`src/config/oshes.ts`), and
  * deliberately with no fallback. This was hardcoded to "_HR_ Forms Owners" —
- * the pmw-hrform group — which does not exist on the OSHE site, so
+ * the pmw-hrform group — which does not exist on the OSHES site, so
  * `getByName` returned 404, every membership check failed closed, and the save
  * came back 403 for genuine administrators. A guessed name denies access in
  * exactly the same way a genuine non-membership does, which is what made it
@@ -68,7 +68,7 @@ const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "local";
  * enables its Save button for someone the API will refuse.
  */
 const ADMIN_GROUP = (process.env.VITE_OSHES_ADMIN_GROUP || process.env.OSHES_ADMIN_GROUP || "").trim();
-const SETTINGS_LIST = OSHE_LISTS.dashboardSettings;
+const SETTINGS_LIST = OSHES_LISTS.dashboardSettings;
 const SETTING_TITLE = "dashboard-background";
 const DEFAULT_SETTING: DashboardBackgroundSetting = {
   backgroundId: "theme",
