@@ -13,6 +13,7 @@ import "../native/native-form.css";
 
 import { getLayerResponseData, updateLayerStatus, submitEvaluationData, getFormConfigByTitle, spGet, spPatch, readMatrixChildItems, triggerApprovalNotification } from "../utils/formBuilderSP";
 import { buildLayerReviewLink, describeMissingReviewLink } from "../utils/layerReviewLink";
+import { linkTokenField, mintLinkToken } from "../utils/linkToken";
 import { appBaseUrl } from "../config/appBaseUrl";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import { SP_LAYER_STATUS, normalizeLayerStatus } from "../utils/statusConstants";
@@ -375,12 +376,20 @@ export default function EvaluationPage() {
           const params = new URLSearchParams(window.location.search);
           const itemId = params.get("item");
           if (!itemId) { setError("Missing response item ID."); setLoading(false); return; }
+          // `k` binds this link to one submission. Sent as given — including not
+          // at all, which is how a link issued before bindings existed asks the
+          // server to mail its reviewer a fresh one.
+          const linkToken = params.get("k") || "";
 
-          const res = await fetch(`/api/evaluate?token=${encodeURIComponent(routeToken || "")}&responseItemId=${itemId}`, {
-            headers: {
-              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+          const res = await fetch(
+            `/api/evaluate?token=${encodeURIComponent(routeToken || "")}&responseItemId=${itemId}`
+            + (linkToken ? `&k=${encodeURIComponent(linkToken)}` : ""),
+            {
+              headers: {
+                ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+              },
             },
-          });
+          );
           const json = await res.json();
           if (!json.success) { setError(json.error || "Failed to load data."); setLoading(false); return; }
 
@@ -524,6 +533,9 @@ export default function EvaluationPage() {
       if (isPublic) {
         const params = new URLSearchParams(window.location.search);
         const itemId = Number(params.get("item"));
+        // Acting is held to the same binding as looking, so the link's `k` is
+        // handed back with the decision.
+        const linkToken = params.get("k") || "";
         if (!routeToken || !itemId || !currentLayer) throw new Error("This evaluation link is missing required details.");
         const res = await fetch("/api/evaluate", {
           method: "POST",
@@ -535,6 +547,7 @@ export default function EvaluationPage() {
             token: routeToken,
             formTitle,
             responseItemId: itemId,
+            linkToken,
             layerNumber: currentLayer.layerNumber,
             action,
             fields: evalForm ? foldOtherAnswers(evalRuntime.collect()) : {},
@@ -567,12 +580,21 @@ export default function EvaluationPage() {
 
       // Resolved before anything is written: a next layer nobody can open is a
       // broken workflow, and advancing into it strands the submission.
+      // The next reviewer's link is bound to this submission, and the binding
+      // is written before the link is built so the record can never be waiting
+      // at a public layer that has no token for it.
+      let nextLinkToken = "";
+      if (!isFinal && String(nextLayer?.authMode || "") === "public" && String(nextLayer?.publicToken || "").trim()) {
+        nextLinkToken = mintLinkToken();
+        await spPatch(token, itemUrl, { [linkTokenField(nextLayerNumber)]: nextLinkToken });
+      }
       const nextReviewLink = !isFinal && nextLayer
         ? buildLayerReviewLink({
             baseUrl: appBaseUrl(),
             layer: nextLayer,
             formSlug: formSlug || "",
             responseItemId: respId,
+            linkToken: nextLinkToken,
           })
         : undefined;
       if (!isFinal && nextLayer && !nextReviewLink) {

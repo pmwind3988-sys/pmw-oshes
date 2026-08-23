@@ -24,6 +24,7 @@ import {
   REFERENCE_NO_FIELD,
 } from "./_utils/referenceNumber.js";
 import { ensureReferenceColumns } from "./_utils/provisioning.js";
+import { linkTokenField, mintLinkToken } from "./_utils/linkToken.js";
 import {
   buildWorkflowActionEmail,
   getApplicationBaseUrl,
@@ -1241,6 +1242,24 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // The first reviewer's link opens this submission and no other, so the value
+    // that binds it is written as part of the record itself rather than patched
+    // in afterwards. A response list provisioned before this existed has nowhere
+    // to put it — republishing the form adds the column — and the link then goes
+    // out unbound rather than carrying a `k` the record could not store, which
+    // would refuse the very reviewer it was sent to.
+    const firstWorkflowLayer = parsedLayerConfig?.layers?.[0];
+    let firstLayerLinkToken = "";
+    if (
+      firstWorkflowLayer
+      && String(firstWorkflowLayer.authMode || "") === "public"
+      && String(firstWorkflowLayer.publicToken || "").trim()
+      && resolveColumnKey(linkTokenField(Number(firstWorkflowLayer.layerNumber)))
+    ) {
+      firstLayerLinkToken = mintLinkToken();
+      submissionBody[linkTokenField(Number(firstWorkflowLayer.layerNumber))] = firstLayerLinkToken;
+    }
+
     // Image column fields (urlFieldPatches) are excluded from the Graph create
     // payload — they have never been writable via Graph PATCH on Image columns.
     const createBody = omitUrlPatchFields(submissionBody, submission.urlFieldPatches);
@@ -1360,6 +1379,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         const isPublicLayer = firstLayer.authMode === "public" && Boolean(firstLayer.publicToken);
         const reviewLink = firstLayer.authMode === "public" && firstLayer.publicToken
           ? `${appBaseUrl}/eval/${encodeURIComponent(firstLayer.publicToken)}?item=${encodeURIComponent(parentId)}`
+            + (firstLayerLinkToken ? `&k=${encodeURIComponent(firstLayerLinkToken)}` : "")
           : `${appBaseUrl}/eval/${encodeURIComponent(formSlug)}/${encodeURIComponent(parentId)}/${firstLayer.layerNumber}`;
         const submittedAt = new Date().toISOString();
         try {

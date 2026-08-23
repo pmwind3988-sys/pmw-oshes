@@ -974,6 +974,9 @@ const ENHANCED_LAYER_COLUMNS: SpColumnSpec[] = [
   { n: 'WorkflowAssignmentData', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailLog', k: SP_FIELD_KIND.note, ml: true },
   { n: 'WorkflowEmailSchedule', k: SP_FIELD_KIND.note, ml: true },
+  // When each layer last had a replacement link mailed out, so an old link
+  // cannot be clicked repeatedly to mail a reviewer. See api/_utils/linkToken.ts.
+  { n: 'LinkReissueLog', k: SP_FIELD_KIND.note, ml: true },
   { n: 'CurrentLayer', k: SP_FIELD_KIND.number },
   { n: 'FormStatus', k: SP_FIELD_KIND.text },
 ];
@@ -999,6 +1002,11 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },
+      // The value that binds this submission's public review link to it. Minted
+      // when the submission reaches a public layer; the link carries it as `k`
+      // and the far end refuses anything that does not match. See
+      // api/_utils/layerItemAccess.ts.
+      { n: `L${n}_LinkToken`, k: 2 },
     );
   }
   return specs;

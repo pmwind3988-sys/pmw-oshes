@@ -11,6 +11,11 @@ export interface LayerReviewLinkParams {
   layer: ReviewableLayer | null | undefined;
   formSlug: string;
   responseItemId: string | number;
+  /**
+   * The submission's own `L{n}_LinkToken`. A public link without one is
+   * refused at the far end, so it is threaded through rather than defaulted.
+   */
+  linkToken?: string;
 }
 
 /**
@@ -36,6 +41,9 @@ export function buildLayerReviewLink(params: LayerReviewLinkParams): string | un
     const publicToken = String(layer.publicToken ?? "").trim();
     return publicToken
       ? `${base}/eval/${encodeURIComponent(publicToken)}?item=${itemId}`
+        + (String(params.linkToken ?? "").trim()
+          ? `&k=${encodeURIComponent(String(params.linkToken).trim())}`
+          : "")
       : undefined;
   }
 

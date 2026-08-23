@@ -42,6 +42,9 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
     { name: "WorkflowAssignmentData", displayName: "WorkflowAssignmentData", type: "note" },
     { name: "WorkflowEmailLog", displayName: "WorkflowEmailLog", type: "note" },
     { name: "WorkflowEmailSchedule", displayName: "WorkflowEmailSchedule", type: "note" },
+    // When each layer last had a replacement link mailed out, so an old link
+    // cannot be clicked repeatedly to mail a reviewer. See api/_utils/linkToken.ts.
+    { name: "LinkReissueLog", displayName: "LinkReissueLog", type: "note" },
     { name: "CurrentLayer", displayName: "CurrentLayer", type: "number" },
     { name: "FormStatus", displayName: "FormStatus", type: "text" },
   ];
@@ -61,6 +64,11 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
       { name: `L${n}_SignedAt`, displayName: `L${n}_SignedAt`, type: "dateTime" },
       { name: `L${n}_Rejection`, displayName: `L${n}_Rejection`, type: "note" },
       { name: `L${n}_Signature`, displayName: `L${n}_Signature`, type: "note" },
+      // The value that binds this submission's public review link to it. Minted
+      // when the submission reaches a public layer; the link carries it as `k`
+      // and the far end refuses anything that does not match. See
+      // api/_utils/layerItemAccess.ts.
+      { name: `L${n}_LinkToken`, displayName: `L${n}_LinkToken`, type: "text" },
     );
   }
   return columns;

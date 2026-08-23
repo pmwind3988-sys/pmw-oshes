@@ -51,6 +51,38 @@ describe("buildWorkflowReviewLink", () => {
     })).toBe("https://forms.example.com/approval/tok-abc123?item=42");
   });
 
+  // The id says which record to fetch; `k` is what proves the link was issued
+  // for it. Drop it and the far end refuses rather than opening the record.
+  it("carries the submission's own link token on the public form", () => {
+    expect(buildWorkflowReviewLink({
+      ...base,
+      layerType: "approval",
+      authMode: "public",
+      publicToken: "tok-abc123",
+      linkToken: "item-tok-9f2",
+    })).toBe("https://forms.example.com/approval/tok-abc123?item=42&k=item-tok-9f2");
+  });
+
+  it("escapes a link token that would otherwise break the query string", () => {
+    expect(buildWorkflowReviewLink({
+      ...base,
+      layerType: "approval",
+      authMode: "public",
+      publicToken: "tok-abc123",
+      linkToken: "a&b=c",
+    })).toBe("https://forms.example.com/approval/tok-abc123?item=42&k=a%26b%3Dc");
+  });
+
+  it("leaves the M365 form alone — it is not reached by token at all", () => {
+    expect(buildWorkflowReviewLink({
+      ...base,
+      layerType: "approval",
+      authMode: "365",
+      publicToken: undefined,
+      linkToken: "item-tok-9f2",
+    })).toBe("https://forms.example.com/approval/leave-application/42/3");
+  });
+
   it("uses the slug form when the layer is public but has no token issued", () => {
     expect(buildWorkflowReviewLink({
       ...base,

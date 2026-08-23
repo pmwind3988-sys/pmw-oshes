@@ -160,6 +160,27 @@ export type LayerAssignee =
   | FieldReferenceLayerAssignee
   | DepartmentApproverLayerAssignee;
 
+/**
+ * How a public layer's link expiry is worked out.
+ *
+ * `fixed` is one date shared by every submission that reaches the layer.
+ * `field` reads a date out of the submission itself — "expire three days
+ * after Permit End Date" — so a permit signed today and one signed next year
+ * do not share a deadline. `offsetDays` is the grace after that date; 0 is
+ * the day itself, and the link dies at the close of that day in Malaysia.
+ *
+ * An answer that cannot be read as a date means the link does not expire.
+ * That is deliberate, and safe only because a link opens one submission and
+ * no other — see `api/_utils/layerItemAccess.ts`.
+ */
+export interface PublicLinkExpiry {
+  mode: "fixed" | "field";
+  /** Question name carrying the date. Field mode only. */
+  field?: string;
+  /** Days of grace after that date. Field mode only. */
+  offsetDays?: number;
+}
+
 export interface BaseLayer {
   layerNumber: number;
   type: LayerType;
@@ -169,6 +190,15 @@ export interface BaseLayer {
   description?: string;
   publicToken?: string;
   tokenExpiresAt?: string;
+  /**
+   * When this layer's public link stops working.
+   *
+   * Absent means the fixed `tokenExpiresAt` above. Field mode instead names
+   * one of the form's own questions, so each submission's link expires on a
+   * date its own answers carry. Authored in the pmw-hrform builder and
+   * enforced here — see `api/_utils/layerExpiry.ts`.
+   */
+  tokenExpiry?: PublicLinkExpiry;
   notifyOnComplete?: boolean;
   /**
    * Working days this layer is allowed before it counts as overdue.

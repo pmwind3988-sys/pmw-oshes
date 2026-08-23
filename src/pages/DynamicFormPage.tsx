@@ -20,6 +20,7 @@ import { SP_LAYER_STATUS, SP_FORM_STATUS } from "../utils/statusConstants";
 import { getDepartmentApproverLookupConfig } from "../utils/departmentApproverLookup";
 import { isFixedAssignee, layerRecipients, routedAssigneeEmail, validFixedAssigneeEmails } from "../utils/layerAssignees";
 import { buildLayerReviewLink } from "../utils/layerReviewLink";
+import { linkTokenField, mintLinkToken } from "../utils/linkToken";
 import { appBaseUrl } from "../config/appBaseUrl";
 import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterRouting";
 import { loginRequest } from "../auth/msalConfig";
@@ -1298,11 +1299,25 @@ export default function DynamicFormPage() {
           const firstLayer = layerConfigParsed?.layers?.[0];
           // A public first layer is reachable only by its own token; the signed-in
           // route and the admin link both wall off the outside reviewer.
+          // The first reviewer's link opens this submission and no other, so the
+          // value binding it is written to the record before the link is built.
+          let firstLayerLinkToken = "";
+          if (String(firstLayer?.authMode || "") === "public" && String(firstLayer?.publicToken || "").trim()) {
+            firstLayerLinkToken = mintLinkToken();
+            const responseListTitle = String(cfg.Title);
+            await ensureWorkflowColumns(token, responseListTitle, resolvedLayerCount);
+            await spPatch(
+              token,
+              `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(responseListTitle)}')/items(${result.Id})`,
+              { [linkTokenField(firstLayerNumber)]: firstLayerLinkToken },
+            );
+          }
           const firstLayerReviewLink = buildLayerReviewLink({
             baseUrl,
             layer: firstLayer,
             formSlug,
             responseItemId: result.Id,
+            linkToken: firstLayerLinkToken,
           });
 
           if (firstLayerManualPaper) {

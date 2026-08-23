@@ -85,6 +85,7 @@ import {
   validFixedAssigneeEmails,
 } from "../../utils/layerAssignees";
 import { buildLayerReviewLink, describeMissingReviewLink } from "../../utils/layerReviewLink";
+import { linkTokenField, mintLinkToken } from "../../utils/linkToken";
 import { COMPANY } from "../../config/company";
 import type { WorkspaceTone } from "./WorkspaceLayout";
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -1154,6 +1155,43 @@ export default function ApprovalDashboard() {
   }, [token, accounts, isSuperuser]);
 
   // Handle evaluation submit
+  /**
+   * The value binding this submission's public review link to it, minting and
+   * storing one if the record has none.
+   *
+   * The dashboard builds links itself — resending a notice, advancing a layer,
+   * scheduling an evaluator email — so it has to bind them itself too. Reads
+   * before minting so that resending a notice does not kill the link a reviewer
+   * is already holding; returns "" for a 365 layer, which is opened by signing
+   * in and has nothing to bind. See api/_utils/layerItemAccess.ts.
+   */
+  const ensureLayerLinkToken = async (
+    listName: string,
+    responseItemId: number | string,
+    layer: { authMode?: string; publicToken?: string } | null | undefined,
+    layerNumber: number,
+  ): Promise<string> => {
+    if (!token) return "";
+    if (String(layer?.authMode || "") !== "public") return "";
+    if (!String(layer?.publicToken || "").trim()) return "";
+
+    const field = linkTokenField(layerNumber);
+    const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items(${responseItemId})`;
+    try {
+      const row = await spGet(token, `${itemUrl}?$select=${field}`) as Record<string, unknown>;
+      const stored = valueToText(row[field]);
+      if (stored) return stored;
+    } catch {
+      // A list provisioned before this column existed answers with an error;
+      // ensureWorkflowColumns below adds it.
+    }
+
+    const minted = mintLinkToken();
+    await ensureWorkflowColumns(token, listName, layerNumber);
+    await spPatch(token, itemUrl, { [field]: minted });
+    return minted;
+  };
+
   const handleEvaluationSubmit = async () => {
     if (!token || !selectedItem || !formConfig) return;
     if (selectedLayerAccess && !selectedLayerAccess.allowed) {
@@ -1249,6 +1287,7 @@ export default function ApprovalDashboard() {
           layer: nextLayerConfig,
           formSlug: valueToText(formConfig?.Slug),
           responseItemId: respId,
+          linkToken: await ensureLayerLinkToken(listName, respId, nextLayerConfig, nextLayerNum),
         });
         if (!nextReviewLink) throw new Error(describeMissingReviewLink(nextLayerConfig));
       }
@@ -1374,6 +1413,7 @@ export default function ApprovalDashboard() {
           layer: bLayers[0],
           formSlug: valueToText(formConfig?.Slug),
           responseItemId: respId,
+          linkToken: await ensureLayerLinkToken(listName, respId, bLayers[0], firstLayerNumber),
         });
         if (!branchReviewLink && bLayers[0]) throw new Error(describeMissingReviewLink(bLayers[0]));
         await triggerApprovalNotification(token, {
@@ -1449,6 +1489,7 @@ export default function ApprovalDashboard() {
         layer: currentLayer,
         formSlug: valueToText(cfg?.Slug),
         responseItemId: item.Id,
+        linkToken: await ensureLayerLinkToken(item.Title, item.Id, currentLayer, currentLayerNumber),
       });
       if (!reviewLink) throw new Error(describeMissingReviewLink(currentLayer));
 
@@ -1647,6 +1688,7 @@ export default function ApprovalDashboard() {
         layer: currentLayer,
         formSlug: valueToText(cfg?.Slug),
         responseItemId: selectedItem.Id,
+        linkToken: await ensureLayerLinkToken(selectedItem.Title, selectedItem.Id, currentLayer, currentLayerNumber),
       });
       if (!reviewLink) throw new Error(describeMissingReviewLink(currentLayer));
       const updatedAt = new Date().toISOString();
@@ -1871,6 +1913,7 @@ export default function ApprovalDashboard() {
             layer: nextLayer,
             formSlug: valueToText(formConfig?.Slug),
             responseItemId: selectedItem.Id,
+            linkToken: await ensureLayerLinkToken(selectedItem.Title, selectedItem.Id, nextLayer, nextLayerNumber),
           });
           if (!nextReviewLink) throw new Error(describeMissingReviewLink(nextLayer));
         }
