@@ -1,0 +1,552 @@
+/* ---------------------------------------------------------------------------
+   Application shell — the branded nav column, the sticky bar, and the canvas
+   the screens sit on.
+
+   The layout is ported from `pmw-it` so the internal portals read as one
+   family: a branded column on the left carrying labelled destinations, a sticky
+   bar above the content, and a canvas the panels sit on. What is NOT ported is
+   pmw-it's palette. That project hard-codes `--it-*` tokens; this one has a
+   live appearance system (`src/theme/appearance.ts`) where the operator picks a
+   colour, a contrast pairing and a font, and every surface follows. So each
+   rule below reads the `--pmw-*` variables that system emits, and the shell
+   re-themes with the rest of the app instead of pinning one blue.
+
+   Two layouts from one tree, switched at 1024px. Below it the column is an
+   off-canvas drawer behind a hamburger; at and above it the same element is a
+   sticky column. The switch is pure CSS rather than a JS width check, so there
+   is no flash of the wrong layout on first paint.
+--------------------------------------------------------------------------- */
+
+:root {
+  --shell-nav-width: 236px;
+  --shell-radius: 12px;
+  /* Ink *on* the brand column, at the dimmed weight the inactive rows use.
+     Derived from the resolved on-brand ink rather than hard-coded white: a pale
+     colour theme resolves `--pmw-on-blue` to near-black, and a fixed white
+     would then be invisible on its own column. */
+  --shell-on-brand: var(--pmw-on-blue);
+  --shell-on-brand-dim: color-mix(in srgb, var(--pmw-on-blue) 74%, transparent);
+  --shell-on-brand-hover: color-mix(in srgb, var(--pmw-on-blue) 14%, transparent);
+  --shell-on-brand-active: color-mix(in srgb, var(--pmw-on-blue) 24%, transparent);
+  --shell-on-brand-rule: color-mix(in srgb, var(--pmw-on-blue) 18%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   The branded surface.
+
+   A two-stop gradient with a slow sheen drifting over it. The sheen is a
+   separate ::before at z-index -1 so it sits under the nav rows rather than
+   over them — a moving tint across live text is a legibility problem, not a
+   flourish.
+--------------------------------------------------------------------------- */
+.oshes-brand-surface {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(
+    160deg,
+    var(--pmw-blue) 0%,
+    var(--pmw-blue-dark) 100%
+  );
+}
+
+.oshes-brand-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(38% 30% at 18% 12%, color-mix(in srgb, var(--pmw-cta) 22%, transparent), transparent 70%),
+    radial-gradient(44% 34% at 84% 84%, color-mix(in srgb, var(--pmw-blue-light) 26%, transparent), transparent 72%);
+  background-repeat: no-repeat;
+  background-size: 170% 170%, 180% 180%;
+  animation: oshesSheenDrift 22s ease-in-out infinite;
+}
+
+@keyframes oshesSheenDrift {
+  0%,
+  100% {
+    background-position: 0% 0%, 100% 100%;
+  }
+  50% {
+    background-position: 34% 24%, 66% 72%;
+  }
+}
+
+/* `both` matters: without it the element paints at full opacity for the frame
+   before the animation starts, which reads as a flicker, not an entrance. */
+@keyframes qaqcRiseIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.oshes-rise {
+  animation: qaqcRiseIn 0.4s ease both;
+}
+
+/* ---------------------------------------------------------------------------
+   Shell frame.
+--------------------------------------------------------------------------- */
+.shell {
+  min-height: 100dvh;
+  display: flex;
+  /* Transparent, deliberately. `body` already paints the wallpaper the operator
+     chose — `var(--app-bg, var(--app-bg-fallback))` — and that paint propagates
+     to the viewport canvas. A ground of its own here is full-viewport and opaque,
+     so it covered that wallpaper everywhere inside the portal and left the
+     background picker looking like it did nothing. */
+  background: transparent;
+  color: var(--pmw-ink);
+  font-family: var(--pmw-font-main);
+}
+
+.shell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(2, 8, 20, 0.5);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.shell-nav {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1300;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  max-width: 82vw;
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 200ms ease-out;
+}
+
+.shell-nav.open {
+  transform: translateX(0);
+  box-shadow: 0 24px 60px rgba(2, 8, 20, 0.45);
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 0 4px;
+}
+
+.shell-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+/* The brand mark is a coloured logo and the column behind it is that same
+   colour — it needs a light chip under it or it disappears into the gradient. */
+.shell-logo-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.shell-brand-name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--shell-on-brand);
+  font-family: var(--pmw-font-heading);
+}
+
+.shell-brand-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--shell-on-brand-dim);
+}
+
+.shell-navclose {
+  background: none;
+  border: 0;
+  padding: 4px;
+  color: var(--shell-on-brand-dim);
+  cursor: pointer;
+  display: flex;
+}
+
+.shell-navclose:hover {
+  color: var(--shell-on-brand);
+}
+
+.shell-navlist {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.shell-navsection {
+  margin: 16px 0 5px;
+  padding: 0 10px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--shell-on-brand-dim);
+  opacity: 0.78;
+}
+
+.shell-navitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--shell-on-brand-dim);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.shell-navitem:hover {
+  background: var(--shell-on-brand-hover);
+  color: var(--shell-on-brand);
+}
+
+.shell-navitem.active {
+  background: var(--shell-on-brand-active);
+  color: var(--shell-on-brand);
+}
+
+.shell-navitem svg {
+  flex-shrink: 0;
+  font-size: 18px;
+}
+
+/* The queue count rides its own row rather than the glyph: this column has the
+   width for a number, and a count nobody can read is a count nobody acts on. */
+.shell-navcount {
+  margin-left: auto;
+  flex: none;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pmw-cta);
+  color: var(--pmw-on-cta);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+.shell-navfoot {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--shell-on-brand-rule);
+}
+
+.shell-navuser {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.shell-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--pmw-cta);
+  color: var(--pmw-on-cta);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.shell-navuser-text {
+  min-width: 0;
+}
+
+.shell-navuser-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--shell-on-brand);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-navuser-role {
+  font-size: 10.5px;
+  color: var(--shell-on-brand-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-navlink,
+.shell-signout {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--shell-on-brand-dim);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.shell-navlink + .shell-navlink,
+.shell-navlink + .shell-signout {
+  margin-top: 7px;
+}
+
+.shell-navlink:hover,
+.shell-signout:hover {
+  color: var(--shell-on-brand);
+}
+
+.shell-navlink svg,
+.shell-signout svg {
+  font-size: 14px;
+}
+
+.shell-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Sticky rather than static: the page itself scrolls (there is no inner scroll
+   container), so the bar has to follow it. */
+.shell-header {
+  position: sticky;
+  top: 0;
+  z-index: 1100;
+  border-bottom: 1px solid var(--pmw-border);
+  background: var(--pmw-panel);
+  padding-top: env(safe-area-inset-top);
+}
+
+.shell-headerrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.shell-hamburger {
+  display: flex;
+  background: none;
+  border: 0;
+  padding: 6px;
+  margin-left: -6px;
+  color: var(--pmw-muted);
+  cursor: pointer;
+}
+
+.shell-headerbrand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--pmw-ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.shell-headerbrand span {
+  font-size: 15px;
+  font-weight: 800;
+  font-family: var(--pmw-font-heading);
+}
+
+.shell-search {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 340px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--pmw-sunken);
+  border: 1px solid transparent;
+}
+
+.shell-search:focus-within {
+  border-color: var(--pmw-blue);
+}
+
+.shell-search svg {
+  flex-shrink: 0;
+  color: var(--pmw-muted);
+  font-size: 18px;
+}
+
+.shell-search input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--pmw-ink);
+}
+
+.shell-headeractions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shell-iconbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--pmw-border);
+  background: var(--pmw-panel);
+  color: var(--pmw-muted);
+  cursor: pointer;
+}
+
+.shell-iconbtn:hover {
+  background: var(--pmw-sunken);
+  color: var(--pmw-ink);
+}
+
+.shell-body {
+  flex: 1;
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+.shell-pagehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.shell-pagehead h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--pmw-ink);
+  margin: 0 0 3px;
+  font-family: var(--pmw-font-heading);
+}
+
+.shell-pagehead p {
+  font-size: 13px;
+  color: var(--pmw-muted);
+  margin: 0;
+}
+
+.shell-pagehead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (min-width: 640px) {
+  .shell-search {
+    display: flex;
+  }
+  .shell-headerrow {
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .shell-nav {
+    position: sticky;
+    bottom: auto;
+    z-index: auto;
+    height: 100dvh;
+    width: var(--shell-nav-width);
+    max-width: none;
+    flex-shrink: 0;
+    transform: translateX(0);
+    box-shadow: none;
+  }
+  .shell-backdrop,
+  .shell-hamburger,
+  .shell-navclose,
+  .shell-headerbrand {
+    display: none;
+  }
+  .shell-headerrow {
+    padding: 12px 24px;
+  }
+  .shell-body {
+    padding: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oshes-brand-surface::before,
+  .oshes-rise {
+    animation: none;
+  }
+  .shell-nav {
+    transition: none;
+  }
+}

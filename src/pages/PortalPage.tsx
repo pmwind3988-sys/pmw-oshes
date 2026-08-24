@@ -14,7 +14,7 @@ import AuditScreen from "./portal/AuditScreen";
 import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
-  const { screen, focusForm, focusStatus } = usePortal();
+  const { screen, focusForm, focusStatus, searchSeedAt } = usePortal();
   switch (screen) {
     case "form":
       return <FormHubScreen />;
@@ -34,15 +34,16 @@ function ScreenBody() {
       return <SettingsScreen />;
     // Two framings of one table: what you filed, and everything you may see.
     //
-    // Keyed on the scope it was opened with, so arriving from a form hub door
-    // or a pressed statistic remounts the table with those filters seeded.
+    // Keyed on the scope it was opened with, so arriving from a form hub door,
+    // a pressed statistic or the shell's search box remounts the table with
+    // those filters seeded.
     // Without the key React reuses the mounted instance and keeps the filter
     // state from wherever you were last — which is how "All Permit to Work"
     // used to open showing the previous form.
     case "mine":
-      return <RecordsScreen key={`mine-${focusForm}-${focusStatus}`} scope="mine" />;
+      return <RecordsScreen key={`mine-${focusForm}-${focusStatus}-${searchSeedAt}`} scope="mine" />;
     case "subs":
-      return <RecordsScreen key={`all-${focusForm}-${focusStatus}`} scope="all" />;
+      return <RecordsScreen key={`all-${focusForm}-${focusStatus}-${searchSeedAt}`} scope="all" />;
     case "home":
     default:
       return <HomeScreen />;

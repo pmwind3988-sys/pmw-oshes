@@ -5,8 +5,8 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Context assembly | `PortalContainer.tsx` | Builds catalogue → records → access, and owns `screen` / `focusForm` / `focusStatus`. The only place portal state is held. |
-| Header, nav drawer, profile | `PortalShell.tsx` | Nav is a drawer at every width; the account lives top right. |
+| Context assembly | `PortalContainer.tsx` | Builds catalogue → records → access, and owns `screen` / `focusForm` / `focusStatus` / the search seed. The only place portal state is held. |
+| Nav column, sticky bar, profile | `PortalShell.tsx` | pmw-it's shell: a branded column of labelled destinations (an off-canvas drawer below 1024px, sticky above — switched in `../../styles/shell.css`, not by a width check), a sticky bar carrying search and the account, and the canvas below. |
 | Record detail — layout | `RecordDetail.tsx` | `OverviewTab`, `AnswersTab`, `ApprovalsTab`, `TimelineTab`, plus `DetailRow` / `SoftCard`. No actions here. |
 | Record detail — actions | `SubmissionDrawer.tsx` | Tabbed drawer: gating, sign/return, the PDF split control, and the pinned action bar. |
 | Withdraw / delete confirmations | `WithdrawDialog.tsx`, `DeleteRecordDialog.tsx` | Shared by the drawer and `TodayScreen`'s waiting table, so one write has one set of promises. |

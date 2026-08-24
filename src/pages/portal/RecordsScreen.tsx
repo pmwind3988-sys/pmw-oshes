@@ -59,15 +59,22 @@ function stageLine(record: PortalRecord): string {
  * for.
  */
 export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
-  const { access, records, myRecords, catalogue, openDrawer, prefs, setScreen, focusForm, focusStatus } =
+  const { access, records, myRecords, catalogue, openDrawer, prefs, setScreen, focusForm, focusStatus, searchSeed } =
     usePortal();
 
   const [formFilter, setFormFilter] = useState(focusForm ?? "all");
   const [statusFilter, setStatusFilter] = useState<StatFilter>(
-    focusStatus ?? (prefs.hideSettled ? "open" : "all"),
+    // Text from the shell's bar is unscoped by construction, so a search opens
+    // on every status: hiding settled rows would drop matches the operator can
+    // see no reason for. Only a plain visit honours the "hide settled" pref.
+    focusStatus ?? (searchSeed ? "all" : prefs.hideSettled ? "open" : "all"),
   );
   const [workflowFilter, setWorkflowFilter] = useState<(typeof WORKFLOW_OPTIONS)[number]["value"]>("all");
-  const [query, setQuery] = useState("");
+  // Seeded from the shell's search bar, then owned here — typing in this box
+  // does not fight the bar, and clearing it does not re-apply what the bar still
+  // holds. PortalPage keys this component on `searchSeedAt`, so each submitted
+  // search remounts the table with the new text even when the words repeat.
+  const [query, setQuery] = useState(searchSeed);
 
   // `records` is already scoped to what this account may see — its own filings
   // plus anything it is on a layer of — so the framing narrows it, never widens.

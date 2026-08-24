@@ -53,6 +53,20 @@ export interface PortalContextValue {
   /** Status the records table should open on — what the pressed statistic counted. */
   focusStatus: StatFilter | null;
 
+  /**
+   * Text the shell's search box was submitted with, which the records table
+   * opens on.
+   *
+   * A seed rather than the live filter: the table owns its own query state
+   * afterwards, so typing in the table does not fight the bar, and clearing the
+   * table's box does not silently re-apply what the bar still holds. The shell
+   * bumps `searchSeedAt` on every submit so re-searching the same words still
+   * reads as a new instruction.
+   */
+  searchSeed: string;
+  searchSeedAt: number;
+  submitSearch: (query: string) => void;
+
   /** Per-browser preferences: landing page, table density, whether settled rows show. */
   prefs: PortalPrefs;
   setPrefs: (changes: Partial<PortalPrefs>) => void;

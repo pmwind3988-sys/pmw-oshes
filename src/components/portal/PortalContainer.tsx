@@ -73,6 +73,7 @@ export default function PortalContainer({
   const [screen, setScreenState] = useState<PortalScreen | null>(null);
   const [focusForm, setFocusForm] = useState<string | null>(null);
   const [focusStatus, setFocusStatus] = useState<StatFilter | null>(null);
+  const [search, setSearch] = useState<{ query: string; at: number }>({ query: "", at: 0 });
   const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
     typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
   );
@@ -220,11 +221,28 @@ export default function PortalContainer({
       setScreenState(next);
       setFocusForm(formScope);
       setFocusStatus(statusScope);
+      // Any deliberate navigation drops the search, for the same reason it drops
+      // the form scope: clicking "All submissions" must show all submissions,
+      // not the last thing that was typed into the bar.
+      setSearch({ query: "", at: 0 });
     },
     // A form hub with no form is the form picker, so a stale scope can never
     // strand the screen on a form this account can no longer see.
     focusForm: focusForm && catalogue.some((entry) => entry.listTitle === focusForm) ? focusForm : null,
     focusStatus,
+    searchSeed: search.query,
+    searchSeedAt: search.at,
+    // Searching is a navigation: it takes you to the table that can answer,
+    // unscoped, rather than filtering whichever screen happened to be open.
+    // `at` is what makes the same words twice count twice — see PortalContext.
+    // Deliberately calls the state setters rather than `setScreen` above, which
+    // would clear the very search being submitted.
+    submitSearch: (query: string) => {
+      setSearch({ query, at: Date.now() });
+      setScreenState("subs");
+      setFocusForm(null);
+      setFocusStatus(null);
+    },
     prefs,
     setPrefs,
     drawerRef,
