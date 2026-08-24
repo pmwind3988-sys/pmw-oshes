@@ -6,6 +6,8 @@ import {
   contrastRatio,
   FONT_THEMES,
   mix,
+  NAV_DIM,
+  NAV_INK,
   normalizeAppearance,
   readableOn,
   resolveAppearance,
@@ -157,5 +159,75 @@ describe("emitted variables", () => {
       expect(vars["--pmw-font-main"]).toBe(font.body);
       expect(vars["--pmw-font-heading"]).toBe(font.heading);
     }
+  });
+});
+
+describe("the branded nav column", () => {
+  /**
+   * The column is the one surface that writes text on a saturated brand fill
+   * rather than on a panel, so `readableOn` against the panel says nothing
+   * about it. Its labels are also not solid — inactive rows sit at `NAV_DIM` —
+   * and a sheen wash drifts over the gradient beneath them.
+   *
+   * This is the check that the derived stops actually hold: every colour, on
+   * every ground, at the worst point of the column.
+   */
+  const SHEEN_ACCENT = 0.12;
+  const SHEEN_BRAND = 0.16;
+
+  /** Every ground the label ink actually meets, at both ends of the gradient. */
+  function navGrounds(r: ReturnType<typeof resolveAppearance>): string[] {
+    return [r.navTop, r.navBottom].flatMap((stop) => [
+      stop,
+      // CTA, matching the wash shell.css actually paints — see navStop.
+      mix(stop, "#FFD84D", SHEEN_ACCENT),
+      mix(stop, r.brandLight, SHEEN_BRAND),
+    ]);
+  }
+
+  it.each(COMBINATIONS)("keeps dimmed nav labels at AA on $label", ({ setting }) => {
+    const r = resolveAppearance(normalizeAppearance(setting));
+    for (const ground of navGrounds(r)) {
+      expect(contrastRatio(mix(ground, NAV_INK, NAV_DIM), ground)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it.each(COMBINATIONS)("keeps the active nav label at AA on $label", ({ setting }) => {
+    const r = resolveAppearance(normalizeAppearance(setting));
+    // Hover and active are solid ink over a scrim of that same ink, which is
+    // the lightest ground in the column — so they are checked separately.
+    for (const ground of navGrounds(r)) {
+      for (const scrim of [0.06, 0.1]) {
+        const behind = mix(ground, NAV_INK, scrim);
+        expect(contrastRatio(NAV_INK, behind)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it.each(COMBINATIONS)("keeps the column a dark surface on $label", ({ setting }) => {
+    // Not "whichever ink suits the brand": one theme in six used to flip the
+    // column pale, which made the nav look like a different component.
+    const r = resolveAppearance(normalizeAppearance(setting));
+    for (const stop of [r.navTop, r.navBottom]) {
+      expect(contrastRatio(NAV_INK, stop)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("leaves a stop alone once it already passes", () => {
+    // Not every brand needs correcting, and the derivation must not walk every
+    // column toward the same colour. Graphite on Noir is already dark enough.
+    const r = resolveAppearance(
+      normalizeAppearance({ colorThemeId: "graphite", contrastThemeId: "noir", fontThemeId: "inter" }),
+    );
+    expect(contrastRatio(mix(r.navTop, NAV_INK, NAV_DIM), r.navTop)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("publishes the stops and the dim the stylesheet reads", () => {
+    // shell.css writes the 85% itself, so the two would drift apart silently.
+    const vars = appearanceCssVars(resolveAppearance(normalizeAppearance({})));
+    expect(vars["--pmw-nav-top"]).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(vars["--pmw-nav-bottom"]).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(vars["--pmw-nav-dim"]).toBe(String(NAV_DIM));
+    expect(vars["--pmw-nav-ink"]).toBe(NAV_INK);
   });
 });

@@ -24,11 +24,20 @@
      Derived from the resolved on-brand ink rather than hard-coded white: a pale
      colour theme resolves `--pmw-on-blue` to near-black, and a fixed white
      would then be invisible on its own column. */
-  --shell-on-brand: var(--pmw-on-blue);
-  --shell-on-brand-dim: color-mix(in srgb, var(--pmw-on-blue) 74%, transparent);
-  --shell-on-brand-hover: color-mix(in srgb, var(--pmw-on-blue) 14%, transparent);
-  --shell-on-brand-active: color-mix(in srgb, var(--pmw-on-blue) 24%, transparent);
-  --shell-on-brand-rule: color-mix(in srgb, var(--pmw-on-blue) 18%, transparent);
+  /* Ink *on* the brand column. Fixed white, published by `appearance.ts` as
+     `NAV_INK` — the column is a dark branded surface on every theme, and the
+     gradient stops below are derived to meet this ink rather than the other way
+     round. See the note beside NAV_INK for why it is not `--pmw-on-blue`. */
+  --shell-on-brand: var(--pmw-nav-ink, #fff);
+  /* These four alphas are a contract with `appearance.ts`: `NAV_DIM` and
+     `NAV_ROW_STATES` derive the gradient stops against exactly these numbers,
+     so that every row state clears 4.5:1. Raising any of them lightens the
+     ground under the labels and walks the column back under AA — change them
+     there and here together, and the appearance tests will tell you. */
+  --shell-on-brand-dim: color-mix(in srgb, var(--pmw-nav-ink, #fff) 88%, transparent);
+  --shell-on-brand-hover: color-mix(in srgb, var(--pmw-nav-ink, #fff) 6%, transparent);
+  --shell-on-brand-active: color-mix(in srgb, var(--pmw-nav-ink, #fff) 10%, transparent);
+  --shell-on-brand-rule: color-mix(in srgb, var(--pmw-nav-ink, #fff) 22%, transparent);
 }
 
 /* ---------------------------------------------------------------------------
@@ -44,8 +53,8 @@
   isolation: isolate;
   background: linear-gradient(
     160deg,
-    var(--pmw-blue) 0%,
-    var(--pmw-blue-dark) 100%
+    var(--pmw-nav-top) 0%,
+    var(--pmw-nav-bottom) 100%
   );
 }
 
@@ -56,8 +65,8 @@
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(38% 30% at 18% 12%, color-mix(in srgb, var(--pmw-cta) 22%, transparent), transparent 70%),
-    radial-gradient(44% 34% at 84% 84%, color-mix(in srgb, var(--pmw-blue-light) 26%, transparent), transparent 72%);
+    radial-gradient(38% 30% at 18% 12%, color-mix(in srgb, var(--pmw-cta) 12%, transparent), transparent 70%),
+    radial-gradient(44% 34% at 84% 84%, color-mix(in srgb, var(--pmw-blue-light) 16%, transparent), transparent 72%);
   background-repeat: no-repeat;
   background-size: 170% 170%, 180% 180%;
   animation: oshesSheenDrift 22s ease-in-out infinite;
@@ -246,9 +255,27 @@
   color: var(--shell-on-brand);
 }
 
+/* The active row's wash is only 10%, because a wash strong enough to read as
+   "selected" unaided forces the whole column several shades darker to keep its
+   labels legible. The rail does that job instead: an accent bar down the left
+   edge, at full strength, plus the heavier weight. Colour is not carrying it
+   alone either — the weight change survives a monochrome display. */
 .shell-navitem.active {
+  position: relative;
   background: var(--shell-on-brand-active);
   color: var(--shell-on-brand);
+  font-weight: 800;
+}
+
+.shell-navitem.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--pmw-cta);
 }
 
 .shell-navitem svg {

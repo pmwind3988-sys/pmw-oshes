@@ -497,6 +497,102 @@ const SERIES = [
 /** The CTA fill — the reference's yellow button. Ink on it is always near-black. */
 const CTA = "#FFD84D";
 
+/**
+ * The branded nav column's two gradient stops, dark enough that the *dimmed*
+ * label ink on them still clears AA.
+ *
+ * The column paints the brand as a fill and writes labels on it. Those labels
+ * are not solid: inactive rows sit at `NAV_DIM` so the active row can be told
+ * apart from them, and a sheen wash drifts over the gradient. Both make the
+ * real contrast worse than `onBrand` on `brand` suggests — at PMW blue the
+ * inactive rows measured 3.7:1, under the 4.5 that 13.5px text needs.
+ *
+ * Neither the ink nor the wash can fix it: white is already the lightest ink
+ * available, and it only reaches 4.53:1 on #0078d4 at full strength. So the
+ * *stop* moves instead, walked away from its own ink until the worst point of
+ * the column — the dimmed ink under the brightest part of the sheen — passes.
+ *
+ * Returns the stop unchanged when it already passes, so a theme whose brand is
+ * dark enough keeps exactly the colour it chose.
+ */
+export const NAV_DIM = 0.88;
+const NAV_SHEEN_ACCENT = 0.12;
+const NAV_SHEEN_BRAND = 0.16;
+
+/**
+ * The column's ink is white on every theme, and is not `inkFor(brand)`.
+ *
+ * Asking which ink suits the brand gave a *pale* column for Teal — its hue
+ * reads better under black than white — so one theme in six turned the nav
+ * into a light surface while the other five kept a dark one. The column is a
+ * branded surface in its own right, not a panel that follows the page, and
+ * pmw-it and the SI shell both draw it the same way: dark ground, white text.
+ * So the ink is fixed and the *ground* is what moves to meet it.
+ */
+export const NAV_INK = "#FFFFFF";
+
+/**
+ * Each row state, as the alpha of the scrim behind it and the alpha of its ink.
+ *
+ * The active row is the binding one and it is easy to miss: its ink is solid,
+ * which sounds like the safe case, but it sits on a scrim of that same ink,
+ * which is the lightest ground anywhere in the column. Checking only the dimmed
+ * inactive rows passes a column whose *selected* row is the illegible one.
+ *
+ * The scrims are deliberately faint — 10% would not carry selection on its own,
+ * and it does not have to: the active row also takes an accent rail and a
+ * heavier weight in `shell.css`. A scrim strong enough to read as "selected"
+ * unaided is a scrim that forces the whole column several shades darker, which
+ * costs the brand more than the rail costs.
+ */
+const NAV_ROW_STATES: ReadonlyArray<readonly [scrim: number, ink: number]> = [
+  [0, NAV_DIM], // inactive
+  [0.06, 1], // hover
+  [0.1, 1], // active
+];
+
+/**
+ * A gradient stop for the branded nav column, dark enough that every row state
+ * on it clears AA.
+ *
+ * The labels are not solid — inactive rows sit at `NAV_DIM` so the active row
+ * can be told apart — and a sheen wash drifts over the gradient. Both make the
+ * real contrast worse than white-on-brand suggests: at PMW blue the inactive
+ * rows measured 3.7:1, under the 4.5 that 13.5px text needs.
+ *
+ * The ink cannot fix it, because white is already the lightest ink there is and
+ * it only reaches 4.53:1 on #0078d4 at full strength. So the stop moves
+ * instead, walked toward black until the worst point of the column passes.
+ *
+ * Returns the stop unchanged when it already passes, so a brand that is dark
+ * enough keeps exactly the colour it chose rather than being pushed toward a
+ * navy every theme shares.
+ */
+function navStop(stop: string, brandLight: string, min = 4.5): string {
+  const passes = (c: string) => {
+    // Every ground the ink actually meets: the bare stop, and the stop under
+    // each of the two sheen washes.
+    //
+    // CTA, not the resolved accent: the wash in `shell.css` is written against
+    // `--pmw-cta`, which is the fixed signal yellow and brighter than any
+    // theme's accent. Deriving against the accent passed the unit test and
+    // still measured 4.46:1 in the browser.
+    const grounds = [c, mix(c, CTA, NAV_SHEEN_ACCENT), mix(c, brandLight, NAV_SHEEN_BRAND)];
+    return grounds.every((ground) =>
+      NAV_ROW_STATES.every(([scrim, ink]) => {
+        const behind = mix(ground, NAV_INK, scrim);
+        return contrastRatio(mix(behind, NAV_INK, ink), behind) >= min;
+      }),
+    );
+  };
+  if (passes(stop)) return stop;
+  for (let step = 1; step <= 24; step += 1) {
+    const candidate = mix(stop, "#000000", step / 24);
+    if (passes(candidate)) return candidate;
+  }
+  return "#000000";
+}
+
 export interface ResolvedAppearance {
   setting: AppearanceSetting;
   color: ColorTheme;
@@ -520,6 +616,9 @@ export interface ResolvedAppearance {
   brand: string;
   brandDark: string;
   brandLight: string;
+  /** The nav column gradient, verified legible under dimmed on-brand ink. */
+  navTop: string;
+  navBottom: string;
   /** Brand at wash strength — the active nav row, the selected menu item. */
   brandWash: string;
   brandWashSoft: string;
@@ -616,6 +715,12 @@ export function resolveAppearance(setting: AppearanceSetting): ResolvedAppearanc
   const brand = readableOn(color.main, panel, dark ? "#FFFFFF" : color.dark, 3);
   const accent = readableOn(color.accent, panel, dark ? "#FFFFFF" : color.accentDark, 3);
 
+  // Hoisted out of the returned literal: the nav column's gradient is derived
+  // from both of them, and a derivation cannot read a sibling property of the
+  // object it is being written into.
+  const brandDark = dark ? mix(color.light, panel, 0.15) : color.dark;
+  const onBrand = inkFor(brand, "#FFFFFF", "#101010");
+
   return {
     setting,
     color,
@@ -636,13 +741,15 @@ export function resolveAppearance(setting: AppearanceSetting): ResolvedAppearanc
     ground: contrast.ground,
 
     brand,
-    brandDark: dark ? mix(color.light, panel, 0.15) : color.dark,
+    brandDark,
     brandLight: color.light,
     brandWash,
     brandWashSoft: wash(color.main, dark ? 0.9 : 0.95),
     brandSoft: soft(color.main),
     brandInk: readableOn(dark ? color.light : color.dark, brandWash, ink),
-    onBrand: inkFor(brand, "#FFFFFF", "#101010"),
+    onBrand,
+    navTop: navStop(brand, color.light),
+    navBottom: navStop(brandDark, color.light),
 
     accent,
     accentDark: dark ? mix(color.accent, panel, 0.15) : color.accentDark,
@@ -742,6 +849,10 @@ export function appearanceCssVars(r: ResolvedAppearance): Record<string, string>
     "--pmw-blue-wash-soft": r.brandWashSoft,
     "--pmw-blue-ink": r.brandInk,
     "--pmw-on-blue": r.onBrand,
+    "--pmw-nav-top": r.navTop,
+    "--pmw-nav-bottom": r.navBottom,
+    "--pmw-nav-ink": NAV_INK,
+    "--pmw-nav-dim": String(NAV_DIM),
     // `sky` predates the wash vocabulary and is used as a mid-strength brand
     // tint (progress bars, the idle animation). It tracks the brand, softer.
     "--pmw-sky": mix(r.brand, r.panel, r.dark ? 0.5 : 0.72),
