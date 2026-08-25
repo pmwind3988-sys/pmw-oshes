@@ -700,3 +700,52 @@ export function TaskRow({
     </Stack>
   );
 }
+
+/**
+ * The secondary action on a widget — "Open your queue", "See everything you filed".
+ *
+ * These were plain text links sitting at the same weight as the body copy above
+ * them, which meant the one pressable thing in the footer looked exactly like
+ * the prose. It carries a border and a ground now, so it reads as a control at
+ * a glance, without going to a filled brand button: there are several of these
+ * on the dashboard at once and a screen of solid CTAs signals nothing.
+ */
+export function QuietButton({
+  children,
+  onClick,
+  fullWidth = false,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  fullWidth?: boolean;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={onClick}
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 0.5,
+        width: fullWidth ? "100%" : "auto",
+        minHeight: 32,
+        px: 1.5,
+        border: editorialHairline,
+        borderRadius: radius.sm,
+        backgroundColor: editorial.neutralWash,
+        color: editorial.ink,
+        font: "inherit",
+        fontSize: 12.5,
+        fontWeight: 800,
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+        transition: "background-color 0.16s ease, border-color 0.16s ease",
+        "&:hover": { backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlue },
+      }}
+    >
+      {children}
+    </Box>
+  );
+}

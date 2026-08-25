@@ -7,6 +7,7 @@ import ReferenceTag from "../../components/ReferenceTag";
 import {
   CtaButton,
   PageHeader,
+  QuietButton,
   SectionLabel,
   TaskRow,
   Widget,
@@ -102,33 +103,61 @@ function FormCard({
         {entry.hasWorkflow ? entry.workflow.label : "No approval step"}
       </Typography>
 
-      <Stack
-        direction="row"
-        spacing={2}
+      {/* Three counts and their words, on a grid rather than a spaced row.
+          Packed left with a 16px gap, the numbers and the labels under them ran
+          together into one strip and you had to count along to work out which
+          word belonged to which figure. Equal columns with a rule between them
+          give each pair its own cell, so the card is readable at a glance —
+          which is the whole reason the counts are on the card and not behind it. */}
+      <Box
         sx={{
           mt: "auto",
           pt: 1.5,
           width: "100%",
           borderTop: `1px solid ${editorial.border}`,
-          alignItems: "flex-end",
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr)) auto",
+          alignItems: "end",
+          columnGap: 1,
         }}
       >
         {[
           { value: mine, label: "yours" },
           { value: open, label: "open" },
           { value: entry.today, label: "today" },
-        ].map((stat) => (
-          <Box key={stat.label}>
+        ].map((stat, index) => (
+          <Box
+            key={stat.label}
+            sx={{
+              minWidth: 0,
+              pl: index === 0 ? 0 : 1.25,
+              borderLeft: index === 0 ? "none" : `1px solid ${editorial.border}`,
+            }}
+          >
             <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
               {stat.value}
             </Typography>
-            <Typography sx={{ fontSize: 10.5, color: editorial.muted }}>{stat.label}</Typography>
+            <Typography
+              sx={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: editorial.muted,
+                mt: 0.4,
+              }}
+              noWrap
+            >
+              {stat.label}
+            </Typography>
           </Box>
         ))}
-        <Typography sx={{ ml: "auto", fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark }}>
+        {/* Not a <button>: the whole card is already the button, and nesting one
+            inside another is invalid. This is the affordance, not the target. */}
+        <Typography sx={{ pl: 1.5, fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark }}>
           Open →
         </Typography>
-      </Stack>
+      </Box>
     </Box>
   );
 }
@@ -375,13 +404,7 @@ export default function HomeScreen() {
             onOpen={() => setScreen("queue")}
             openLabel="Open your queue"
             footer={
-              <Button
-                onClick={() => setScreen("queue")}
-                size="small"
-                sx={{ px: 0, minWidth: 0, fontWeight: 800 }}
-              >
-                Open your queue →
-              </Button>
+              <QuietButton onClick={() => setScreen("queue")}>Open your queue →</QuietButton>
             }
           >
             {queue.length === 0 ? (
@@ -416,13 +439,7 @@ export default function HomeScreen() {
           onOpen={() => setScreen("mine", null, "all")}
           openLabel="See everything you filed"
           footer={
-            <Button
-              onClick={() => setScreen("mine", null, "all")}
-              size="small"
-              sx={{ px: 0, minWidth: 0, fontWeight: 800 }}
-            >
-              See everything you filed →
-            </Button>
+            <QuietButton onClick={() => setScreen("mine", null, "all")}>See everything you filed →</QuietButton>
           }
         >
           {myRecords.length === 0 ? (
