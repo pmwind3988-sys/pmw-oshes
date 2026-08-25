@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Stack, Typography } from "@mui/material";
-import {
-  AdminPanelSettingsOutlined as AdminIcon,
-  DeleteForeverOutlined as DeleteForeverIcon,
-  FileDownloadOutlined as FileDownloadIcon,
-  PersonOutlined as PersonIcon,
-  SpaceDashboardOutlined as DashboardIcon,
-  TableChartOutlined as TableChartIcon,
-  WarningAmberOutlined as WarningIcon,
-} from "@mui/icons-material";
+import { ShieldUser as AdminIcon, LayoutDashboard as DashboardIcon, Trash2 as DeleteForeverIcon, Download as FileDownloadIcon, User as PersonIcon, Table as TableChartIcon, AlertTriangle as WarningIcon } from "../components/ui/Icons";
 import { useMsal } from "@azure/msal-react";
 import { loginRequest } from "../auth/msalConfig";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";

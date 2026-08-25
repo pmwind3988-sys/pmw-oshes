@@ -14,12 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import {
-  ArrowDropDown as ArrowDropDownIcon,
-  BlockOutlined as BlockIcon,
-  Close as CloseIcon,
-  DeleteForeverOutlined as DeleteForeverIcon,
-} from "@mui/icons-material";
+import { ChevronDown as ArrowDropDownIcon, Ban as BlockIcon, X as CloseIcon, Trash2 as DeleteForeverIcon } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";

@@ -8,9 +8,7 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
-import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
-import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
+import { CheckCircle as CheckCircleOutlinedIcon, AlertCircle as ErrorOutlinedIcon, Circle as RadioButtonUncheckedIcon } from "../ui/Icons";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 

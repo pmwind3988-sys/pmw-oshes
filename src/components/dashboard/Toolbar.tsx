@@ -26,15 +26,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import {
-  AdminPanelSettings as AdminIcon,
-  ExpandLess,
-  ExpandMore,
-  FileDownloadOutlined as FileDownloadIcon,
-  FilterList as FilterListIcon,
-  RestartAlt as ClearFiltersIcon,
-  Search as SearchIcon,
-} from "@mui/icons-material";
+import { ShieldUser as AdminIcon, RotateCcw as ClearFiltersIcon, ChevronUp as ExpandLess, ChevronDown as ExpandMore, Download as FileDownloadIcon, Filter as FilterListIcon, Search as SearchIcon } from "../ui/Icons";
 import { editorial, editorialShadow } from "../../theme/editorial";
 import { panelSx, radius } from "../../theme/surfaces";
 import {

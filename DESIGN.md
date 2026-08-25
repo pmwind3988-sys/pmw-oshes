@@ -215,7 +215,7 @@ sometimes wearing gloves.
 
 ## Components
 
-Panels are white on a pale blue-tinted ground. Structural cards use 14px radius, inputs and
+Panels are white on a pale blue-tinted ground. Structural cards use 12px radius, inputs and
 menus 12px, small surfaces 8–10px, pills 999px, and **MUI buttons are square (radius 0)** —
 that contrast is intentional, not an oversight.
 

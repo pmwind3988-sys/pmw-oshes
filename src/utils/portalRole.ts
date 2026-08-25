@@ -162,7 +162,9 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
     {
       id: "start",
       label: "",
-      items: [{ screen: "home", label: "Home", count: null, hint: "Everything waiting on you, in one place" }],
+      items: [
+        { screen: "home", label: "Home", count: null, hint: "Everything waiting on you, in one place", caption: "Your overview" },
+      ],
     },
   ];
 
@@ -177,6 +179,7 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
       hint: access.isEvaluator
         ? "On your layer now — evaluate, and it routes onward"
         : "On your layer now — signing releases it to the next approver",
+      caption: "On your layer",
     });
   }
   yours.push({
@@ -184,9 +187,16 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
     label: "My submissions",
     count: counts.myRecords,
     hint: "Forms you filed, including ones sent from a QR poster with this email",
+    caption: "Filed by you",
   });
   if (access.canFile) {
-    yours.push({ screen: "file", label: "File a form", count: null, hint: "Pick a form type and fill it in" });
+    yours.push({
+      screen: "file",
+      label: "File a form",
+      count: null,
+      hint: "Pick a form type and fill it in",
+      caption: "Start a new one",
+    });
   }
   sections.push({ id: "yours", label: "Your work", items: yours });
 
@@ -203,6 +213,7 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
         label: "Today",
         count: null,
         hint: "High severity, stuck approvals, and where work is sitting",
+        caption: "Needs attention",
       });
     }
     oversight.push({
@@ -212,6 +223,7 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
       hint: access.canSeeEveryRecord
         ? "Every form instance, whichever door it came through"
         : "Everything you are on a layer of, including what you have already signed",
+      caption: access.canSeeEveryRecord ? "Every record" : "Records you are on",
     });
     if (access.canManageCatalogue) {
       oversight.push({
@@ -219,10 +231,17 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
         label: "Form catalogue",
         count: counts.catalogue,
         hint: "What each form does after submit, its SLA, and who can reach it",
+        caption: "Published form types",
       });
     }
     if (access.canSeePeople) {
-      oversight.push({ screen: "people", label: "People & roles", count: null, hint: "Who holds which approval role" });
+      oversight.push({
+        screen: "people",
+        label: "People & roles",
+        count: null,
+        hint: "Who holds which approval role",
+        caption: "Who approves what",
+      });
     }
     if (access.canSeeAudit) {
       oversight.push({
@@ -230,6 +249,7 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
         label: "Audit trail",
         count: counts.audit,
         hint: "Append-only: every signature, nudge, reassignment and cancellation",
+        caption: "Every action, in order",
       });
     }
     sections.push({
@@ -243,7 +263,13 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
     id: "account",
     label: "Account",
     items: [
-      { screen: "settings", label: "Settings", count: null, hint: "Your account, what you can see, and where you land" },
+      {
+        screen: "settings",
+        label: "Settings",
+        count: null,
+        hint: "Your account, what you can see, and where you land",
+        caption: "Your account",
+      },
     ],
   });
 

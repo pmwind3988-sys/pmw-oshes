@@ -1,24 +1,7 @@
 import { useEffect, useState } from "react";
 import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import MenuIcon from "@mui/icons-material/Menu";
-import CloseIcon from "@mui/icons-material/Close";
-import SearchIcon from "@mui/icons-material/Search";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import LogoutIcon from "@mui/icons-material/Logout";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
-import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
-import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
-import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
-import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
-import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
-import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
-import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
-import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
-import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
-import type { SvgIconComponent } from "@mui/icons-material";
+import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
+import type { IconComponent } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
@@ -44,7 +27,7 @@ import "../../styles/shell.css";
  */
 
 /** One glyph per screen. The column carries the word too — this is not a memory test. */
-const SCREEN_ICON: Partial<Record<PortalScreen, SvgIconComponent>> = {
+const SCREEN_ICON: Partial<Record<PortalScreen, IconComponent>> = {
   home: HomeOutlinedIcon,
   today: TodayOutlinedIcon,
   queue: PendingActionsOutlinedIcon,
@@ -310,7 +293,11 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                     {access.readOnly ? "Read only" : roleLabel(role)}
                   </Typography>
                 </Box>
-                <ExpandMoreIcon sx={{ display: { xs: "none", lg: "block" }, fontSize: 18, color: editorial.muted }} />
+                {/* The chevron only appears where the name beside it does. A plain
+                    <svg> has no breakpoints, so the responsive part rides on a Box. */}
+                <Box sx={{ display: { xs: "none", lg: "block" }, color: editorial.muted }}>
+                  <ExpandMoreIcon size={18} />
+                </Box>
               </Box>
             </div>
           </div>

@@ -9,12 +9,8 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  Logout as LogoutIcon,
-  Refresh as RefreshIcon,
-  SwitchAccount as SwitchAccountIcon,
-} from "@mui/icons-material";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import { LogOut as LogoutIcon, RefreshCw as RefreshIcon, Users as SwitchAccountIcon } from "../ui/Icons";
+import { Lock as LockOutlinedIcon } from "../ui/Icons";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 

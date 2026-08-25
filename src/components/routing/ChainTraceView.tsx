@@ -6,10 +6,7 @@
  * the wrong person or parked with nowhere to go.
  */
 import { Box, Chip, Stack, Typography } from "@mui/material";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorOutlinedIcon from "@mui/icons-material/ErrorOutlined";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import { ArrowRight as ArrowForwardIcon, CheckCircle as CheckCircleIcon, AlertCircle as ErrorOutlinedIcon, Info as InfoOutlinedIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 import type { ChainStopReason, ChainTrace } from "../../utils/approvalDirectoryHealth";
 

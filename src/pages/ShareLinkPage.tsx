@@ -10,11 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CheckIcon from "@mui/icons-material/Check";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import ForwardToInboxIcon from "@mui/icons-material/ForwardToInbox";
-import LinkIcon from "@mui/icons-material/Link";
+import { Check as CheckIcon, Copy as ContentCopyIcon, Mail as ForwardToInboxIcon, Link2 as LinkIcon, ExternalLink as OpenInNewIcon } from "../components/ui/Icons";
 import { editorial, editorialHairline } from "../theme/editorial";
 import { appBaseUrl } from "../config/appBaseUrl";
 

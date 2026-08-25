@@ -24,7 +24,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Add as AddIcon, Close as CloseIcon } from "@mui/icons-material";
+import { Plus as AddIcon, X as CloseIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 import {
   OPS_BY_KIND,

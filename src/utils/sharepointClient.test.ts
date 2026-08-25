@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectManagedFileUrls } from "./sharepointClient";
+import { collectManagedFileUrls, readSharePointErrorDetail } from "./sharepointClient";
 import type { ListMetaEntry, Submission } from "../types";
 
 /**
@@ -131,5 +131,47 @@ describe("collectManagedFileUrls", () => {
     });
 
     expect(collectManagedFileUrls(item, SITE)).toEqual(["/sites/oshes/Incident Report Files/photo-142.png"]);
+  });
+});
+
+/**
+ * Why a write failed is only ever in the response body. Every SharePoint write
+ * in this app used to throw the status code alone, so a withdraw that failed
+ * because a Choice column does not offer "Cancelled" — a nameable, fixable
+ * thing — reached the person as "400" and nothing else.
+ */
+describe("readSharePointErrorDetail", () => {
+  const body = (payload: unknown, ok = false): Response =>
+    new Response(typeof payload === "string" ? payload : JSON.stringify(payload), { status: ok ? 200 : 400 });
+
+  it("digs the sentence out of an odata=nometadata error", async () => {
+    const response = body({
+      "odata.error": {
+        code: "-2130575163, Microsoft.SharePoint.SPException",
+        message: { lang: "en-US", value: "The specified value is not valid for the field FormStatus." },
+      },
+    });
+
+    expect(await readSharePointErrorDetail(response)).toBe(
+      "The specified value is not valid for the field FormStatus.",
+    );
+  });
+
+  it("digs it out of an odata=verbose error too", async () => {
+    const response = body({ error: { message: { value: "Column 'WorkflowEmailSchedule' does not exist." } } });
+
+    expect(await readSharePointErrorDetail(response)).toBe("Column 'WorkflowEmailSchedule' does not exist.");
+  });
+
+  it("passes a plain-text body through", async () => {
+    expect(await readSharePointErrorDetail(body("Access denied."))).toBe("Access denied.");
+  });
+
+  it("drops an HTML error page — a page of markup in a toast is worse than nothing", async () => {
+    expect(await readSharePointErrorDetail(body("<html><body>Runtime Error</body></html>"))).toBe("");
+  });
+
+  it("returns nothing rather than throwing on an empty body", async () => {
+    expect(await readSharePointErrorDetail(body(""))).toBe("");
   });
 });

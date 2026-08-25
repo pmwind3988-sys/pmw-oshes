@@ -5,7 +5,7 @@ import {
   IconButton,
   Typography,
 } from "@mui/material";
-import { Warning as WarningIcon, Close as CloseIcon } from "@mui/icons-material";
+import { X as CloseIcon, AlertTriangle as WarningIcon } from "../ui/Icons";
 import { useState } from "react";
 import { editorial, editorialShadow } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";

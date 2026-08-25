@@ -11,15 +11,7 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import {
-  Person as PersonIcon,
-  Logout as LogoutIcon,
-  Menu as MenuIcon,
-  PrivacyTip as PrivacyIcon,
-  Palette as PaletteIcon,
-  OpenInNew as OpenInNewIcon,
-  AccountTree as AccountTreeIcon,
-} from "@mui/icons-material";
+import { Network as AccountTreeIcon, LogOut as LogoutIcon, Menu as MenuIcon, ExternalLink as OpenInNewIcon, Palette as PaletteIcon, User as PersonIcon, ShieldAlert as PrivacyIcon } from "../ui/Icons";
 import type { MouseEvent } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";

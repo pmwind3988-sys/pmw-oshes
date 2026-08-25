@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
-import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
-import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
+import { FileText as DescriptionOutlinedIcon, ClipboardClock as PendingActionsOutlinedIcon, Undo2 as ReplayOutlinedIcon } from "../../components/ui/Icons";
 import { editorial } from "../../theme/editorial";
 import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
@@ -284,8 +282,15 @@ export default function HomeScreen() {
     catalogue: catalogue.length,
     audit: audit.length,
   });
-  const hint = (screen: PortalScreen): string =>
-    sections.flatMap((section) => section.items).find((item) => item.screen === screen)?.hint ?? "";
+  /**
+   * The two- or three-word caption for a destination.
+   *
+   * Deliberately `caption` and not `hint`: `hint` is the sentence the nav column
+   * shows on hover, and printing it under every card here is what made the
+   * dashboard read as an explanation of itself rather than as a set of numbers.
+   */
+  const caption = (screen: PortalScreen): string =>
+    sections.flatMap((section) => section.items).find((item) => item.screen === screen)?.caption ?? "";
   const has = (screen: PortalScreen): boolean =>
     sections.some((section) => section.items.some((item) => item.screen === screen));
 
@@ -325,7 +330,6 @@ export default function HomeScreen() {
             <StatTile
               value={queue.length}
               label="Waiting on you"
-              hint="on your layer now"
               tone={queue.length > 0 ? "alert" : "ink"}
               onClick={() => setScreen("queue")}
             />
@@ -333,14 +337,12 @@ export default function HomeScreen() {
           <StatTile
             value={myRecords.length}
             label="Filed by you"
-            hint="all time"
             onClick={() => setScreen("mine", null, "all")}
           />
           {records.length > myRecords.length && (
             <StatTile
               value={stats.open}
               label="Still moving"
-              hint="in a chain now"
               onClick={() => setScreen("subs", null, "open")}
             />
           )}
@@ -348,7 +350,6 @@ export default function HomeScreen() {
             <StatTile
               value={stats.filedToday}
               label="Filed today"
-              hint="since midnight"
               onClick={() => setScreen("subs", null, "all")}
             />
           )}
@@ -358,7 +359,6 @@ export default function HomeScreen() {
             <StatTile
               value={stats.overdue}
               label="Past SLA"
-              hint="over their target"
               tone="alert"
               onClick={() => setScreen("subs", null, "Past SLA")}
             />
@@ -370,7 +370,7 @@ export default function HomeScreen() {
         {has("queue") && (
           <Widget
             title={access.isEvaluator ? "To evaluate" : "To approve"}
-            caption={hint("queue")}
+            caption={caption("queue")}
             meta={<WidgetCount value={queue.length} tone={queue.length > 0 ? "alert" : "ink"} />}
             onOpen={() => setScreen("queue")}
             openLabel="Open your queue"
@@ -411,7 +411,7 @@ export default function HomeScreen() {
 
         <Widget
           title="Your recent filings"
-          caption={hint("mine")}
+          caption={caption("mine")}
           meta={<WidgetCount value={myRecords.length} />}
           onOpen={() => setScreen("mine", null, "all")}
           openLabel="See everything you filed"
@@ -448,7 +448,7 @@ export default function HomeScreen() {
         {has("subs") && records.length > 0 && (
           <Widget
             title="Where records stand"
-            caption="press a slice to open that list"
+            caption="Press a slice to filter"
             onOpen={() => setScreen("subs", null, "all")}
             openLabel="Open all records"
           >
@@ -469,9 +469,8 @@ export default function HomeScreen() {
           sx={{ alignItems: { sm: "flex-end" }, justifyContent: "space-between", mb: 1.75 }}
         >
           <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: { xs: 18, sm: 20 }, fontWeight: 700 }}>Your forms</Typography>
-            <Typography sx={{ fontSize: 12.5, color: editorial.muted }}>
-              pick one to file it, see everyone's, or see your own
+            <Typography sx={{ fontSize: { xs: 18, sm: 20 }, fontWeight: 800, letterSpacing: "-0.01em" }}>
+              Your forms
             </Typography>
           </Box>
           {catalogue.length > 6 && (
@@ -513,7 +512,7 @@ export default function HomeScreen() {
         <WidgetGrid min={340} sx={{ mb: 3.5 }}>
           <Widget
             title="Where everything stands"
-            caption="press a status to open that list"
+            caption="Press a status to filter"
             onOpen={() => setScreen("subs", null, "all")}
             openLabel="Open all records"
           >
@@ -522,7 +521,7 @@ export default function HomeScreen() {
 
           <Widget
             title="Intake, last 14 days"
-            caption="today is the last bar"
+            caption="Today is the last bar"
             meta={<WidgetCount value={stats.last7} tone="muted" />}
             onOpen={() => setScreen("subs", null, "all")}
             openLabel="Open all records"
@@ -537,23 +536,23 @@ export default function HomeScreen() {
           <SectionLabel>{access.canSeeEveryRecord ? "Oversight" : "More"}</SectionLabel>
           <WidgetGrid min={200}>
             {extras.includes("today") && (
-              <LinkTile label="Today" hint={hint("today")} onOpen={() => setScreen("today")} />
+              <LinkTile label="Today" hint={caption("today")} onOpen={() => setScreen("today")} />
             )}
             {extras.includes("cat") && (
               <LinkTile
                 label="Form catalogue"
-                hint={hint("cat")}
+                hint={caption("cat")}
                 count={catalogue.length}
                 onOpen={() => setScreen("cat")}
               />
             )}
             {extras.includes("people") && (
-              <LinkTile label="People & roles" hint={hint("people")} onOpen={() => setScreen("people")} />
+              <LinkTile label="People & roles" hint={caption("people")} onOpen={() => setScreen("people")} />
             )}
             {extras.includes("audit") && (
-              <LinkTile label="Audit trail" hint={hint("audit")} count={audit.length} onOpen={() => setScreen("audit")} />
+              <LinkTile label="Audit trail" hint={caption("audit")} count={audit.length} onOpen={() => setScreen("audit")} />
             )}
-            <LinkTile label="Settings" hint={hint("settings")} onOpen={() => setScreen("settings")} />
+            <LinkTile label="Settings" hint={caption("settings")} onOpen={() => setScreen("settings")} />
           </WidgetGrid>
         </Box>
       )}

@@ -45,14 +45,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
-import DownloadIcon from "@mui/icons-material/Download";
-import EditIcon from "@mui/icons-material/Edit";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { Plus as AddIcon, ArrowLeft as ArrowBackIcon, Trash2 as DeleteOutlinedIcon, Download as DownloadIcon, Pencil as EditIcon, RefreshCw as RefreshIcon, Search as SearchIcon, Upload as UploadFileIcon } from "../components/ui/Icons";
 import { acquireAccessTokenSilentOrRedirect } from "../utils/authRecovery";
 import { createSpClient } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";

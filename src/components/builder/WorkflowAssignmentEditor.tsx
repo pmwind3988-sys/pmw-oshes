@@ -10,8 +10,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { ChevronDown as ExpandMoreIcon, UserCog as ManageAccountsIcon } from "../ui/Icons";
 import type { LayerConfigItem } from "../../types";
 import { getWorkflowAssignment } from "../../utils/workflowAssignmentData";
 import { editorial, editorialHairline } from "../../theme/editorial";

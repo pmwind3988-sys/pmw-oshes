@@ -1,5 +1,5 @@
 import { Box, Stack, Typography } from "@mui/material";
-import { Description as DescriptionIcon } from "@mui/icons-material";
+import { FileText as DescriptionIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 

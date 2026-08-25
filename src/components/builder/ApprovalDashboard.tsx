@@ -56,14 +56,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import BlockIcon from "@mui/icons-material/Block";
-import LockIcon from "@mui/icons-material/Lock";
-import DescriptionIcon from "@mui/icons-material/Description";
-import CloseIcon from "@mui/icons-material/Close";
-import CheckIcon from "@mui/icons-material/Check";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ReplayIcon from "@mui/icons-material/Replay";
-import CallSplitIcon from "@mui/icons-material/CallSplit";
+import { Ban as BlockIcon, GitBranch as CallSplitIcon, Check as CheckIcon, X as CloseIcon, Trash2 as DeleteIcon, FileText as DescriptionIcon, Lock as LockIcon, Undo2 as ReplayIcon } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import {
   WorkspaceHeader,
@@ -567,7 +560,6 @@ export default function ApprovalDashboard() {
     currentLayerNumber: number;
     override: boolean;
   } | null>(null);
-
 
   const baseFilteredItems = useMemo(() => {
     let items = pendingItems;

@@ -1,10 +1,5 @@
 import { Box, Stack, Typography } from "@mui/material";
-import {
-  AccessTime as AccessTimeIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  Description as DescriptionIcon,
-} from "@mui/icons-material";
+import { Clock as AccessTimeIcon, XCircle as CancelIcon, CheckCircle as CheckCircleIcon, FileText as DescriptionIcon } from "../ui/Icons";
 import type { ReactNode } from "react";
 import type { Submission } from "../../types";
 import { editorial } from "../../theme/editorial";

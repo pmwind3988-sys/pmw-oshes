@@ -15,8 +15,7 @@ import {
   ThemeProvider,
   CssBaseline,
 } from "@mui/material";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
+import { Home as HomeOutlinedIcon, Lock as LockOutlinedIcon } from "../ui/Icons";
 import theme from "../../theme";
 import { OSHES_APP } from "../../config/oshes";
 

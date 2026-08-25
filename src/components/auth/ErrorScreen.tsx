@@ -10,14 +10,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  CheckCircleOutlined as CheckCircleOutlinedIcon,
-  ErrorOutlined as ErrorOutlinedIcon,
-  Login as LoginIcon,
-  Logout as LogoutIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon,
-  Refresh as RefreshIcon,
-} from "@mui/icons-material";
+import { CheckCircle as CheckCircleOutlinedIcon, AlertCircle as ErrorOutlinedIcon, LogIn as LoginIcon, LogOut as LogoutIcon, Circle as RadioButtonUncheckedIcon, RefreshCw as RefreshIcon } from "../ui/Icons";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 import type { LoadingStep, LoadingStepStatus } from "./LoadingScreen";

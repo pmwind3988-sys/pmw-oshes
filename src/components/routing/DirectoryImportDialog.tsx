@@ -25,8 +25,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
-import DownloadIcon from "@mui/icons-material/Download";
+import { Download as DownloadIcon, Upload as UploadFileIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 import { downloadCsv } from "../../utils/csv";
 import {

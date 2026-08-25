@@ -26,7 +26,7 @@ import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterR
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
-import IosShareIcon from "@mui/icons-material/IosShare";
+import { Share as IosShareIcon } from "../components/ui/Icons";
 import Logo from "../components/Logo";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -484,7 +484,6 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
     </div>
   );
 };
-
 
 const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>

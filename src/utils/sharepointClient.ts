@@ -11,15 +11,63 @@ export class SharePointHttpError extends Error {
   readonly status: number;
   readonly statusText: string;
   readonly action: string;
+  /** SharePoint's own sentence about what it rejected, when the body carried one. */
+  readonly detail: string;
 
-  constructor(action: string, response: Response) {
+  constructor(action: string, response: Response, detail = "") {
     const statusText = response.statusText ? ` ${response.statusText}` : "";
-    super(`${action}: ${response.status}${statusText}`);
+    const trimmed = detail.trim();
+    super(`${action}: ${response.status}${statusText}${trimmed ? ` — ${trimmed}` : ""}`);
     this.name = "SharePointHttpError";
     this.status = response.status;
     this.statusText = response.statusText;
     this.action = action;
+    this.detail = trimmed;
   }
+}
+
+/**
+ * SharePoint's reason, dug out of the error body.
+ *
+ * A write that SharePoint refuses comes back as a bare 400, and the *reason* is
+ * only ever in the body: "The specified value is not valid for the field
+ * FormStatus", or a column name it does not have. Throwing `400` on its own is
+ * what turned a withdraw that failed for a nameable, fixable reason into an
+ * unactionable error toast — so every write path reads the body before it
+ * throws.
+ *
+ * Never throws on its own account: this runs on a path that is already failing,
+ * and a parse error here would replace the status code with a stack trace about
+ * JSON.
+ */
+export async function readSharePointErrorDetail(response: Response): Promise<string> {
+  let raw = "";
+  try {
+    raw = await response.text();
+  } catch {
+    return "";
+  }
+  if (!raw) return "";
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    // `odata=verbose` nests under `error`, `odata=nometadata` under
+    // `odata.error`, and both put the sentence at `.message.value`.
+    const container = getStringRecord(parsed);
+    const error = getStringRecord(container?.["odata.error"] ?? container?.error);
+    const message = getStringRecord(error?.message);
+    const value = message?.value ?? error?.message;
+    if (typeof value === "string" && value.trim()) return value.trim();
+  } catch {
+    // Not JSON. An HTML error page is worse than nothing in a toast.
+  }
+
+  return raw.trim().startsWith("<") ? "" : raw.trim().slice(0, 400);
+}
+
+/** True when SharePoint refused a *value* — a choice the column does not offer. */
+export function isSharePointInvalidValueError(error: unknown): boolean {
+  return error instanceof SharePointHttpError && error.status === 400;
 }
 
 export function isSharePointForbiddenError(error: unknown): boolean {
@@ -36,8 +84,8 @@ export function isSharePointAccessDeniedError(error: unknown): boolean {
   return error instanceof SharePointHttpError && (error.status === 401 || error.status === 403);
 }
 
-function createSharePointHttpError(action: string, response: Response): SharePointHttpError {
-  return new SharePointHttpError(action, response);
+async function createSharePointHttpError(action: string, response: Response): Promise<SharePointHttpError> {
+  return new SharePointHttpError(action, response, await readSharePointErrorDetail(response));
 }
 
 function escapeODataString(value: string): string {
@@ -396,7 +444,7 @@ export function createSpClient(
     });
 
     if (!response.ok) {
-      throw createSharePointHttpError("Failed to access SharePoint site", response);
+      throw await createSharePointHttpError("Failed to access SharePoint site", response);
     }
   }
 
@@ -413,7 +461,7 @@ export function createSpClient(
     );
 
     if (!response.ok) {
-      throw createSharePointHttpError("Failed to discover lists", response);
+      throw await createSharePointHttpError("Failed to discover lists", response);
     }
 
     const data = await response.json();
@@ -679,7 +727,7 @@ export function createSpClient(
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to add column: ${response.status}`);
+      throw await createSharePointHttpError(`Failed to add column "${internalName}" to "${listTitle}"`, response);
     }
   }
 
@@ -721,7 +769,7 @@ export function createSpClient(
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to update item: ${response.status}`);
+        throw await createSharePointHttpError(`Failed to update item in "${listTitle}"`, response);
       }
 
       return { updated: true, id: itemId };
@@ -749,7 +797,7 @@ export function createSpClient(
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to create item: ${response.status}`);
+        throw await createSharePointHttpError(`Failed to create item in "${listTitle}"`, response);
       }
 
       const data = await response.json();

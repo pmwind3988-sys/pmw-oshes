@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
-import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
+import { ClipboardClock as PendingActionsOutlinedIcon } from "../../components/ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";

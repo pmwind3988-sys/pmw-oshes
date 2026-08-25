@@ -16,23 +16,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  AccessTime as AccessTimeIcon,
-  CalendarToday as CalendarIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  Close as CloseIcon,
-  Description as DocumentIcon,
-  Edit as SignatureIcon,
-  Email as EmailIcon,
-  InfoOutlined as InfoIcon,
-  InsertDriveFile as FileIcon,
-  Lock as LockIcon,
-  OpenInNew as OpenInNewIcon,
-  Person as PersonIcon,
-  PictureAsPdf as PdfIcon,
-  VerifiedUser as ApprovalIcon,
-} from "@mui/icons-material";
+import { Clock as AccessTimeIcon, ShieldCheck as ApprovalIcon, CalendarDays as CalendarIcon, XCircle as CancelIcon, CheckCircle as CheckCircleIcon, X as CloseIcon, FileText as DocumentIcon, Mail as EmailIcon, FileText as FileIcon, Info as InfoIcon, Lock as LockIcon, ExternalLink as OpenInNewIcon, FileType as PdfIcon, User as PersonIcon, Pencil as SignatureIcon } from "../ui/Icons";
 import { useEffect, useState, type ReactNode } from "react";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../../utils/authRecovery";
 import { useMsal } from "@azure/msal-react";
@@ -305,7 +289,6 @@ function collectLinks(value: unknown): LinkValue[] {
   const link = linkFromValue(normalized);
   return link ? [link] : [];
 }
-
 
 function signatureValueToSrc(value: unknown): string {
   const normalized = normalizeMaybeJson(value);

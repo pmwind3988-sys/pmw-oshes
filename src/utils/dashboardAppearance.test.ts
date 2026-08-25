@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   APPEARANCE_CHOICE_FIELDS,
   DEFAULT_DASHBOARD_APPEARANCE,
+  MAX_PHOTO_STRENGTH,
+  buildDashboardBackgroundCss,
   isAppearanceDirty,
   normalizeDashboardAppearance,
   type DashboardAppearanceSetting,
@@ -97,5 +99,49 @@ describe("normalizeDashboardAppearance", () => {
   it("rejects an unknown background id", () => {
     const result = normalizeDashboardAppearance({ backgroundId: "wallpaper-of-the-month" });
     expect(result.backgroundId).toBe(DEFAULT_DASHBOARD_APPEARANCE.backgroundId);
+  });
+});
+
+/**
+ * The screen titles, the section labels and the captions under them sit directly
+ * on the wallpaper — there is no panel between `--pmw-ink` and the picture. So a
+ * photographic wallpaper has to keep a floor of the theme's own canvas over it
+ * at every stop, at every slider position, or the headings on the dashboard land
+ * on a window frame and stop being readable.
+ *
+ * These pin the floor rather than the exact gradient, so the stops can be
+ * re-weighted without rewriting the test.
+ */
+describe("photographic wallpaper readability floor", () => {
+  const scrimPercents = (css: string): number[] =>
+    [...css.matchAll(/var\(--pmw-canvas\) (\d+)%/g)].map((match) => Number(match[1]));
+
+  const withOpacity = (imageOpacity: number): DashboardAppearanceSetting => ({
+    ...DEFAULT_DASHBOARD_APPEARANCE,
+    backgroundId: "workspace",
+    imageOpacity,
+  });
+
+  it("never lets a photograph through at more than MAX_PHOTO_STRENGTH", () => {
+    const percents = scrimPercents(buildDashboardBackgroundCss(withOpacity(1)));
+    expect(percents.length).toBeGreaterThan(0);
+    const floor = Math.round((1 - MAX_PHOTO_STRENGTH) * 100);
+    for (const percent of percents) expect(percent).toBeGreaterThanOrEqual(floor);
+  });
+
+  it("holds the floor when the slider is pushed past its range", () => {
+    const percents = scrimPercents(buildDashboardBackgroundCss(withOpacity(4)));
+    const floor = Math.round((1 - MAX_PHOTO_STRENGTH) * 100);
+    for (const percent of percents) expect(percent).toBeGreaterThanOrEqual(floor);
+  });
+
+  it("still lets the slider change the picture", () => {
+    const quiet = scrimPercents(buildDashboardBackgroundCss(withOpacity(0.1)));
+    const loud = scrimPercents(buildDashboardBackgroundCss(withOpacity(1)));
+    expect(Math.min(...loud)).toBeLessThan(Math.min(...quiet));
+  });
+
+  it("keeps the wallpaper off the page entirely on the default theme ground", () => {
+    expect(DEFAULT_DASHBOARD_APPEARANCE.backgroundId).toBe("theme");
   });
 });

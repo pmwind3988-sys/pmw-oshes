@@ -9,13 +9,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import {
-  ChevronRight as ChevronRightIcon,
-  DeleteOutlined as DeleteIcon,
-  LayersOutlined as LayersIcon,
-  NumbersOutlined as NumbersIcon,
-  VisibilityOutlined as ViewIcon,
-} from "@mui/icons-material";
+import { ChevronRight as ChevronRightIcon, Trash2 as DeleteIcon, Layers as LayersIcon, Hash as NumbersIcon, Eye as ViewIcon } from "../ui/Icons";
 import type { KeyboardEvent, MouseEvent } from "react";
 import type { Submission, ListMetaEntry } from "../../types";
 import ListBadge from "./ListBadge";

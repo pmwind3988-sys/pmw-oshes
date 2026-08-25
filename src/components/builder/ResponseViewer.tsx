@@ -13,9 +13,7 @@ import "../../native/native-form.css";
 
 import DOMPurify from "dompurify";
 import { Alert, Box, Button, Link, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import LockIcon from "@mui/icons-material/Lock";
-import BlockIcon from "@mui/icons-material/Block";
-import DownloadIcon from "@mui/icons-material/Download";
+import { Ban as BlockIcon, Download as DownloadIcon, Lock as LockIcon } from "../ui/Icons";
 import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../../utils/formBuilderSP";
 import { createSpClient } from "../../utils/sharepointClient";

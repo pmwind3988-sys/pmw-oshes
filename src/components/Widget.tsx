@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import { ArrowRight as ArrowForwardIcon } from "./ui/Icons";
 import { editorial, editorialHairline } from "../theme/editorial";
 import { panelSx, radius } from "../theme/surfaces";
 
@@ -257,7 +257,17 @@ export function PageHeader({
               {eyebrow}
             </Typography>
           )}
-          <Typography component="h1" sx={{ fontSize: { xs: 26, sm: 32 }, fontWeight: 700, lineHeight: 1.12 }}>
+          {/* 19/22px. Still nowhere near the 26/32px display size this used to
+              carry — that pushed the first table row below the fold on a phone —
+              but two points up from 17/19, because at 19px the screen title was
+              *smaller* than the 30px figure in the first statistic tile and no
+              larger than a 16px card title. A page heading that loses to the
+              content beneath it is not a heading. Tightened tracking keeps the
+              line the same visual weight per character. */}
+          <Typography
+            component="h1"
+            sx={{ fontSize: { xs: 19, sm: 22 }, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.015em" }}
+          >
             {title}
           </Typography>
           {subtitle && (

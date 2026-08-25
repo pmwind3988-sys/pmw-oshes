@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import PendingActionsOutlinedIcon from "@mui/icons-material/PendingActionsOutlined";
+import { ArrowLeft as ArrowBackIcon, ClipboardClock as PendingActionsOutlinedIcon } from "../../components/ui/Icons";
 import { editorial } from "../../theme/editorial";
 import { liftSx, panelSx } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";

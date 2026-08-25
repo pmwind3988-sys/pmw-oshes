@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Box, Stack, Typography } from "@mui/material";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import { ArrowRight as ArrowForwardIcon, FileText as DescriptionOutlinedIcon } from "../../components/ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { panelSx, radius } from "../../theme/surfaces";
 import { IconTile, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";

@@ -1,5 +1,5 @@
 import { Chip } from "@mui/material";
-import { DescriptionOutlined as DescriptionIcon } from "@mui/icons-material";
+import { FileText as DescriptionIcon } from "../ui/Icons";
 
 interface ListBadgeProps {
   title: string;

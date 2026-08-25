@@ -46,7 +46,23 @@ export interface DashboardAppearanceSetting extends AppearanceSetting {
 }
 
 const CSS_VAR = "--app-bg";
-export const DEFAULT_IMAGE_OPACITY = 0.22;
+export const DEFAULT_IMAGE_OPACITY = 0.16;
+
+/**
+ * The most of a photograph that is ever allowed through the scrim.
+ *
+ * The opacity slider used to run all the way to 1, which meant "no scrim at
+ * all" — and a photograph of an office at full strength puts window frames and
+ * ceiling lights directly behind the page's own headings, which are painted in
+ * the theme's ink and have nothing else to sit on. The screen titles, the
+ * section labels and the captions under them are all directly on the wallpaper.
+ *
+ * Capping the photo at 45% keeps at least 55% of the contrast theme's own canvas
+ * over the image everywhere, which is what holds `--pmw-ink` above 4.5:1 on the
+ * busiest photograph in the catalogue. The slider still spans its full range and
+ * still visibly changes the picture; it just cannot turn the scrim off.
+ */
+export const MAX_PHOTO_STRENGTH = 0.45;
 
 /** The ground the contrast theme itself defines — see theme/appearance.ts. */
 const THEME_GROUND = "var(--app-bg-fallback)";
@@ -74,11 +90,12 @@ function tint(variable: string, percent: number): string {
  * header and the first row of statistics sit — stays the calmest part.
  */
 function photo(url: string, imageOpacity = DEFAULT_IMAGE_OPACITY): string {
+  const strength = normalizeImageOpacity(imageOpacity) * MAX_PHOTO_STRENGTH;
   const scrim = (scale: number) => {
-    const opacity = 1 - normalizeImageOpacity(imageOpacity) * scale;
+    const opacity = 1 - strength * scale;
     return `color-mix(in srgb, var(--pmw-canvas) ${Math.round(opacity * 100)}%, transparent)`;
   };
-  return `linear-gradient(180deg, ${scrim(0.55)} 0%, ${scrim(1)} 42%, ${scrim(0.45)} 100%), url("${url}") center/cover no-repeat`;
+  return `linear-gradient(180deg, ${scrim(0.45)} 0%, ${scrim(1)} 55%, ${scrim(0.7)} 100%), url("${url}") center/cover no-repeat`;
 }
 
 export const DASHBOARD_BACKGROUNDS: DashboardBackgroundDef[] = [

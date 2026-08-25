@@ -47,6 +47,45 @@ async function patch(
   await context.spClient.upsertListItem(record.listTitle, itemFilter(record), fields);
 }
 
+/** One rung of a narrowing patch: the fields to try, and what giving up on them costs. */
+interface PatchAttempt {
+  fields: Record<string, unknown>;
+  /** Null on the first rung — nothing has been given up yet. */
+  lost: string | null;
+}
+
+/**
+ * Write the first patch SharePoint accepts, narrowing on each refusal.
+ *
+ * A SharePoint MERGE is all or nothing: one column the list does not have, or
+ * one Choice value the column does not offer, and the *entire* patch comes back
+ * 400 and nothing at all is written. Withdrawing a form writes five columns at
+ * once — `FormStatus`, the layer's status, the layer's rejection note, and the
+ * email schedule — across response lists that were provisioned at different
+ * times by two different apps. Any one of them missing took the whole withdraw
+ * down, and the record stayed live with its reminder still queued.
+ *
+ * So the important part goes first and the rest is peeled off in order of what
+ * it costs to lose. Returns the rung that stuck, so the caller can tell the
+ * person what did not get written rather than reporting a clean success.
+ */
+async function patchNarrowing(
+  context: PortalActionContext,
+  record: PortalRecord,
+  attempts: PatchAttempt[],
+): Promise<PatchAttempt> {
+  let lastError: unknown = new Error("No patch was attempted.");
+  for (const attempt of attempts) {
+    try {
+      await patch(context, record, attempt.fields);
+      return attempt;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 /** Merge a note into the per-layer EvaluationData JSON — the column that already holds layer notes. */
 function withLayerNote(record: PortalRecord, layerNumber: number, note: string, actor: PortalActionContext): string {
   const raw = record.submission.evaluationDataRaw;
@@ -304,35 +343,82 @@ export async function cancelSubmission(
   // it, anyone else cancels it. The trail should say which one happened.
   const verb = normalizeEmail(context.actorEmail) === record.submitterEmail ? "Withdrawn" : "Cancelled";
 
-  const fields: Record<string, unknown> = { FormStatus: SP_FORM_STATUS.CANCELLED };
+  const note = trimmed ? `${verb} by ${context.actorName} — ${trimmed}` : `${verb} by ${context.actorName}`;
+  const standDown = JSON.stringify(
+    cancelScheduledWorkflowEmails(record.submission.workflowEmailScheduleRaw, now),
+  );
 
   // A record with no chain has nothing to stand down, and one that is already
   // settled has a decision recorded against its layer that must not be
   // overwritten by this one.
-  if (record.hasWorkflow && !record.done) {
-    fields[`L${layerNumber}_Status`] = SP_LAYER_STATUS.CANCELLED;
-    fields[`L${layerNumber}_Rejection`] = trimmed
-      ? `${verb} by ${context.actorName} — ${trimmed}`
-      : `${verb} by ${context.actorName}`;
-    fields.WorkflowEmailSchedule = JSON.stringify(
-      cancelScheduledWorkflowEmails(record.submission.workflowEmailScheduleRaw, now),
-    );
+  const closesLayer = record.hasWorkflow && !record.done;
+
+  const full: Record<string, unknown> = { FormStatus: SP_FORM_STATUS.CANCELLED };
+  if (closesLayer) {
+    full[`L${layerNumber}_Status`] = SP_LAYER_STATUS.CANCELLED;
+    full[`L${layerNumber}_Rejection`] = note;
+    full.WorkflowEmailSchedule = standDown;
   }
 
-  await patch(context, record, fields);
+  /**
+   * The rungs, in the order it is least painful to lose them.
+   *
+   * `WorkflowEmailSchedule` and `L{n}_Rejection` were both added to the response
+   * lists after the first sites were provisioned, so an older list has the
+   * record's own status columns and not those two. `Cancelled` is likewise a
+   * later addition to the FormStatus and L{n}_Status Choice columns, and a
+   * Choice column refuses a value it does not offer. Any one of those made the
+   * whole withdraw a 400 and left the form live.
+   *
+   * The last two rungs write `Rejected`, which is the vocabulary every list has
+   * carried since the beginning — the same fallback `returnForInformation`
+   * already relies on. It is not the right word, and the note and the audit
+   * trail both say `Withdrawn`, so the record still reads correctly to a person.
+   */
+  const attempts: PatchAttempt[] = [{ fields: full, lost: null }];
+
+  if (closesLayer) {
+    attempts.push({
+      fields: { FormStatus: SP_FORM_STATUS.CANCELLED, [`L${layerNumber}_Status`]: SP_LAYER_STATUS.CANCELLED, [`L${layerNumber}_Rejection`]: note },
+      lost: "the queued reminder could not be stood down",
+    });
+    attempts.push({
+      fields: { FormStatus: SP_FORM_STATUS.CANCELLED, [`L${layerNumber}_Status`]: SP_LAYER_STATUS.CANCELLED },
+      lost: "the reason and the queued reminder could not be written",
+    });
+    attempts.push({
+      fields: { FormStatus: SP_FORM_STATUS.REJECTED, [`L${layerNumber}_Status`]: SP_LAYER_STATUS.REJECTED, [`L${layerNumber}_Rejection`]: note },
+      lost: `this list does not offer "Cancelled", so it reads as rejected`,
+    });
+  }
+
+  attempts.push({
+    fields: { FormStatus: SP_FORM_STATUS.REJECTED },
+    lost: closesLayer
+      ? `this list does not offer "Cancelled", so it reads as rejected and its layer is still open`
+      : `this list does not offer "Cancelled", so it reads as rejected`,
+  });
+
+  const stuck = await patchNarrowing(context, record, attempts);
+  const fields = stuck.fields;
 
   const audit = await writeAuditEntry(context.spClient, {
     reference: record.reference,
     who: context.actorName,
-    event: `${verb} on ${record.hasWorkflow ? record.layerLabel.toLowerCase() : "a form with no approval step"}${trimmed ? ` — ${trimmed}` : ""}`,
+    // The shortfall goes in the trail, not only in a toast that closes. If the
+    // reminder is still queued, the person who gets chased needs a record of why.
+    event: `${verb} on ${record.hasWorkflow ? record.layerLabel.toLowerCase() : "a form with no approval step"}${trimmed ? ` — ${trimmed}` : ""}${stuck.lost ? ` · incomplete write: ${stuck.lost}` : ""}`,
   });
 
+  const done = `${record.reference} ${verb.toLowerCase()}.`;
   return {
     fields,
     audit,
-    toast: record.hasWorkflow && !record.done
-      ? `${record.reference} ${verb.toLowerCase()}. ${step?.who ?? "The approver"} is no longer being asked to sign it.`
-      : `${record.reference} ${verb.toLowerCase()}. The record keeps its reference and stays readable.`,
+    toast: stuck.lost
+      ? `${done} SharePoint refused part of the write — ${stuck.lost}. Tell an administrator.`
+      : closesLayer
+        ? `${done} ${step?.who ?? "The approver"} is no longer being asked to sign it.`
+        : `${done} The record keeps its reference and stays readable.`,
   };
 }
 

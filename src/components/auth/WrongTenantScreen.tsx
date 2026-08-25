@@ -9,7 +9,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Refresh as RefreshIcon, Logout as LogoutIcon } from "@mui/icons-material";
+import { LogOut as LogoutIcon, RefreshCw as RefreshIcon } from "../ui/Icons";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 

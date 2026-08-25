@@ -20,10 +20,6 @@
 :root {
   --shell-nav-width: 236px;
   --shell-radius: 12px;
-  /* Ink *on* the brand column, at the dimmed weight the inactive rows use.
-     Derived from the resolved on-brand ink rather than hard-coded white: a pale
-     colour theme resolves `--pmw-on-blue` to near-black, and a fixed white
-     would then be invisible on its own column. */
   /* Ink *on* the brand column. Fixed white, published by `appearance.ts` as
      `NAV_INK` — the column is a dark branded surface on every theme, and the
      gradient stops below are derived to meet this ink rather than the other way
@@ -84,7 +80,7 @@
 
 /* `both` matters: without it the element paints at full opacity for the frame
    before the animation starts, which reads as a flicker, not an entrance. */
-@keyframes qaqcRiseIn {
+@keyframes oshesRiseIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -96,7 +92,7 @@
 }
 
 .oshes-rise {
-  animation: qaqcRiseIn 0.4s ease both;
+  animation: oshesRiseIn 0.4s ease both;
 }
 
 /* ---------------------------------------------------------------------------
@@ -136,7 +132,12 @@
   width: 260px;
   max-width: 82vw;
   padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
-  overflow-y: auto;
+  /* `hidden`, not `auto`. The whole column used to be the scroll container, so a
+     long section list pushed the brand mark and the account/sign-out block out of
+     view and left a scrollbar track down the middle of the branded surface. The
+     column is now a fixed frame - brand pinned top, account block pinned bottom -
+     and `.shell-navlist` is the only thing in it that scrolls. */
+  overflow: hidden;
   transform: translateX(-100%);
   transition: transform 200ms ease-out;
 }
@@ -218,6 +219,33 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  /* The one scrolling area in the column. `min-height: 0` is what lets it
+     actually shrink inside the flex column rather than growing past the viewport
+     and taking the footer with it. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A hairline of the column's own ink rather than the platform scrollbar, which
+     paints a light grey track across a dark branded surface. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-on-brand-rule) transparent;
+  /* Room for the thumb so it never sits on top of a label. */
+  padding-right: 4px;
+  margin-right: -4px;
+}
+
+.shell-navlist::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shell-navlist::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.shell-navlist::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--shell-on-brand-rule);
 }
 
 .shell-navsection {
@@ -227,8 +255,11 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  /* No extra `opacity` here. It used to carry 0.78 on top of the dim, which
+     multiplied out to about 69% ink — and these are 9.5px uppercase labels, the
+     smallest text in the column. The dim is the one place that strength is set,
+     because it is the number `appearance.ts` derives the gradient against. */
   color: var(--shell-on-brand-dim);
-  opacity: 0.78;
 }
 
 .shell-navitem {
@@ -278,9 +309,13 @@
   background: var(--pmw-cta);
 }
 
+/* width/height, not font-size: these are inline <svg>s from components/ui/Icons,
+   which carry their own box. font-size only ever sized the Material glyphs that
+   used to be here, and left silently doing nothing after the swap. */
 .shell-navitem svg {
   flex-shrink: 0;
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 /* The queue count rides its own row rather than the glyph: this column has the
@@ -300,7 +335,8 @@
 }
 
 .shell-navfoot {
-  margin-top: auto;
+  flex: none;
+  margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--shell-on-brand-rule);
 }
@@ -355,9 +391,12 @@
   gap: 7px;
   background: none;
   border: 0;
-  padding: 0;
+  padding: 6px 8px;
+  margin-left: -8px;
+  border-radius: 8px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--shell-on-brand-dim);
   cursor: pointer;
   text-decoration: none;
@@ -365,17 +404,20 @@
 
 .shell-navlink + .shell-navlink,
 .shell-navlink + .shell-signout {
-  margin-top: 7px;
+  margin-top: 2px;
 }
 
 .shell-navlink:hover,
 .shell-signout:hover {
   color: var(--shell-on-brand);
+  background: var(--shell-on-brand-hover);
 }
 
 .shell-navlink svg,
 .shell-signout svg {
-  font-size: 14px;
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .shell-main {
@@ -453,7 +495,8 @@
 .shell-search svg {
   flex-shrink: 0;
   color: var(--pmw-muted);
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 .shell-search input {

@@ -9,8 +9,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import ShieldIcon from "@mui/icons-material/Shield";
+import { ArrowLeft as ArrowBackIcon, ShieldCheck as ShieldIcon } from "../components/ui/Icons";
 import { editorial } from "../theme/editorial";
 import {
   PDPA_CONTACT_EMAIL,

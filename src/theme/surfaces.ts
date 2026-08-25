@@ -25,8 +25,9 @@ export const radius = {
   md: "10px",
   /** Inputs, menus, nested panels. */
   base: "12px",
-  /** Structural cards — the widget. */
-  lg: "16px",
+  /** Structural cards — the widget. 12px, matching the SI maintenance portal,
+   *  so a card in either app is the same object. */
+  lg: "12px",
   /** Pills, bars, avatars. */
   full: "999px",
 } as const;

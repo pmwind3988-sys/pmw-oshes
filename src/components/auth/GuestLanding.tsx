@@ -8,7 +8,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { Login as LoginIcon } from "@mui/icons-material";
+import { LogIn as LoginIcon } from "../ui/Icons";
 import { fadeInUp } from "../../theme";
 import Logo from "../../components/Logo";
 import { editorial, editorialShadow } from "../../theme/editorial";

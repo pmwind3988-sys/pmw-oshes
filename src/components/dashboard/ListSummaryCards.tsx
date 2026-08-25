@@ -1,12 +1,5 @@
 import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
-import {
-  AccessTime as AccessTimeIcon,
-  ArrowForward as ArrowForwardIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  Description as DescriptionIcon,
-  Edit as EditIcon,
-} from "@mui/icons-material";
+import { Clock as AccessTimeIcon, ArrowRight as ArrowForwardIcon, XCircle as CancelIcon, CheckCircle as CheckCircleIcon, FileText as DescriptionIcon, Pencil as EditIcon } from "../ui/Icons";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
 import { editorial } from "../../theme/editorial";
 import { panelSx, radius } from "../../theme/surfaces";

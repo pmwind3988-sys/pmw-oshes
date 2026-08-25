@@ -14,7 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Check, Close, Palette } from "@mui/icons-material";
+import { Check, X as Close, Palette } from "../ui/Icons";
 import {
   COLOR_THEMES,
   CONTRAST_THEMES,

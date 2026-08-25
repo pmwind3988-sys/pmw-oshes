@@ -10,7 +10,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
+import { Trash2 as DeleteForeverIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 import { usePortal } from "../../contexts/PortalContext";
 import { deleteSubmission } from "../../utils/portalActions";

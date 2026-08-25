@@ -157,6 +157,78 @@ describe("cancelSubmission", () => {
     expect(result.toast).toContain("withdrawn");
   });
 
+  /**
+   * A SharePoint MERGE is all or nothing, and the response lists were
+   * provisioned at different times by two different apps — so one column an
+   * older list does not have, or one Choice value it does not offer, used to
+   * come back as a bare 400 with the whole withdraw unwritten and the form
+   * still live and still being chased.
+   *
+   * These pin the narrowing: the important part lands, and what could not be
+   * written is *said* rather than reported as a clean success.
+   */
+  describe("when SharePoint refuses part of the patch", () => {
+    /** Reject any patch that mentions one of `bad`, the way a 400 on a MERGE does. */
+    function refusing(bad: string[]) {
+      return vi.fn(async (_list: string, _filter: string, body: Record<string, unknown>) => {
+        const offending = bad.find((key) => key in body && body[key] !== undefined);
+        if (offending) throw new Error(`Failed to update item in "Incident Report": 400 — no column ${offending}`);
+        return { updated: true, id: "9" };
+      });
+    }
+
+    function actorWith(upsertListItem: ReturnType<typeof vi.fn>): PortalActionContext {
+      const spClient = { upsertListItem, hardDeleteSubmission: vi.fn() } as unknown as SharePointClient;
+      return { spClient, actorName: "Aina Zulkifli", actorEmail: "aina@pmw.gov.my" };
+    }
+
+    it("still closes the record when the list has no WorkflowEmailSchedule column", async () => {
+      const upsertListItem = refusing(["WorkflowEmailSchedule"]);
+
+      const result = await cancelSubmission(
+        actorWith(upsertListItem),
+        record({ workflowEmailScheduleRaw: scheduled }),
+        "Duplicate report",
+      );
+
+      expect(result.fields.FormStatus).toBe("Cancelled");
+      expect(result.fields.L1_Status).toBe("Cancelled");
+      expect(String(result.fields.L1_Rejection)).toContain("Duplicate report");
+      // The cron reads the schedule and never FormStatus, so a reminder that
+      // could not be stood down is still going to be sent. Say so.
+      expect(result.toast).toContain("reminder");
+      expect(result.audit.event).toContain("incomplete write");
+    });
+
+    it("falls back to Rejected when the Choice column does not offer Cancelled", async () => {
+      const upsertListItem = refusing(["WorkflowEmailSchedule"]);
+      upsertListItem.mockImplementation(async (_list: string, _filter: string, body: Record<string, unknown>) => {
+        if (body.FormStatus === "Cancelled" || body.L1_Status === "Cancelled") {
+          throw new Error('Failed to update item: 400 — value not valid for field FormStatus');
+        }
+        return { updated: true, id: "9" };
+      });
+
+      const result = await cancelSubmission(actorWith(upsertListItem), record(), "Filed twice");
+
+      expect(result.fields.FormStatus).toBe("Rejected");
+      // The note and the trail still say what actually happened.
+      expect(String(result.fields.L1_Rejection)).toContain("Cancelled by Aina Zulkifli");
+      expect(result.audit.event).toContain("Cancelled");
+      expect(result.toast).toContain("Cancelled");
+    });
+
+    it("surfaces SharePoint's own reason when nothing at all is accepted", async () => {
+      const upsertListItem = vi.fn(async () => {
+        throw new Error('Failed to update item in "Incident Report": 400 — field FormStatus is read only');
+      });
+
+      await expect(cancelSubmission(actorWith(upsertListItem), record(), "Filed twice")).rejects.toThrow(
+        /field FormStatus is read only/,
+      );
+    });
+  });
+
   it("leaves a settled record's layer alone — its decision is already recorded", async () => {
     const { actor, upsertListItem } = context();
 

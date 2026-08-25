@@ -1,11 +1,5 @@
 import { Chip } from "@mui/material";
-import {
-  AccessTime as AccessTimeIcon,
-  Cancel as CancelIcon,
-  CheckCircle as CheckCircleIcon,
-  HourglassEmpty as WaitingIcon,
-  TaskAlt as ConfirmedIcon,
-} from "@mui/icons-material";
+import { Clock as AccessTimeIcon, XCircle as CancelIcon, CheckCircle as CheckCircleIcon, CheckCircle as ConfirmedIcon, Hourglass as WaitingIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {

@@ -285,6 +285,16 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: "#4B4D89",
   },
   {
+    id: "si",
+    label: "SI Navy",
+    note: "The maintenance portal's navy, for sites that run both",
+    main: "#0F3D91",
+    dark: "#0B2F70",
+    light: "#2C5AA8",
+    accent: "#0E7490",
+    accentDark: "#0F5A72",
+  },
+  {
     id: "indigo",
     label: "Indigo",
     note: "Deeper and cooler than the house blue",
@@ -797,7 +807,12 @@ export function resolveAppearance(setting: AppearanceSetting): ResolvedAppearanc
     // leans on the ring layer instead.
     shadow: dark
       ? `0 0 0 1px ${withAlpha("#000000", 0.5)}, 0 1px 2px -1px ${withAlpha("#000000", 0.6)}, 0 14px 36px ${withAlpha("#000000", 0.45)}`
-      : `0 0 0 1px ${withAlpha("#000000", 0.06)}, 0 1px 2px -1px ${withAlpha("#000000", 0.06)}, 0 14px 36px ${withAlpha(color.dark, 0.08)}`,
+      : // The card shadow is the SI maintenance portal's: two flat slate layers
+        // rather than a wide tinted bloom. At the densities these screens run
+        // at — tables of records, grids of form cards — the tinted 36px blur
+        // pooled between neighbouring panels and read as a gradient on the
+        // page rather than as lift on each card.
+        `0 0 0 1px ${withAlpha("#000000", 0.06)}, 0 1px 2px ${withAlpha("#0F172A", 0.04)}, 0 4px 12px ${withAlpha("#0F172A", 0.05)}`,
     shadowHover: dark
       ? `0 0 0 1px ${withAlpha("#000000", 0.6)}, 0 2px 6px -2px ${withAlpha("#000000", 0.7)}, 0 18px 42px ${withAlpha("#000000", 0.55)}`
       : `0 0 0 1px ${withAlpha("#000000", 0.08)}, 0 2px 6px -2px ${withAlpha("#000000", 0.1)}, 0 18px 42px ${withAlpha(color.dark, 0.12)}`,

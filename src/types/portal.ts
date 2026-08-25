@@ -55,8 +55,22 @@ export interface PortalNavItem {
   label: string;
   /** Rendered right-aligned; null when the item carries no count. */
   count: number | null;
-  /** One line of what the page is for — the home cards and the nav share it. */
+  /**
+   * One line of what the page is for. This is the *tooltip* text — it appears on
+   * hover in the nav column, where there is time to read it and it costs no
+   * layout.
+   */
   hint: string;
+  /**
+   * Two or three words, for anywhere the description is always on screen.
+   *
+   * The home dashboard used to print `hint` under every card title, so a screen
+   * whose job is to show numbers carried a paragraph of explanation above them —
+   * "Forms you filed, including ones sent from a QR poster with this email" over
+   * a card already titled "Your recent filings". The long line is still worth
+   * having on first hover; it is not worth having on every visit.
+   */
+  caption: string;
 }
 
 /** Nav items under one heading. A blank heading renders without one. */

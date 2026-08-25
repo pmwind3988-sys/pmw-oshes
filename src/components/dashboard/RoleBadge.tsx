@@ -1,5 +1,5 @@
 import { Chip } from "@mui/material";
-import { Shield as ShieldIcon, Person as PersonIcon } from "@mui/icons-material";
+import { User as PersonIcon, ShieldCheck as ShieldIcon } from "../ui/Icons";
 import { editorial } from "../../theme/editorial";
 
 interface RoleBadgeProps {
