@@ -747,10 +747,21 @@ export function createSpClient(
       const itemId = String(item.Id || "");
       const digest = await getDigest(token);
 
-      const updateBody = {
-        __metadata: { type: "SP.Data." + listTitle.replace(/\s/g, "_x0020_") + "ListItem" },
-        ...body,
-      };
+      // No `__metadata`. It used to carry a *guessed* entity type —
+      // `"SP.Data." + listTitle.replace(/\s/g, "_x0020_") + "ListItem"` — built
+      // from the list's display title. SharePoint derives that name from the
+      // list's URL instead, which is fixed when the list is created and is not
+      // touched by a later rename. So on any list whose title and URL have
+      // drifted apart, the guess named a type that does not exist and every
+      // write to it came back 400 "a type named ... could not be resolved by
+      // the model" — while the same code worked on every list that had never
+      // been renamed. That is the shape the withdraw failure had: one list, all
+      // writes to it, a bare 400.
+      //
+      // The request already asks for `odata=nometadata`, where the type is not
+      // required and a plain bag of fields is the documented form. So the
+      // correct fix is to stop guessing rather than to guess better.
+      const updateBody = { ...body };
 
       const response = await fetchWithTimeout(
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${itemId})`,
@@ -777,10 +788,9 @@ export function createSpClient(
       // Create new
       const digest = await getDigest(token);
 
-      const createBody = {
-        __metadata: { type: "SP.Data." + listTitle.replace(/\s/g, "_x0020_") + "ListItem" },
-        ...body,
-      };
+      // See the note on `updateBody` above: the type name was a guess off the
+      // display title, and `odata=nometadata` does not want one.
+      const createBody = { ...body };
 
       const response = await fetchWithTimeout(
         `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items`,
