@@ -22,8 +22,20 @@ describe("effectiveFlag", () => {
   it("computes open-over-12h at read time", () => {
     expect(effectiveFlag(brk({ timeIn: "2026-09-23T23:00:00Z", timeOut: null, durationMinutes: null }), now)).toBe("Open over 12 hours");
   });
-  it("clears once resolved", () => {
-    expect(effectiveFlag(brk({ flagReason: "Lasted over 12 hours", resolvedAt: "2026-09-24T05:00:00Z" }), now)).toBe("");
+  it("clears once resolved after the break closed", () => {
+    expect(effectiveFlag(brk({ flagReason: "Lasted over 12 hours", timeOut: "2026-09-24T02:49:00Z", resolvedAt: "2026-09-24T05:00:00Z" }), now)).toBe("");
+  });
+  it("does not let a resolution made while still open cover a later flag", () => {
+    // Resolved at 1000 while still open, but the break didn't close (and its
+    // flag didn't become true) until 1400 — the resolution predates the flag.
+    const b = brk({
+      timeIn: "2026-09-23T22:00:00Z",
+      timeOut: "2026-09-24T14:00:00Z",
+      durationMinutes: 960,
+      flagReason: "Lasted over 12 hours",
+      resolvedAt: "2026-09-24T10:00:00Z",
+    });
+    expect(effectiveFlag(b, now)).toBe("Lasted over 12 hours");
   });
 });
 
@@ -54,6 +66,13 @@ describe("currentlyOut", () => {
     const stale = brk({ id: "7", timeIn: "2026-09-23T11:50:00Z", timeOut: null, durationMinutes: null });
     expect(currentlyOut([open, stale, brk({})], now).map((r) => r.id)).toEqual(["6"]);
   });
+  it("excludes an open break resolved over 12h ago — a forgotten scan-out, not a person on break", () => {
+    const resolvedOpen = brk({
+      id: "8", timeIn: "2026-09-23T22:00:00Z", timeOut: null, durationMinutes: null,
+      flagReason: "", resolvedAt: "2026-09-24T00:00:00Z",
+    });
+    expect(currentlyOut([resolvedOpen], now).map((r) => r.id)).toEqual([]);
+  });
 });
 
 describe("computeTotals", () => {
@@ -64,6 +83,17 @@ describe("computeTotals", () => {
     ], now);
     expect(totals).toEqual([{
       email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", breaks: 2, totalMinutes: 20, averageMinutes: 10, flagged: 1,
+    }]);
+  });
+
+  it("keeps a break flagged (and out of the average) when it was resolved while still open, before it closed", () => {
+    const resolvedWhileOpen = brk({
+      id: "4", durationMinutes: 960, flagReason: "Lasted over 12 hours",
+      timeIn: "2026-09-23T22:00:00Z", timeOut: "2026-09-24T14:00:00Z", resolvedAt: "2026-09-24T10:00:00Z",
+    });
+    const totals = computeTotals([brk({ id: "1", durationMinutes: 7 }), resolvedWhileOpen], now);
+    expect(totals).toEqual([{
+      email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", breaks: 1, totalMinutes: 7, averageMinutes: 7, flagged: 1,
     }]);
   });
 });
@@ -115,7 +145,7 @@ describe("export and references", () => {
     };
     const csv = profilesCsv([profile]).split("\r\n");
     expect(csv).toHaveLength(2);
-    expect(csv[0]).toBe('"Name","Email","Department","Position","Company","Staff ID","Signed in with","First seen","Last seen"');
+    expect(csv[0]).toBe('"Name","Email","Department","Position","Company","Staff ID","Signed in with","First seen","Last signed in"');
     expect(csv[1]).toContain('"Ali, Tan"');
     expect(csv[1]).toContain('"QA/QC (typed)"');
   });

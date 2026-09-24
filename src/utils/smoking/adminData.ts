@@ -44,8 +44,18 @@ export interface BreakEdit {
 
 const AREA_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+/**
+ * A resolution only covers the break if it was already closed when resolved
+ * — otherwise a later scan-out (or the clock, for a break still open) can
+ * still raise a flag the resolution never saw.
+ */
+function resolutionCovers(b: SmokingBreak): boolean {
+  if (!b.resolvedAt || !b.timeOut) return false;
+  return new Date(b.resolvedAt).getTime() >= new Date(b.timeOut).getTime();
+}
+
 export function effectiveFlag(b: SmokingBreak, now: Date): string {
-  if (b.resolvedAt) return "";
+  if (resolutionCovers(b)) return "";
   return b.flagReason || flagReasonFor(new Date(b.timeIn), b.timeOut ? new Date(b.timeOut) : null, now);
 }
 
@@ -187,7 +197,7 @@ export const signInMethodLabel = (method: SmokingProfile["signInMethod"]) => (me
 export const departmentLabel = (p: SmokingProfile) => (p.departmentFromList ? p.department : `${p.department} (typed)`);
 
 export function profilesCsv(profiles: SmokingProfileRow[]): string {
-  const lines = [csvRow(["Name", "Email", "Department", "Position", "Company", "Staff ID", "Signed in with", "First seen", "Last seen"])];
+  const lines = [csvRow(["Name", "Email", "Department", "Position", "Company", "Staff ID", "Signed in with", "First seen", "Last signed in"])];
   for (const p of profiles) {
     lines.push(
       csvRow([
