@@ -5,6 +5,7 @@ import { SharePointHttpError } from "./sharepointClient";
 import { OSHES_LISTS } from "../config/oshes";
 import { appBaseUrl } from "../config/appBaseUrl";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
+import { SMOKING_INDEXES } from "./smoking/lists";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || '').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || '';
@@ -307,6 +308,7 @@ const LIST_INDEXES: Record<string, string[]> = {
   [OSHES_LISTS.versions]: ['FormTitle', 'FormSlug', 'FormVersion', 'PublishedAt'],
   [OSHES_LISTS.builderLog]: ['FormTitle', 'EventType', 'ChangedBy', 'EventAt'],
   [OSHES_LISTS.dashboardSettings]: ['BackgroundId', 'UpdatedAt'],
+  ...SMOKING_INDEXES,
 };
 
 async function ensureIndexedColumns(
