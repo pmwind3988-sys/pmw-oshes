@@ -11,12 +11,13 @@ import {
   ensureDocLibrary as ensureGraphDocLibrary,
   ensureListColumns,
   uploadFileToDriveItem,
+  createDriveUploadSession,
   deleteListItem,
   deleteDocLibraryFile,
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
-import { patchHyperlinkViaSPRest } from "./_utils/sharepointRest.js";
+import { ensureFieldsHoldLongTextViaSPRest, patchHyperlinkViaSPRest, SP_TEXT_COLUMN_MAX } from "./_utils/sharepointRest.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import {
   catalogueCodeFromLayerConfig,
@@ -515,9 +516,11 @@ function extractUploadCandidates(value: unknown): ApiUploadCandidate[] {
 }
 
 function parseDataUri(value: string): ApiDataUri | null {
-  const match = value.match(/^data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  // The type may be missing (a file the browser could not identify arrives as
+  // `data:;base64,...`) and may carry parameters before `;base64`.
+  const match = value.match(/^data:([^;,]*)(?:;[^;,]*)*;base64,(.+)$/);
   if (!match) return null;
-  const mime = match[1];
+  const mime = match[1] || "application/octet-stream";
   const base64 = match[2];
   const rawSize = Math.ceil((base64.length * 3) / 4);
   const ext = (mime.split("/").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") || "bin";
@@ -570,6 +573,65 @@ async function resolveExistingUploadLibrary(
   );
 }
 
+/**
+ * A piece of a file sent ahead of its submission. Graph wants every piece but
+ * the last to be a multiple of 320 KiB; eight of them keeps each request, once
+ * base64-encoded, comfortably under the ~4.5 MB a serverless request may carry.
+ */
+export const UPLOAD_CHUNK_BYTES = 320 * 1024 * 8;
+
+function siteUrl(): URL | null {
+  try {
+    return new URL((process.env.VITE_SP_SITE_URL || process.env.SP_SITE_URL || "").replace(/\/$/, ""));
+  } catch {
+    return null;
+  }
+}
+
+/** An https address on our own SharePoint site, and nowhere else. */
+function isOwnSharePointUrl(value: string, site = siteUrl()): boolean {
+  if (!site) return false;
+  try {
+    const url = new URL(value);
+    const sitePath = site.pathname.replace(/\/$/, "").toLowerCase();
+    return url.protocol === "https:"
+      && url.hostname.toLowerCase() === site.hostname.toLowerCase()
+      && decodeURIComponent(url.pathname).toLowerCase().startsWith(`${decodeURIComponent(sitePath)}/`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The file addresses in an answer whose files were uploaded ahead of it.
+ * `null` when anything in it is not one of our own SharePoint addresses.
+ */
+function fileAnswerUrls(value: unknown): string[] | null {
+  let parsed = value;
+  if (typeof parsed === "string" && parsed.trim().startsWith("[")) parsed = parseJsonValue(parsed.trim());
+  const entries = Array.isArray(parsed) ? parsed : [parsed];
+  const urls: string[] = [];
+  for (const entry of entries) {
+    if (entry === null || entry === undefined || entry === "") continue;
+    if (typeof entry !== "string" || !isOwnSharePointUrl(entry.trim())) return null;
+    urls.push(entry.trim());
+  }
+  return urls;
+}
+
+/**
+ * `quote.pdf` -> `quote_<stamp>.pdf`. Mirrors `uniqueUploadFileName` in
+ * `src/utils/fileAttachments.ts`; the API does not import from `src/`.
+ */
+function uniqueUploadFileName(originalName: string, stamp: string): string {
+  const safe = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").slice(0, 80);
+  const dot = safe.lastIndexOf(".");
+  const hasExtension = dot > 0 && dot < safe.length - 1;
+  const base = (hasExtension ? safe.slice(0, dot) : safe).replace(/^[._]+|[._]+$/g, "") || "file";
+  const extension = hasExtension ? safe.slice(dot) : "";
+  return `${base}_${stamp}${extension}`;
+}
+
 async function uploadDataUri(
   context: ApiUploadContext,
   fieldName: string,
@@ -587,8 +649,13 @@ async function uploadDataUri(
   const libraryName = await resolveExistingUploadLibrary(context, use);
   const safeList = context.listTitle.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "form";
   const safeField = fieldName.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "upload";
-  const originalName = candidate.name ? candidate.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) : "";
-  const fileName = originalName || `${safeList}_${safeField}_${Date.now()}_${index}.${parsed.ext}`;
+  // Stamped even when the file kept its own name: every upload for a form lands
+  // in one library, and Graph's PUT replaces a file of the same name, so a
+  // second "quote.pdf" used to overwrite the first respondent's.
+  const fileName = uniqueUploadFileName(
+    candidate.name?.trim() || `${safeList}_${safeField}.${parsed.ext}`,
+    `${Date.now().toString(36)}${index.toString(36)}${Math.floor(Math.random() * 46656).toString(36).padStart(3, "0")}`,
+  );
   const binary = new Uint8Array(Buffer.from(parsed.base64, "base64"));
   const uploaded = await uploadFileToDriveItem(context.token, libraryName, fileName, binary);
   if (uploaded.id) {
@@ -614,7 +681,15 @@ async function coerceFieldValue(
       }
       return uploads.length === 1 ? uploads[0] : JSON.stringify(uploads);
     }
-    return stringifyValue(valueToText(value) || value);
+    // Files sent ahead of the submission (see `handlePublicUpload`) arrive as
+    // the addresses they were stored at. Only addresses on our own site are
+    // accepted: a public form must not be able to file a link to anywhere.
+    const urls = fileAnswerUrls(value);
+    if (urls === null) {
+      throw new PublicSubmissionError(`The files attached to "${spec.name}" could not be read. Please attach them again.`, 400);
+    }
+    if (urls.length === 0) return undefined;
+    return urls.length === 1 ? urls[0] : JSON.stringify(urls);
   }
 
   // "url" kind (signaturepad) is handled separately in coerceUrlFieldPatch —
@@ -1118,6 +1193,146 @@ interface ApiResponse {
   end(): void;
 }
 
+interface PublicUploadDeps {
+  getGraphToken: typeof getGraphToken;
+  queryMasterFormByTitle: typeof queryMasterFormByTitle;
+  getPublishedSurveyJson: typeof getPublishedSurveyJson;
+  resolveUploadLibrary: (token: string, listTitle: string) => Promise<string>;
+  createDriveUploadSession: typeof createDriveUploadSession;
+  fetch: typeof fetch;
+  now: () => number;
+}
+
+const DEFAULT_PUBLIC_UPLOAD_DEPS: PublicUploadDeps = {
+  getGraphToken,
+  queryMasterFormByTitle,
+  getPublishedSurveyJson,
+  resolveUploadLibrary: (token, listTitle) => resolveExistingUploadLibrary({
+    token,
+    listTitle,
+    uploadLibraryByUse: {},
+    uploadDataUri,
+    uploadLibraryDeps: DEFAULT_UPLOAD_LIBRARY_DEPS,
+    uploadedFiles: [],
+  }, "file"),
+  createDriveUploadSession,
+  fetch: (...args) => fetch(...args),
+  now: () => Date.now(),
+};
+
+type PublicUploadResult = { status: number; body: Record<string, unknown> };
+
+/**
+ * Files for a public form, sent ahead of the submission and in pieces.
+ *
+ * The whole submission used to travel as one request with every file inside
+ * it as base64, and a serverless request is capped at about 4.5 MB - so two
+ * phone photos, or one scanned PDF, failed the form outright. Each file is now
+ * opened as a Graph upload session (`upload-start`) and its bytes sent a
+ * piece at a time (`upload-chunk`); the submission then carries only the
+ * addresses the files were stored at.
+ *
+ * `upload-start` checks what the submission itself checks - the form exists,
+ * is public, and the field is a file question on the published version - plus
+ * the size, so nobody can use it to put an arbitrary file on the site.
+ * `upload-chunk` only ever sends to an upload address on our own SharePoint
+ * host, and refuses any piece that does not fit the file it belongs to.
+ */
+export async function handlePublicUpload(
+  request: Record<string, unknown>,
+  deps: PublicUploadDeps = DEFAULT_PUBLIC_UPLOAD_DEPS,
+): Promise<PublicUploadResult> {
+  const action = request.action;
+
+  if (action === "upload-start") {
+    const listTitle = valueToText(request.listTitle);
+    const fieldName = valueToText(request.fieldName);
+    const originalName = valueToText(request.fileName);
+    const size = Number(request.size);
+    if (!listTitle || !fieldName || !originalName) {
+      return { status: 400, body: { error: "Missing listTitle, fieldName or fileName." } };
+    }
+    if (!Number.isInteger(size) || size <= 0) return { status: 400, body: { error: "Missing or invalid file size." } };
+    if (size > MAX_UPLOAD_BYTES) {
+      return { status: 413, body: { error: `"${originalName}" is over the 10 MB limit.` } };
+    }
+
+    const token = await deps.getGraphToken();
+    const formConfig = (await deps.queryMasterFormByTitle(token, listTitle))?.fields;
+    if (!formConfig) return { status: 404, body: { error: "Form not found" } };
+    if (formConfig.IsPublic === false) return { status: 403, body: { error: "Form is not public" } };
+    const publishKey = valueToText(request.publishKey) || valueToText(formConfig.CurrentPublishKey) || "production";
+    const formVersion = valueToText(request.formVersion);
+    const config = { ...formConfig, ...(formVersion ? { CurrentVersion: formVersion } : {}) };
+    const surveyJson = await deps.getPublishedSurveyJson(token, config, publishKey);
+    if (!surveyJson) return { status: 500, body: { error: "Internal server error. Please try again." } };
+    const isFileField = collectSubmissionSchema(surveyJson).fields
+      .some((field) => field.name === fieldName && field.kind === "file");
+    if (!isFileField) return { status: 400, body: { error: `"${fieldName}" does not accept files on this form.` } };
+
+    const libraryName = await deps.resolveUploadLibrary(token, listTitle);
+    const stamp = `${deps.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36).padStart(3, "0")}`;
+    const fileName = uniqueUploadFileName(originalName, stamp);
+    const uploadUrl = await deps.createDriveUploadSession(token, libraryName, fileName);
+    return { status: 200, body: { uploadUrl, chunkBytes: UPLOAD_CHUNK_BYTES, fileName } };
+  }
+
+  if (action === "upload-chunk") {
+    const uploadUrl = valueToText(request.uploadUrl);
+    const offset = Number(request.offset);
+    const size = Number(request.size);
+    const data = typeof request.data === "string" ? request.data : "";
+    if (!uploadUrl || !isOwnSharePointHost(uploadUrl)) return { status: 400, body: { error: "Invalid upload address." } };
+    if (!Number.isInteger(size) || size <= 0 || size > MAX_UPLOAD_BYTES) {
+      return { status: 400, body: { error: "Invalid file size." } };
+    }
+    if (!Number.isInteger(offset) || offset < 0 || offset % UPLOAD_CHUNK_BYTES !== 0 || offset >= size) {
+      return { status: 400, body: { error: "Invalid upload offset." } };
+    }
+    const bytes = new Uint8Array(Buffer.from(data, "base64"));
+    const end = offset + bytes.length;
+    const isLast = end === size;
+    if (
+      bytes.length === 0
+      || bytes.length > UPLOAD_CHUNK_BYTES
+      || end > size
+      || (!isLast && bytes.length !== UPLOAD_CHUNK_BYTES)
+    ) {
+      return { status: 400, body: { error: "Invalid upload piece." } };
+    }
+
+    // No Authorization header: the upload address carries its own, and Graph
+    // rejects a request that sends both.
+    const response = await deps.fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Range": `bytes ${offset}-${end - 1}/${size}` },
+      body: Buffer.from(bytes),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      logWarn("api:submit-form", "Upload piece refused", { status: response.status, errorMessage: text.slice(0, 250) });
+      return { status: 502, body: { error: "The file could not be uploaded. Please try again." } };
+    }
+    if (!isLast) return { status: 200, body: { done: false } };
+    const item = (await response.json().catch(() => ({}))) as { webUrl?: string };
+    if (!item.webUrl) return { status: 502, body: { error: "The file was uploaded but no address came back." } };
+    return { status: 200, body: { done: true, url: item.webUrl } };
+  }
+
+  return { status: 400, body: { error: "Unknown upload action." } };
+}
+
+/** The upload address Graph hands back lives on the tenant's SharePoint host. */
+function isOwnSharePointHost(value: string, site = siteUrl()): boolean {
+  if (!site) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname.toLowerCase() === site.hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -1126,6 +1341,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const auth = validateApiKey(req.headers as Record<string, string | string[] | undefined>);
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const action = (req.body as Record<string, unknown> | undefined)?.action;
+  if (action === "upload-start" || action === "upload-chunk") {
+    try {
+      const result = await handlePublicUpload(req.body as Record<string, unknown>);
+      return res.status(result.status).json(result.body);
+    } catch (error) {
+      if (error instanceof PublicSubmissionError) return res.status(error.statusCode).json({ error: error.message });
+      logError("api:submit-form", "Public upload failed", error, {});
+      return res.status(500).json({ error: "The file could not be uploaded. Please try again." });
+    }
+  }
 
   const {
     listTitle,
@@ -1264,6 +1491,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     ) {
       firstLayerLinkToken = mintLinkToken();
       submissionBody[linkTokenField(Number(firstWorkflowLayer.layerNumber))] = firstLayerLinkToken;
+    }
+
+    // Several attached files are stored as a list of their addresses, which
+    // outgrows a single line of text after two or three long names. Widen the
+    // column first rather than let SharePoint refuse the submission.
+    const longFileAnswers = schema.fields
+      .filter((field) => field.kind === "file")
+      .map((field) => field.name)
+      .filter((name) => typeof submissionBody[name] === "string" && (submissionBody[name] as string).length > SP_TEXT_COLUMN_MAX);
+    if (longFileAnswers.length > 0) {
+      const spToken = await getSharePointToken();
+      const widened = await ensureFieldsHoldLongTextViaSPRest(spToken, listTitle, longFileAnswers);
+      if (widened.length > 0) logWarn("api:submit-form", "Widened file columns to multi-line text", { listTitle, widened: widened.join(", ") });
     }
 
     // Image column fields (urlFieldPatches) are excluded from the Graph create
@@ -1452,5 +1692,9 @@ export const __test__ = {
   createResponseItem,
   graphUrlFieldValue,
   omitUrlPatchFields,
+  fileAnswerUrls,
+  handlePublicUpload,
+  parseDataUri,
   resolveExistingUploadLibrary,
+  uniqueUploadFileName,
 };

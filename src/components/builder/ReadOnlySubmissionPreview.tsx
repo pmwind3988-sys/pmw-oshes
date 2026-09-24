@@ -419,7 +419,7 @@ function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByFie
   return sources.some(isImageLike) ? sources : [];
 }
 
-function MediaValue({ source, accessToken }: { source: string; accessToken?: string | null }) {
+function MediaValue({ source, accessToken, showName = false }: { source: string; accessToken?: string | null; showName?: boolean }) {
   const { src, loading } = useAuthenticatedMediaSource(source, accessToken);
   // A source the reader is not authorised for — a SharePoint URL reached from a
   // public evaluation link — would otherwise sit in the card as a broken-image
@@ -440,6 +440,12 @@ function MediaValue({ source, accessToken }: { source: string; accessToken?: str
           />
         </div>
         {loading && <span style={{ color: C.textMuted, fontSize: 12 }}>Loading secure image...</span>}
+        {/* An attached photo is still a file: its name opens the original. */}
+        {showName && !source.startsWith("data:") && (
+          <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, overflowWrap: "anywhere" }}>
+            {filenameFromUrl(source)}
+          </a>
+        )}
       </div>
     );
   }
@@ -545,7 +551,7 @@ function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: Pre
     return (
       <div style={{ display: "grid", gap: 10 }}>
         {mediaSources.map((source, index) => (
-          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} />
+          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} showName={field.type === "file" || field.type === "imageupload"} />
         ))}
       </div>
     );

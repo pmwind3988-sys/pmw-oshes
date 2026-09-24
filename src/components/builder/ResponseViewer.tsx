@@ -79,6 +79,9 @@ export default function ResponseViewer() {
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<SubmissionItem | null>(null);
   const [selectedResponseData, setSelectedResponseData] = useState<Record<string, unknown> | null>(null);
+  const [attachmentsBusy, setAttachmentsBusy] = useState(false);
+  /** The outcome of the last "with attachments" download, said in words. */
+  const [attachmentsNotice, setAttachmentsNotice] = useState("");
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
@@ -144,9 +147,31 @@ export default function ResponseViewer() {
     loadData();
   }, [adminChecked, isAdmin, token, formTitle]);
 
+  const downloadWithAttachments = async () => {
+    if (!token || !selectedSubmission?.PdfUrl || !selectedResponseData || attachmentsBusy) return;
+    setAttachmentsBusy(true);
+    setAttachmentsNotice("");
+    try {
+      const { attachmentDownloadMessage, downloadStoredPdfWithAttachments } = await import("../../utils/portalPdf");
+      const summary = await downloadStoredPdfWithAttachments(
+        token,
+        selectedSubmission.PdfUrl,
+        surveyJson,
+        selectedResponseData,
+        `${formTitle || "Form"} ${selectedSubmission.Id}`,
+      );
+      setAttachmentsNotice(attachmentDownloadMessage(summary));
+    } catch (downloadError) {
+      setAttachmentsNotice(downloadError instanceof Error ? downloadError.message : "Could not build the PDF with attachments.");
+    } finally {
+      setAttachmentsBusy(false);
+    }
+  };
+
   // Load survey JSON for selected submission
   const loadSubmissionDetails = async (item: SubmissionItem) => {
     if (!token) return;
+    setAttachmentsNotice("");
 
     setSelectedSubmission(item);
     setSelectedResponseData(null);
@@ -465,9 +490,24 @@ export default function ResponseViewer() {
                         View PDF
                       </Link>
                     )}
+                    {selectedSubmission.PdfUrl && (
+                      <Button
+                        size="small"
+                        onClick={() => void downloadWithAttachments()}
+                        disabled={attachmentsBusy || !selectedResponseData}
+                        sx={{ fontSize: 11, fontWeight: 800, minHeight: 0, py: 0.5, px: 1.25, borderRadius: "999px" }}
+                      >
+                        {attachmentsBusy ? "Preparing…" : "With attachments"}
+                      </Button>
+                    )}
                     <WorkspaceTag tone={getStatusTone(selectedSubmission.Status)}>{selectedSubmission.Status}</WorkspaceTag>
                   </Stack>
                 </Stack>
+                {attachmentsNotice && (
+                  <Typography role="status" sx={{ mt: 1, fontSize: 12, color: editorial.muted }}>
+                    {attachmentsNotice}
+                  </Typography>
+                )}
                 <Typography sx={{ mt: 1, fontSize: 12, color: editorial.muted }}>
                   Submitted by <strong>{selectedSubmission.SubmittedBy}</strong> · Version {selectedSubmission.FormVersion}
                   {(selectedSubmission.CurrentLayer ?? selectedSubmission.CurrentApprovalLayer) > 0 && (

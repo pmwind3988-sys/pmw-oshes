@@ -186,6 +186,64 @@ export interface SharePointColumnResolvers {
  * readers — take this rather than destructuring the pair, which keeps them
  * source-identical to their pmw-hrform counterparts.
  */
+/** What a single line of text holds. SharePoint refuses anything longer. */
+export const SP_TEXT_COLUMN_MAX = 255;
+
+/**
+ * A single-line text column's definition, rewritten as multi-line plain text.
+ *
+ * A file question was provisioned as a single line of text, and its answer is
+ * the address of every file attached — two or three long file names and the
+ * answer no longer fits, and SharePoint refuses the whole submission. Changing
+ * the column's `SchemaXml` is the conversion SharePoint itself supports for
+ * this pair of types; the stored values are kept. Returns "" when the column is
+ * not single-line text, so nothing else is ever touched.
+ */
+export function textFieldSchemaAsNote(schemaXml: string): string {
+  if (!/^<Field\b[^>]*\sType="Text"/.test(schemaXml)) return "";
+  return schemaXml.replace(/^<Field\b[^>]*?(?=\/?>)/, (open) => {
+    let next = open
+      .replace(/\sType="Text"/, ' Type="Note"')
+      .replace(/\s+MaxLength="[^"]*"/, "");
+    // Added straight after the element name, so a self-closing tag stays whole.
+    const extra = [
+      /\sNumLines=/.test(next) ? "" : ' NumLines="6"',
+      /\sRichText=/.test(next) ? "" : ' RichText="FALSE"',
+      /\sUnlimitedLengthInDocumentLibrary=/.test(next) ? "" : ' UnlimitedLengthInDocumentLibrary="TRUE"',
+    ].join("");
+    next = next.replace(/^<Field\b/, `<Field${extra}`);
+    return next;
+  });
+}
+
+/**
+ * Make sure each named column can hold more than one line of text, converting
+ * any that are still single-line text. Called only for an answer that would not
+ * otherwise fit, so a form whose answers are short never has its list changed.
+ */
+export async function ensureColumnsHoldLongText(
+  token: string,
+  listTitle: string,
+  fieldNames: string[],
+): Promise<void> {
+  if (fieldNames.length === 0) return;
+  const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')`;
+  const data = await spGet(
+    token,
+    `${listUrl}/fields?$select=Id,Title,InternalName,StaticName,EntityPropertyName,FieldTypeKind,SchemaXml&$top=5000`,
+  ) as { value?: (ExistingFieldInfo & { Id?: string; SchemaXml?: string })[] };
+  const wanted = new Set(fieldNames.map(normalizeColumnName));
+  for (const field of data.value || []) {
+    const names = [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName].filter(Boolean) as string[];
+    if (!names.some((name) => wanted.has(normalizeColumnName(name)))) continue;
+    if (field.FieldTypeKind !== SP_FIELD_KIND.text || !field.Id || !field.SchemaXml) continue;
+    const schemaXml = textFieldSchemaAsNote(field.SchemaXml);
+    if (!schemaXml) continue;
+    await spPatch(token, `${listUrl}/fields('${field.Id}')`, { SchemaXml: schemaXml });
+  }
+  columnCache.delete(columnCacheKey(listTitle));
+}
+
 export async function getSharePointColumnKeyResolver(
   token: string,
   listTitle: string,
@@ -2015,9 +2073,13 @@ export async function uploadFileToDocLib(
   base64Content: string,
   onLog?: (msg: string) => void,
 ): Promise<string> {
-  // Strip data URI prefix if present: data:mime;base64,<payload>
+  // Strip data URI prefix if present: data:mime;base64,<payload>. The type is
+  // matched loosely: Word and Excel types carry dots
+  // (`application/vnd.openxmlformats-…`), and a file the browser could not
+  // identify arrives with no type at all — both used to reach `atob` with the
+  // prefix still on and fail the upload.
   let base64 = base64Content;
-  const match = base64.match(/^data:[\w/+-]+;base64,(.+)$/);
+  const match = base64.match(/^data:[^;,]*(?:;[^;,]*)*;base64,(.+)$/);
   if (match) base64 = match[1];
 
   // Decode base64 → binary

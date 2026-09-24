@@ -718,3 +718,28 @@ describe("a repeating panel on a printed permit", () => {
     expect(text).toContain("NAME OF WORK PERFORMER");
   });
 });
+
+describe("a question answered with attached files", () => {
+  const withFiles = (overrides: Partial<PdfFormData> = {}) => baseData({
+    surveyJson: {
+      title: "Permit To Work",
+      pages: [{ name: "page1", elements: [{ type: "file", name: "Docs", title: "Supporting documents", allowMultiple: true }] }],
+    },
+    responseData: { Docs: '["https://t.sharepoint.com/sites/a/Files/quote.pdf","https://t.sharepoint.com/sites/a/Files/site.png"]' },
+    ...overrides,
+  });
+
+  it("prints each file as a link that opens it", async () => {
+    const raw = await renderPdf(withFiles());
+    expect(raw).toContain("/URI (https://t.sharepoint.com/sites/a/Files/quote.pdf)");
+    expect(raw).toContain("/URI (https://t.sharepoint.com/sites/a/Files/site.png)");
+    expect(contentStreams(raw).join("")).not.toContain("not embedded");
+  });
+
+  it("numbers the files when they are appended to the same document", async () => {
+    const plain = await renderPdf(withFiles());
+    const appended = await renderPdf(withFiles({ attachmentsAppended: true }));
+    // The note adds text to the page, so the appended copy's content is longer.
+    expect(contentStreams(appended).join("").length).toBeGreaterThan(contentStreams(plain).join("").length);
+  });
+});

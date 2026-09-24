@@ -19,6 +19,7 @@ import {
   sniffRiffWebp,
 } from "./sharepointImageData";
 import { isRecord } from "./pdfImageSources";
+import { fileAnswerKeys } from "./fileAttachments";
 import { layerNumberFromValue, layerSequenceFromConfig } from "./layerSequence";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -165,8 +166,15 @@ function sanitizeMatrixFieldName(fieldName: string): string {
  */
 export async function hydratePdfImages(token: string, data: PdfFormData): Promise<void> {
   const cache = new Map<string, string>();
+  // A file question prints as links to its files, so its answer has to keep
+  // the addresses. Swapping a photo for its pixels here left the page with a
+  // thumbnail nobody could open, and a PDF attachment with nothing at all.
+  const fileKeys = fileAnswerKeys(data.surveyJson, data.responseData);
   const entries = await Promise.all(
-    Object.entries(data.responseData).map(async ([key, value]) => [key, await hydrateImageValue(token, value, cache)] as const),
+    Object.entries(data.responseData).map(async ([key, value]) => [
+      key,
+      fileKeys.has(key) ? value : await hydrateImageValue(token, value, cache),
+    ] as const),
   );
   data.responseData = Object.fromEntries(entries);
 

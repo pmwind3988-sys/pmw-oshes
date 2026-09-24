@@ -3,6 +3,7 @@ import type { LayerStatus, PortalRecord, SharePointClient, SurveyJson } from "..
 import type { PdfFormData, PdfLayerResult } from "./FormPdfDocument";
 import { PDF_LAYER_AWAITING, PDF_LAYER_NOT_REACHED } from "./pdfLayerProgress";
 import { layerStatusLabel, normalizeLayerStatus } from "./statusConstants";
+import { collectRecordAttachments, type RecordAttachment } from "./fileAttachments";
 
 /** Layer states that carry a decision. Anything else is still ahead of the record. */
 const DECIDED_STATUSES: ReadonlySet<LayerStatus> = new Set<LayerStatus>([
@@ -153,6 +154,107 @@ export async function downloadRecordPdf(
 
   const pdfDocument = createElement(FormPdfDocument, data) as Parameters<typeof pdf>[0];
   saveBlob(await pdf(pdfDocument).toBlob(), `${record.reference}.pdf`);
+}
+
+/** The files attached to a record, in the order they would be appended. */
+export function recordAttachments(record: PortalRecord, surveyJson: SurveyJson | null): RecordAttachment[] {
+  const data = recordPdfData(record, surveyJson);
+  return collectRecordAttachments(data.surveyJson, data.responseData);
+}
+
+/** What the "with attachments" download managed, for the message that follows it. */
+export interface AttachmentDownloadSummary {
+  total: number;
+  included: number;
+  notIncluded: { name: string; reason: string }[];
+}
+
+/**
+ * "Download PDF with attachments": the same document as {@link downloadRecordPdf},
+ * followed by every attached file — each PDF's pages, then each picture on a page
+ * of its own — in the order they were attached.
+ *
+ * A read, like the plain download: nothing stored changes. The files are
+ * fetched with the reader's own credentials, so what one cannot open appears as
+ * a page naming the file and linking to it rather than failing the download.
+ */
+export async function downloadRecordPdfWithAttachments(
+  record: PortalRecord,
+  surveyJson: SurveyJson | null,
+  spClient: SharePointClient,
+): Promise<AttachmentDownloadSummary> {
+  const { pdf } = await import("@react-pdf/renderer");
+  const { default: FormPdfDocument } = await import("./FormPdfDocument");
+  const { createElement } = await import("react");
+  const { hydratePdfImages } = await import("./generateFormPdf");
+
+  const token = await spClient.acquireToken();
+  const data: PdfFormData = { ...recordPdfData(record, surveyJson), attachmentsAppended: true };
+  const attachments = collectRecordAttachments(data.surveyJson, data.responseData);
+  try {
+    await hydratePdfImages(token, data);
+  } catch {
+    // Every image resolves to a placeholder the document knows how to draw.
+  }
+
+  const pdfDocument = createElement(FormPdfDocument, data) as Parameters<typeof pdf>[0];
+  const base = await (await pdf(pdfDocument).toBlob()).arrayBuffer();
+  return appendAndSave(token, base, attachments, `${record.reference} with attachments.pdf`);
+}
+
+/** Append the attachments to a finished PDF and hand the reader the result. */
+async function appendAndSave(
+  token: string,
+  base: ArrayBuffer | Uint8Array,
+  attachments: RecordAttachment[],
+  fileName: string,
+): Promise<AttachmentDownloadSummary> {
+  const { appendAttachmentsToPdf } = await import("./pdfAttachmentMerge");
+  const { fetchSharePointFileBytes, responseToImageDataUrl } = await import("./sharepointImageData");
+  const { absoluteAttachmentUrl } = await import("./fileAttachments");
+
+  const merged = await appendAttachmentsToPdf(base, attachments, (attachment) => fetchSharePointFileBytes(token, attachment.url), {
+    toAbsoluteUrl: absoluteAttachmentUrl,
+    // WEBP, GIF and BMP go through the browser's own decoder and come out PNG.
+    imageToPng: async (bytes) => {
+      const dataUrl = await responseToImageDataUrl(new Response(bytes as BlobPart));
+      if (!dataUrl) return null;
+      const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+      return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    },
+  });
+
+  saveBlob(new Blob([merged.bytes as BlobPart], { type: "application/pdf" }), fileName);
+  return { total: attachments.length, included: merged.included, notIncluded: merged.notIncluded };
+}
+
+/**
+ * "With attachments" beside a stored copy's "View PDF": that same stored file,
+ * followed by the record's attachments. The stored copy itself is not changed —
+ * it stays the record with links, small enough to open and to email.
+ */
+export async function downloadStoredPdfWithAttachments(
+  token: string,
+  pdfUrl: string,
+  surveyJson: unknown,
+  responseData: Record<string, unknown>,
+  fileName: string,
+): Promise<AttachmentDownloadSummary> {
+  const { fetchSharePointFileBytes } = await import("./sharepointImageData");
+  const base = await fetchSharePointFileBytes(token, pdfUrl);
+  if (!base) throw new Error("The stored PDF could not be opened. Try re-generating it first.");
+  const attachments = collectRecordAttachments(surveyJson, responseData);
+  const safeName = fileName.replace(/[\\/:*?"<>|]+/g, "_").trim() || "record";
+  return appendAndSave(token, base, attachments, `${safeName} with attachments.pdf`);
+}
+
+/** What to tell the reader once a "with attachments" download is saved. */
+export function attachmentDownloadMessage(summary: AttachmentDownloadSummary): string {
+  if (summary.notIncluded.length === 0) {
+    return `Downloaded with ${summary.included} ${summary.included === 1 ? "attachment" : "attachments"} added after the record.`;
+  }
+  const missed = summary.notIncluded.map((file) => `${file.name} ${file.reason}`).join("; ");
+  return `Downloaded. ${summary.notIncluded.length} of ${summary.total} could not be added and got a page with a link instead: ${missed}.`;
 }
 
 /**

@@ -539,6 +539,8 @@ export default function ApprovalDashboard() {
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [selectedActiveLayers, setSelectedActiveLayers] = useState<LayerConfigItem[]>([]);
   const [pdfRegeneratingItemKey, setPdfRegeneratingItemKey] = useState("");
+  /** Which item's "with attachments" copy is being put together. */
+  const [pdfAttachmentsItemKey, setPdfAttachmentsItemKey] = useState("");
   const [currentLayerType, setCurrentLayerType] = useState<"approval" | "evaluation" | null>(null);
   const [currentLayerConfig, setCurrentLayerConfig] = useState<LayerConfigItem | null>(null);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
@@ -1747,6 +1749,31 @@ export default function ApprovalDashboard() {
     }
   };
 
+  const handleDownloadWithAttachments = async (item: PendingItem) => {
+    if (!token || !isAdmin || !item.PdfUrl) return;
+    const itemKey = getPendingItemKey(item);
+    setPdfAttachmentsItemKey(itemKey);
+    setError("");
+    setEmailNotice("");
+    try {
+      const pdfData = await loadPdfData(item, token);
+      if (!pdfData) throw new Error("Could not load the submission data needed to find its attachments.");
+      const { attachmentDownloadMessage, downloadStoredPdfWithAttachments } = await import("../../utils/portalPdf");
+      const summary = await downloadStoredPdfWithAttachments(
+        token,
+        item.PdfUrl,
+        pdfData.surveyJson,
+        pdfData.responseData,
+        pdfData.meta.referenceNo || `${item.Title} ${item.Id}`,
+      );
+      setEmailNotice(attachmentDownloadMessage(summary));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not build the PDF with attachments.");
+    } finally {
+      setPdfAttachmentsItemKey("");
+    }
+  };
+
   const handleDeleteSubmission = async () => {
     if (!token || !deleteTarget) return;
 
@@ -2859,6 +2886,16 @@ export default function ApprovalDashboard() {
                               disabled={pdfRegeneratingItemKey === getPendingItemKey(selectedItem)}
                             >
                               {pdfRegeneratingItemKey === getPendingItemKey(selectedItem) ? "Rebuilding..." : "Rebuild PDF"}
+                            </Button>
+                          )}
+                          {isAdmin && selectedItem.PdfUrl && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => void handleDownloadWithAttachments(selectedItem)}
+                              disabled={pdfAttachmentsItemKey === getPendingItemKey(selectedItem)}
+                            >
+                              {pdfAttachmentsItemKey === getPendingItemKey(selectedItem) ? "Preparing..." : "PDF with attachments"}
                             </Button>
                           )}
                         </Stack>

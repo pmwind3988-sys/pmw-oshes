@@ -1,7 +1,7 @@
 /**
  * FormPdfDocument.tsx — Corporate-style PDF for form submissions with approval/evaluation layers.
  */
-import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { COMPANY, companyContactLines, type CompanyProfile } from "../config/company";
 import { getSelectedCompany } from "./companySelection";
 import { buildFormSubmissionSections, type FormSubmissionField } from "./formSubmissionLayout";
@@ -10,6 +10,7 @@ import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSigna
 import { isChoiceField, readTicks, shouldListChoices } from "./pdfChoiceMatching";
 import { chainProgress, isAwaitingLayer } from "./pdfLayerProgress";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
+import { absoluteAttachmentUrl, attachmentName, attachmentUrls, collectRecordAttachments, isFileQuestionType } from "./fileAttachments";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,11 @@ export interface PdfFormData {
   documentHeader?: DocumentControlHeader;
   /** Letterhead identity. Defaults to the deployment's configured company. */
   company?: CompanyProfile;
+  /**
+   * The attached files follow this document in the same file — the "with
+   * attachments" download. Each link then says where its file was added.
+   */
+  attachmentsAppended?: boolean;
 }
 
 export interface PdfLayerResult {
@@ -213,6 +219,11 @@ const S = StyleSheet.create({
   // answer, because "nothing was said" is itself a fact about the record.
   fieldValueMuted: { width: "53%", fontSize: 7.5, color: C.muted, fontStyle: "italic", lineHeight: 1.3 },
   imageGrid: { width: "53%", flexDirection: "row", flexWrap: "wrap" },
+  // A file question's answer: one clickable file name per attachment.
+  attachmentList: { width: "53%" },
+  attachmentItem: { marginBottom: 2 },
+  attachmentLink: { fontSize: 7.5, color: C.primary, fontWeight: "bold", textDecoration: "underline", lineHeight: 1.3 },
+  attachmentNote: { fontSize: 6.5, color: C.muted, lineHeight: 1.3 },
 
   // ── Tick list ──
   // The answer column of a "(TICK)" question, set as the boxes it was on paper.
@@ -734,7 +745,11 @@ function layerVisuals(layer: PdfLayerResult, evaluationFields: FormSubmissionFie
   }
 
   for (const field of evaluationFields) {
-    const sources = collectImageSources(field.value);
+    // A file question's documents are printed as links in its own row; only
+    // the pictures that were actually pulled in belong in the strip.
+    const sources = isFileQuestionType(field.type)
+      ? collectImageSources(field.value).filter(isEmbeddableImage)
+      : collectImageSources(field.value);
     if (sources.length === 0) continue;
     visuals.push({
       id: `layer-${layer.layerNumber}-${field.key}`,
@@ -794,12 +809,53 @@ function renderLayerVisuals(visuals: LayerVisual[]) {
 }
 
 /**
+ * A file question's answer, as the files themselves: each name is a link that
+ * opens the stored file. `positions` numbers them when the files are appended
+ * to this same document, so the reader knows which page to turn to.
+ */
+function renderAttachmentLinks(value: unknown, positions?: Map<string, number>, total = 0) {
+  const urls = attachmentUrls(value);
+  if (urls.length === 0) return null;
+  return (
+    <View style={S.attachmentList}>
+      {urls.map((url, index) => {
+        const position = positions?.get(url);
+        return (
+          <View key={`${url}-${index}`} style={S.attachmentItem}>
+            <Link src={absoluteAttachmentUrl(url)} style={S.attachmentLink}>{attachmentName(url)}</Link>
+            {position
+              ? <Text style={S.attachmentNote}>Attachment {position} of {total}, added after the last page of this record</Text>
+              : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
  * One question and its answer, as a numbered row of the data table.
  *
  * `index` is the running number across the whole table rather than within a
  * section, so "item 12" identifies one row of one document.
  */
-function FieldRow({ field, index, striped }: { field: FormSubmissionField; index: number; striped: boolean }) {
+function FieldRow({ field, index, striped, attachmentPositions, attachmentTotal }: {
+  field: FormSubmissionField;
+  index: number;
+  striped: boolean;
+  attachmentPositions?: Map<string, number>;
+  attachmentTotal?: number;
+}) {
+  const links = isFileQuestionType(field.type) ? renderAttachmentLinks(field.value, attachmentPositions, attachmentTotal) : null;
+  if (links) {
+    return (
+      <View style={[S.fieldRow, striped ? S.fieldRowAlt : {}]} wrap={false}>
+        <Text style={S.fieldIndex}>{index}</Text>
+        <Text style={S.fieldLabel}>{field.label}</Text>
+        {links}
+      </View>
+    );
+  }
   const imageSources = collectImageSources(field.value);
   const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
   const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
@@ -911,12 +967,17 @@ function LayerDetailCard({
             const measure = shouldRenderMeasure(field) ? renderMeasureValue(field) : null;
             const ticks = shouldListChoices(field) ? renderChoiceList(field) : null;
             const drawnAbove = visualByFieldKey.get(field.key);
+            const links = !includeEmptyEvaluationFields && isFileQuestionType(field.type)
+              ? renderAttachmentLinks(field.value)
+              : null;
             return (
               <View key={`${field.key}-${index}`} style={includeEmptyEvaluationFields ? S.paperEvalRow : S.evalSubRow} wrap={false}>
                 <Text style={includeEmptyEvaluationFields ? S.paperEvalLabel : S.evalSubLabel}>{field.label}</Text>
                 {includeEmptyEvaluationFields
                   ? renderPaperFieldValue(field)
-                  : drawnAbove
+                  : links
+                    ? links
+                    : drawnAbove
                     ? <Text style={S.evalSubRef}>{shownAboveNote(drawnAbove)}</Text>
                     : ticks || measure || <Text style={S.evalSubValue}>{fmtVal(field.value, field) || "—"}</Text>}
               </View>
@@ -929,7 +990,7 @@ function LayerDetailCard({
 }
 
 
-export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader, company }: PdfFormData) {
+export default function FormPdfDocument({ surveyJson, responseData, meta, layerResults, isoStandards, logoUrl, pdfConfig, documentHeader, company, attachmentsAppended }: PdfFormData) {
   const formSections = buildFormSubmissionSections(surveyJson, responseData, {
     fallbackSectionTitle: "Main Page",
     // The document is the record of the form, so it carries the whole form: the
@@ -940,6 +1001,10 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
     formatFallbackLabel: fallbackPdfLabel,
     shouldIncludeField: (key) => !isBookkeepingColumn(key),
   });
+  // Numbered in the order `appendAttachmentsToPdf` adds them, so "Attachment 2"
+  // here is the second thing after the record's last page.
+  const appended = attachmentsAppended ? collectRecordAttachments(surveyJson, responseData) : [];
+  const attachmentPositions = new Map(appended.map((attachment, index) => [attachment.url, index + 1] as const));
   const layoutConfig = pdfConfig?.enabled === false ? undefined : pdfConfig;
   const title = layoutConfig?.title?.trim() || surveyJson?.title || meta.formTitle;
   const badge = badgeStyle(meta.formStatus);
@@ -1060,7 +1125,16 @@ export default function FormPdfDocument({ surveyJson, responseData, meta, layerR
                       return <View key={field.key} style={{ paddingHorizontal: 5, paddingTop: 5 }} wrap={false}>{renderMatrixField(field)}</View>;
                     }
                     itemNumber += 1;
-                    return <FieldRow key={field.key} field={field} index={itemNumber} striped={itemNumber % 2 === 0} />;
+                    return (
+                      <FieldRow
+                        key={field.key}
+                        field={field}
+                        index={itemNumber}
+                        striped={itemNumber % 2 === 0}
+                        attachmentPositions={attachmentPositions}
+                        attachmentTotal={appended.length}
+                      />
+                    );
                   })}
                 </View>
               ))
