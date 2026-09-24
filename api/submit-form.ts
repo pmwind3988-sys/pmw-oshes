@@ -351,10 +351,16 @@ function toBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
+/** A datetime-local answer: a wall-clock time with no zone of its own. */
+const WALL_CLOCK_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
 function toIsoDateTime(value: unknown): string | undefined {
   const text = valueToText(value);
   if (!text) return undefined;
-  const time = Date.parse(text);
+  // The person filling the form meant Malaysian time. Left to Date.parse, a
+  // zoneless time is read in the server's zone — UTC on Vercel — and lands in
+  // SharePoint eight hours late.
+  const time = Date.parse(WALL_CLOCK_DATETIME.test(text) ? `${text}+08:00` : text);
   return Number.isNaN(time) ? undefined : new Date(time).toISOString();
 }
 
