@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEdit, breakReference, breaksCsv, computeTotals, currentlyOut, describeChange,
-  effectiveFlag, filterBreaks, newAreaCode, validateEdit, type BreakFilters,
+  effectiveFlag, filterBreaks, newAreaCode, onBreakLabel, validateEdit, type BreakFilters,
 } from "./adminData";
 import type { SmokingBreak } from "./schema";
 
@@ -104,5 +104,17 @@ describe("export and references", () => {
   it("makes unambiguous area codes", () => {
     expect(newAreaCode(() => 0)).toBe("AAAAAA");
     expect(newAreaCode()).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+  });
+});
+
+describe("onBreakLabel", () => {
+  it("says nobody, rather than a zero", () => {
+    expect(onBreakLabel(0)).toBe("Nobody on a break now");
+  });
+  it("uses the singular for exactly one", () => {
+    expect(onBreakLabel(1)).toBe("1 person on a break now");
+  });
+  it("uses the plural above one", () => {
+    expect(onBreakLabel(2)).toBe("2 people on a break now");
   });
 });

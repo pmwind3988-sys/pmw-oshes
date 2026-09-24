@@ -54,6 +54,12 @@ export function currentlyOut(breaks: SmokingBreak[], now: Date): SmokingBreak[] 
   return breaks.filter((b) => !b.timeOut && effectiveFlag(b, now) === "");
 }
 
+/** "Nobody on a break now" / "1 person on a break now" / "N people on a break now". */
+export function onBreakLabel(n: number): string {
+  if (n === 0) return "Nobody on a break now";
+  return `${n} ${n === 1 ? "person" : "people"} on a break now`;
+}
+
 export function computeTotals(breaks: SmokingBreak[], now: Date): PersonTotal[] {
   const byEmail = new Map<string, PersonTotal>();
   for (const b of breaks) {

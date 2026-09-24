@@ -9,6 +9,7 @@ import { downloadCsv } from "../../utils/csv";
 import { formatMalaysiaDateTime, malaysiaDateStamp } from "../../utils/malaysiaTime";
 import BreakEditDialog, { isoToMytInput, mytInputToIso } from "../../components/smoking/BreakEditDialog";
 import DeleteBreakDialog from "../../components/smoking/DeleteBreakDialog";
+import OnBreakButton from "../../components/smoking/OnBreakButton";
 import ResolveFlagDialog from "../../components/smoking/ResolveFlagDialog";
 import SmokingLogTable from "../../components/smoking/SmokingLogTable";
 import SmokingTotalsTable from "../../components/smoking/SmokingTotalsTable";
@@ -212,11 +213,13 @@ export default function SmokingLogScreen() {
       <PageHeader
         title="Smoking log"
         subtitle="every break scanned in and out, with edits, flags and deletions kept in the audit trail"
-        meta={`${outNow.length} on a break now`}
         actions={
-          <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
-            Export to CSV
-          </Button>
+          <>
+            <OnBreakButton outNow={outNow} />
+            <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
+              Export to CSV
+            </Button>
+          </>
         }
       />
 
