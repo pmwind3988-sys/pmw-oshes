@@ -63,6 +63,10 @@ check(set("OSHES_FORM_EMAIL_FROM_ADDRESS") &&
   "VITE_OSHES_FORM_EMAIL_FROM_ADDRESS === OSHES_FORM_EMAIL_FROM_ADDRESS");
 advise(!set("PDPA_RETENTION_YEARS") || env.PDPA_RETENTION_YEARS === env.VITE_PDPA_RETENTION_YEARS,
   `PDPA_RETENTION_YEARS === VITE_PDPA_RETENTION_YEARS  (server uses ${env.PDPA_RETENTION_YEARS || "7, the default"})`);
+check(set("VITE_GOOGLE_CLIENT_ID") && env.VITE_GOOGLE_CLIENT_ID === env.GOOGLE_CLIENT_ID,
+  "VITE_GOOGLE_CLIENT_ID === GOOGLE_CLIENT_ID  (smoking log Google sign-in)");
+check(set("SMOKING_PASS_SECRET") && env.SMOKING_PASS_SECRET.length >= 32,
+  "SMOKING_PASS_SECRET is 32+ characters  (smoking log passes)");
 
 console.log("\nSharePoint site");
 const site = env.VITE_SP_SITE_URL || "";

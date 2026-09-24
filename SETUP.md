@@ -308,7 +308,59 @@ will not re-send. The response reports `{ examined, sent, failed }`.
 
 ---
 
-## F. Expected gaps on a fresh site
+## F. Smoking log
+
+The smoking log is a separate feature optionally running on the same SharePoint site.
+Its three lists — `Smoking Profiles`, `Smoking Log`, `Smoking Areas` — are created
+automatically on first use.
+
+1. **Google sign-in (≈10 min):** Set up OAuth 2.0 for the `/smoke` page.
+   - Google Cloud Console → Create or choose a project → *OAuth consent screen*:
+     mark as External, app name "PMW OSHES Smoking Log", support email
+   - Add the production domain under *Authorised domains*
+   - *Credentials → Create credentials → OAuth client ID → Web application*
+   - *Authorised JavaScript origins*: the production origin (`VITE_APP_BASE_URL`)
+     and `http://localhost:5173` for local testing
+   - Copy the client ID into both `VITE_GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_ID`
+   - **On Vercel:** set both variables in Production, Preview, and Development
+
+   > The client ID for this deployment has been issued and must be set in Vercel
+   > for Production, Preview and Development.
+
+   - Publish the consent screen so non-test users can sign in
+
+2. **Pass secret:** Generate a 32+ character random string and set `SMOKING_PASS_SECRET`.
+   The string signs the 90-day pass a smoker's phone keeps. Changing it signs
+   everyone out of the smoking page (nothing else).
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+3. **HR departments read access:** If the app-only identity uses `Sites.Selected`,
+   grant `read` on the HR Docs site with the same Graph call as section B step 5,
+   using the HR site's id:
+
+   ```bash
+   az rest --method GET --url "https://graph.microsoft.com/v1.0/sites/pmwgroupcom.sharepoint.com:/sites/PMWHRDocs"
+   ```
+
+   The symptom if missing: the profile form shows "The department list is unavailable
+   — type yours."
+
+4. **First run:** An OSHES admin opens *Smoking log* in the portal. This creates the
+   three lists. The admin then adds each area on the *Areas* tab and prints its poster.
+   - Admins can *Show QR* on the Areas tab to download the QR as PNG or print the A4
+     poster (Save as PDF from the print window)
+   - The *People* tab can Block/Unblock or Remove a person — removal deletes only their
+     profile; their break records stay. Blocked people are refused at scan time by the server
+
+5. **Microsoft sign-in:** Uses the existing app registration from section B. Nothing
+   to add — it only accepts PMW accounts.
+
+---
+
+## G. Expected gaps on a fresh site
 
 These are unfinished builder features, not setup mistakes. The app degrades
 rather than failing:
@@ -350,7 +402,7 @@ List settings → Create column. Both fix it permanently, with no redeploy.
 
 ---
 
-## G. Verify a change before deploying
+## H. Verify a change before deploying
 
 ```bash
 npx tsc -b
