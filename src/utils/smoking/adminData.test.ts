@@ -111,6 +111,7 @@ describe("export and references", () => {
       id: "1", email: "ali@gmail.com", fullName: "Ali, Tan", department: "QA/QC", departmentFromList: false,
       position: "Tech", staffId: "S001", company: "PMW", signInMethod: "google",
       firstSeen: "2026-09-01T00:00:00Z", lastSeen: "2026-09-24T02:00:00Z",
+      blocked: false, blockedBy: "", blockedAt: "",
     };
     const csv = profilesCsv([profile]).split("\r\n");
     expect(csv).toHaveLength(2);

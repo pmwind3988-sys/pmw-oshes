@@ -7,6 +7,9 @@ export interface SmokingProfileRow extends SmokingProfile {
   id: string;
   firstSeen: string;
   lastSeen: string;
+  blocked: boolean;
+  blockedBy: string;
+  blockedAt: string;
 }
 
 export interface BreakFilters {

@@ -28,6 +28,7 @@ export const SMOKING_LIST_SCHEMAS: SpListSchema[] = [
     columns: [
       text("Email"), text("FullName"), text("Department"), text("DepartmentFromList"), text("Position"),
       text("StaffId"), text("Company"), text("SignInMethod"), when("FirstSeen"), when("LastSeen"),
+      text("Blocked"), text("BlockedBy"), when("BlockedAt"),
     ],
   },
   {

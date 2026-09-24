@@ -32,5 +32,11 @@ export function describeOutcome(outcome: ScanOutcome): OutcomeView {
       return { tone: "warn", headline: "This poster is no longer in use", detail: "Nothing was recorded. Use the poster at your smoking area." };
     case "no-profile":
       return { tone: "warn", headline: "Finish your profile first", detail: "Then scan again." };
+    case "blocked":
+      return {
+        tone: "warn",
+        headline: "Access turned off",
+        detail: "Your access to the smoking log has been turned off. Contact OSHES.",
+      };
   }
 }

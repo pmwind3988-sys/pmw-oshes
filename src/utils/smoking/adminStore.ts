@@ -50,7 +50,9 @@ export function rowToArea(row: Record<string, unknown>): SmokingArea {
   return { id: str(row.Id), name: str(row.Title), code: str(row.Code), active: str(row.Active) !== "no" };
 }
 
-export function rowToProfile(row: Record<string, unknown>): SmokingProfile & { id: string; firstSeen: string; lastSeen: string } {
+export function rowToProfile(
+  row: Record<string, unknown>,
+): SmokingProfile & { id: string; firstSeen: string; lastSeen: string; blocked: boolean; blockedBy: string; blockedAt: string } {
   return {
     id: str(row.Id),
     email: str(row.Email),
@@ -63,6 +65,9 @@ export function rowToProfile(row: Record<string, unknown>): SmokingProfile & { i
     signInMethod: str(row.SignInMethod) === "microsoft" ? "microsoft" : "google",
     firstSeen: str(row.FirstSeen),
     lastSeen: str(row.LastSeen),
+    blocked: str(row.Blocked) === "yes",
+    blockedBy: str(row.BlockedBy),
+    blockedAt: str(row.BlockedAt),
   };
 }
 
@@ -131,4 +136,18 @@ export async function updateArea(token: string, area: SmokingArea): Promise<void
 export async function loadProfiles(token: string) {
   return (await readAll(token, `${items(SMOKING_LISTS.profiles)}?$top=2000`)).map(rowToProfile)
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
+
+/** Blocking is enforced by the server; unblocking clears who/when it happened. */
+export async function setProfileBlocked(token: string, id: string, blocked: boolean, by: string, at: Date): Promise<void> {
+  await spPatch(token, `${items(SMOKING_LISTS.profiles)}(${id})`, {
+    Blocked: blocked ? "yes" : "no",
+    BlockedBy: blocked ? by : "",
+    BlockedAt: blocked ? at.toISOString() : null,
+  });
+}
+
+/** Removes the profile only — break records in Smoking Log are untouched. */
+export async function deleteProfile(token: string, id: string): Promise<void> {
+  await spDelete(token, `${items(SMOKING_LISTS.profiles)}(${id})`);
 }

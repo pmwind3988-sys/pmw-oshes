@@ -53,19 +53,31 @@ export default function SmokingScanPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [departmentsFromList, setDepartmentsFromList] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const googleButton = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const shouldAutoScanRef = useRef(readStoredPass() && areaCode);
+
+  /** The server refused because OSHES turned this person's access off. Never a retryable failure. */
+  const showBlocked = useCallback(() => {
+    setView(describeOutcome({ result: "blocked" }));
+    setBlocked(true);
+    setStage("result");
+  }, []);
 
   const fail = useCallback((e: unknown) => {
     if (e instanceof SmokingApiError && e.code === "signin-required") {
       setStage("signin");
       return;
     }
+    if (e instanceof SmokingApiError && e.code === "blocked") {
+      showBlocked();
+      return;
+    }
     setError(e instanceof Error ? e.message : "Something went wrong.");
     setStage("error");
-  }, []);
+  }, [showBlocked]);
 
   const openProfile = useCallback(async (profile: SmokingProfile | null, nameHint = "") => {
     const list = await callSmoking<{ departments: string[]; fromList: boolean }>("departments");
@@ -89,6 +101,7 @@ export default function SmokingScanPage() {
         await openProfile(null);
         return;
       }
+      setBlocked(false);
       setView(describeOutcome(outcome));
       setStage("result");
     } catch (e) {
@@ -105,10 +118,14 @@ export default function SmokingScanPage() {
       if (!result.profile) await openProfile(null, result.name);
       else await scan();
     } catch (e) {
+      if (e instanceof SmokingApiError && e.code === "blocked") {
+        showBlocked();
+        return;
+      }
       setError(e instanceof Error ? e.message : "Sign-in failed.");
       setStage("signin");
     }
-  }, [openProfile, scan]);
+  }, [openProfile, scan, showBlocked]);
 
   // Fetch area header.
   useEffect(() => {
@@ -151,6 +168,10 @@ export default function SmokingScanPage() {
       await callSmoking("profile-save", { ...draft, departmentFromList: departmentsFromList });
       await scan();
     } catch (e) {
+      if (e instanceof SmokingApiError && e.code === "blocked") {
+        showBlocked();
+        return;
+      }
       setError(e instanceof Error ? e.message : "Could not save your profile.");
     } finally {
       setBusy(false);
@@ -232,10 +253,12 @@ export default function SmokingScanPage() {
               {view.headline}
             </Typography>
             <Typography variant="h6">{view.detail}</Typography>
-            <Stack sx={{ flexDirection: "row" }} spacing={2}>
-              <Link component="button" onClick={editProfile}>Edit my profile</Link>
-              <Link component="button" onClick={() => { clearStoredPass(); setStage("signin"); }}>Not you?</Link>
-            </Stack>
+            {!blocked && (
+              <Stack sx={{ flexDirection: "row" }} spacing={2}>
+                <Link component="button" onClick={editProfile}>Edit my profile</Link>
+                <Link component="button" onClick={() => { clearStoredPass(); setStage("signin"); }}>Not you?</Link>
+              </Stack>
+            )}
           </Stack>
         )}
 

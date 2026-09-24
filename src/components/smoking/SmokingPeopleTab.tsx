@@ -1,21 +1,58 @@
 import { useEffect, useState } from "react";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
 import { Callout, DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../Widget";
-import { Download as DownloadIcon } from "../ui/Icons";
+import { Ban as BlockIcon, Download as DownloadIcon, ShieldCheck as UnblockIcon, Trash2 as RemoveIcon } from "../ui/Icons";
 import { usePortal } from "../../contexts/PortalContext";
 import { downloadCsv } from "../../utils/csv";
 import { formatMalaysiaDateTime, malaysiaDateStamp } from "../../utils/malaysiaTime";
+import { writeAuditEntry } from "../../utils/portalAudit";
 import { departmentLabel, profilesCsv, signInMethodLabel, type SmokingProfileRow } from "../../utils/smoking/adminData";
-import { loadProfiles } from "../../utils/smoking/adminStore";
+import { deleteProfile, loadProfiles, setProfileBlocked } from "../../utils/smoking/adminStore";
+import PersonActionDialog, { type PersonAction } from "./PersonActionDialog";
 
 type Profile = SmokingProfileRow;
 
+const PILL_BASE = {
+  display: "inline-flex",
+  alignItems: "center",
+  whiteSpace: "nowrap",
+  fontSize: 10,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  px: 0.9,
+  py: 0.4,
+  borderRadius: "999px",
+  border: "1px solid transparent",
+} as const;
+
+function StatusCell({ p }: { p: Profile }) {
+  if (!p.blocked) {
+    return (
+      <Box component="span" sx={{ ...PILL_BASE, color: editorial.muted, backgroundColor: editorial.neutralWash, borderColor: editorial.border }}>
+        Active
+      </Box>
+    );
+  }
+  return (
+    <Tooltip title={p.blockedBy ? `Blocked by ${p.blockedBy}${p.blockedAt ? `, ${formatMalaysiaDateTime(p.blockedAt)}` : ""}` : "Blocked"}>
+      <Box component="span" sx={{ ...PILL_BASE, color: editorial.error, backgroundColor: editorial.errorWash, borderColor: editorial.error }}>
+        Blocked
+      </Box>
+    </Tooltip>
+  );
+}
+
 export default function SmokingPeopleTab() {
-  const { spClient, toast } = usePortal();
+  const { access, spClient, userEmail, appendAudit, toast } = usePortal();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [actionTarget, setActionTarget] = useState<{ action: PersonAction; person: Profile } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const canWrite = access.isAdmin && !access.readOnly;
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +79,56 @@ export default function SmokingPeopleTab() {
   const handleExport = () => {
     downloadCsv(profilesCsv(profiles), `smoking-people-${malaysiaDateStamp()}.csv`);
     toast(`Exported ${profiles.length} rows`);
+  };
+
+  const runWrite = async (action: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await action();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "That didn't go through.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleActionYes = () => {
+    const t = actionTarget;
+    if (!t) return;
+    const { action, person } = t;
+    void runWrite(async () => {
+      const token = await spClient.acquireToken();
+      if (action === "remove") {
+        await deleteProfile(token, person.id);
+        const entry = await writeAuditEntry(spClient, {
+          reference: `SMK-PERSON-${person.email}`,
+          who: userEmail,
+          event: `Smoking user removed — ${person.fullName} ${person.email}, ${person.department}, ${person.position}, ${person.company} (break records kept)`,
+        });
+        appendAudit(entry);
+        setProfiles((rows) => rows.filter((r) => r.id !== person.id));
+        toast("Person removed");
+      } else {
+        const blocked = action === "block";
+        const at = new Date();
+        await setProfileBlocked(token, person.id, blocked, userEmail, at);
+        const entry = await writeAuditEntry(spClient, {
+          reference: `SMK-PERSON-${person.email}`,
+          who: userEmail,
+          event: `Smoking user ${blocked ? "blocked" : "unblocked"} — ${person.fullName} ${person.email}`,
+        });
+        appendAudit(entry);
+        setProfiles((rows) =>
+          rows.map((r) =>
+            r.id === person.id
+              ? { ...r, blocked, blockedBy: blocked ? userEmail : "", blockedAt: blocked ? at.toISOString() : "" }
+              : r,
+          ),
+        );
+        toast(blocked ? "Person blocked" : "Person unblocked");
+      }
+      setActionTarget(null);
+    });
   };
 
   return (
@@ -72,7 +159,7 @@ export default function SmokingPeopleTab() {
         </Widget>
       ) : (
         <DataTable
-          minWidth={980}
+          minWidth={canWrite ? 1160 : 1040}
           columns={[
             { key: "name", label: "Name" },
             { key: "email", label: "Email" },
@@ -83,6 +170,8 @@ export default function SmokingPeopleTab() {
             { key: "signIn", label: "Signed in with" },
             { key: "firstSeen", label: "First seen" },
             { key: "lastSeen", label: "Last seen" },
+            { key: "status", label: "Status" },
+            ...(canWrite ? [{ key: "actions", label: "", width: 110, align: "right" as const }] : []),
           ]}
         >
           {profiles.map((p) => (
@@ -100,10 +189,46 @@ export default function SmokingPeopleTab() {
               <DataCell muted nowrap>
                 {formatMalaysiaDateTime(p.lastSeen)}
               </DataCell>
+              <DataCell>
+                <StatusCell p={p} />
+              </DataCell>
+              {canWrite && (
+                <DataCell align="right">
+                  <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+                    <Tooltip title={p.blocked ? "Unblock" : "Block"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setActionTarget({ action: p.blocked ? "unblock" : "block", person: p })}
+                        aria-label={`${p.blocked ? "Unblock" : "Block"} ${p.fullName || p.email}`}
+                      >
+                        {p.blocked ? <UnblockIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Remove">
+                      <IconButton
+                        size="small"
+                        onClick={() => setActionTarget({ action: "remove", person: p })}
+                        aria-label={`Remove ${p.fullName || p.email}`}
+                      >
+                        <RemoveIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </DataCell>
+              )}
             </DataRow>
           ))}
         </DataTable>
       )}
+
+      <PersonActionDialog
+        open={!!actionTarget}
+        action={actionTarget?.action ?? null}
+        target={actionTarget?.person ?? null}
+        busy={busy}
+        onNo={() => setActionTarget(null)}
+        onYes={handleActionYes}
+      />
     </Box>
   );
 }

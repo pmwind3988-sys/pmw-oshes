@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakFilterFor, nextPageUrl, rowToArea, rowToBreak } from "./adminStore";
+import { breakFilterFor, nextPageUrl, rowToArea, rowToBreak, rowToProfile } from "./adminStore";
 
 describe("admin store mapping", () => {
   it("reads a SharePoint REST row into a break", () => {
@@ -36,5 +36,14 @@ describe("admin store mapping", () => {
   it("returns undefined for falsy links", () => {
     expect(nextPageUrl(undefined)).toBeUndefined();
     expect(nextPageUrl("")).toBeUndefined();
+  });
+
+  it("reads a blocked profile", () => {
+    expect(rowToProfile({ Id: 9, Email: "a@b.com", Blocked: "yes", BlockedBy: "oshes@pmw-group.com", BlockedAt: "2026-09-24T02:42:00Z" }))
+      .toMatchObject({ blocked: true, blockedBy: "oshes@pmw-group.com", blockedAt: "2026-09-24T02:42:00Z" });
+  });
+
+  it("treats a profile as not blocked unless marked yes", () => {
+    expect(rowToProfile({ Id: 9, Email: "a@b.com" })).toMatchObject({ blocked: false, blockedBy: "", blockedAt: "" });
   });
 });

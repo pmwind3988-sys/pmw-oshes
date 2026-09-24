@@ -8,7 +8,8 @@ export type ScanOutcome =
   | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
   | { result: "already-in"; timeIn: string; areaName: string }
   | { result: "retired-area" }
-  | { result: "no-profile" };
+  | { result: "no-profile" }
+  | { result: "blocked" };
 
 export interface SignInResult {
   pass: string;
