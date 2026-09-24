@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createSharePointColumnKeyResolver, createSharePointMultiValueResolver } from "./formBuilderSP";
+import {
+  SP_FIELD_KIND,
+  coerceForColumnKind,
+  createSharePointColumnKeyResolver,
+  createSharePointColumnKindResolver,
+  createSharePointMultiValueResolver,
+} from "./formBuilderSP";
 
 describe("formBuilderSP column key resolver", () => {
   it("maps long display names to SharePoint REST entity property names", () => {
@@ -48,5 +54,33 @@ describe("formBuilderSP multi-value column resolver", () => {
     expect(isMultiValueColumn("Remarks")).toBe(false);
     expect(isMultiValueColumn("AttachmentsJson")).toBe(false);
     expect(isMultiValueColumn("NotAColumn")).toBe(false);
+  });
+});
+
+describe("an answer written to a typed SharePoint column", () => {
+  it("sends a Yes/No answer as a real true or false, never as text", () => {
+    for (const yes of [true, "true", "True", "yes", "1", 1, "Accepted"]) expect(coerceForColumnKind(yes, SP_FIELD_KIND.boolean)).toBe(true);
+    for (const no of [false, "false", "No", "0", 0]) expect(coerceForColumnKind(no, SP_FIELD_KIND.boolean)).toBe(false);
+    expect(coerceForColumnKind("", SP_FIELD_KIND.boolean)).toBeNull();
+  });
+
+  it("sends a number as a number, and a blank number as empty", () => {
+    expect(coerceForColumnKind("12.5", SP_FIELD_KIND.number)).toBe(12.5);
+    expect(coerceForColumnKind("", SP_FIELD_KIND.number)).toBeNull();
+  });
+
+  it("leaves text columns, and values it cannot read, exactly as they were", () => {
+    expect(coerceForColumnKind("true", SP_FIELD_KIND.text)).toBe("true");
+    expect(coerceForColumnKind("maybe", SP_FIELD_KIND.boolean)).toBe("maybe");
+    expect(coerceForColumnKind("true", undefined)).toBe("true");
+  });
+
+  it("finds a column's type by any of its names", () => {
+    const kindOf = createSharePointColumnKindResolver([
+      { Title: "Hot Work", InternalName: "hotWork", EntityPropertyName: "hotWork", FieldTypeKind: SP_FIELD_KIND.boolean },
+    ]);
+    expect(kindOf("hotWork")).toBe(SP_FIELD_KIND.boolean);
+    expect(kindOf("Hot Work")).toBe(SP_FIELD_KIND.boolean);
+    expect(kindOf("missing")).toBeUndefined();
   });
 });

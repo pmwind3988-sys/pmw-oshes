@@ -177,6 +177,59 @@ export function createSharePointMultiValueResolver(
 export interface SharePointColumnResolvers {
   resolveColumnKey: (fieldName: string) => string | null;
   isMultiValueColumn: (fieldName: string) => boolean;
+  /** The column's `FieldTypeKind`, or `undefined` when there is no such column. */
+  columnKind: (fieldName: string) => number | undefined;
+}
+
+export function createSharePointColumnKindResolver(
+  fields: ExistingFieldInfo[],
+): (fieldName: string) => number | undefined {
+  const kinds = new Map<string, number>();
+  for (const field of fields) {
+    if (typeof field.FieldTypeKind !== "number") continue;
+    for (const name of [field.Title, field.InternalName, field.StaticName, field.EntityPropertyName]) {
+      if (name) kinds.set(normalizeColumnName(name), field.FieldTypeKind);
+    }
+  }
+  return (fieldName: string) => kinds.get(normalizeColumnName(fieldName));
+}
+
+const TRUE_WORDS = new Set(["true", "yes", "y", "1", "on", "accepted"]);
+const FALSE_WORDS = new Set(["false", "no", "n", "0", "off"]);
+
+/**
+ * An answer in the shape its column's type demands.
+ *
+ * The signed-in submit posts JSON with `odata=nometadata`, where SharePoint
+ * types every value strictly: a Yes/No column refuses the text `"true"` with
+ * "Cannot convert a primitive value to the expected type 'Edm.Boolean'", and
+ * that one answer fails the whole submission. Answers used to be flattened to
+ * text before this point, so every form with a Yes/No question failed.
+ *
+ * Only Yes/No and Number columns are touched. A value that cannot be read as
+ * the column's type is passed through unchanged, so SharePoint still names the
+ * problem rather than the record silently storing a guess.
+ */
+export function coerceForColumnKind(value: unknown, kind: number | undefined): unknown {
+  if (kind === SP_FIELD_KIND.boolean) {
+    if (typeof value === "boolean") return value;
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return value !== 0;
+    const word = String(value).trim().toLowerCase();
+    if (!word) return null;
+    if (TRUE_WORDS.has(word)) return true;
+    if (FALSE_WORDS.has(word)) return false;
+    return value;
+  }
+  if (kind === SP_FIELD_KIND.number) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+  return value;
 }
 
 /**
@@ -264,6 +317,7 @@ export async function getSharePointColumnResolvers(
   return {
     resolveColumnKey: createSharePointColumnKeyResolver(fields),
     isMultiValueColumn: createSharePointMultiValueResolver(fields),
+    columnKind: createSharePointColumnKindResolver(fields),
   };
 }
 
