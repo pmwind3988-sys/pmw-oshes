@@ -13,6 +13,18 @@ import PersonActionDialog, { type PersonAction } from "./PersonActionDialog";
 
 type Profile = SmokingProfileRow;
 
+/**
+ * Removing a blocked person must not lift the block — SharePoint has no
+ * concept of "removed but still blocked", so a fresh registration would come
+ * in unblocked. Unblock first, then remove.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- pure helper the tests import directly, no separate file for one export
+export function canRemovePerson(person: { blocked: boolean }): boolean {
+  return !person.blocked;
+}
+
+const REMOVE_BLOCKED_HINT = "Unblock first — removing a blocked person would let them register again, unblocked.";
+
 const PILL_BASE = {
   display: "inline-flex",
   alignItems: "center",
@@ -169,7 +181,7 @@ export default function SmokingPeopleTab() {
             { key: "staffId", label: "Staff ID" },
             { key: "signIn", label: "Signed in with" },
             { key: "firstSeen", label: "First seen" },
-            { key: "lastSeen", label: "Last seen" },
+            { key: "lastSeen", label: "Last signed in" },
             { key: "status", label: "Status" },
             ...(canWrite ? [{ key: "actions", label: "", width: 110, align: "right" as const }] : []),
           ]}
@@ -204,14 +216,17 @@ export default function SmokingPeopleTab() {
                         {p.blocked ? <UnblockIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Remove">
-                      <IconButton
-                        size="small"
-                        onClick={() => setActionTarget({ action: "remove", person: p })}
-                        aria-label={`Remove ${p.fullName || p.email}`}
-                      >
-                        <RemoveIcon fontSize="small" />
-                      </IconButton>
+                    <Tooltip title={canRemovePerson(p) ? "Remove" : REMOVE_BLOCKED_HINT}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={!canRemovePerson(p)}
+                          onClick={() => setActionTarget({ action: "remove", person: p })}
+                          aria-label={`Remove ${p.fullName || p.email}`}
+                        >
+                          <RemoveIcon fontSize="small" />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Box>
                 </DataCell>
