@@ -620,6 +620,31 @@ function fileAnswerUrls(value: unknown): string[] | null {
 }
 
 /**
+ * Question names SharePoint already uses for its own columns. A file question
+ * named `attachments` wrote into SharePoint's built-in `Attachments` flag (a
+ * Yes/No) and failed the submission, so such an answer is stored under
+ * `<name>_Answer` instead. Mirrors `src/utils/reservedColumns.ts`; keep the
+ * two lists identical.
+ */
+const RESERVED_COLUMN_NAMES = new Set(
+  [
+    "Attachments", "AttachmentFiles", "ID", "GUID", "Created", "Modified", "Author", "Editor",
+    "ContentType", "ContentTypeId", "Edit", "LinkTitle", "LinkTitleNoMenu", "DocIcon",
+    "ItemChildCount", "FolderChildCount", "AppAuthor", "AppEditor", "ComplianceAssetId",
+    "FileRef", "FileLeafRef", "FileDirRef", "FSObjType", "UniqueId", "ProgId", "ScopeId",
+    "owshiddenversion", "InstanceID", "Order", "WorkflowVersion", "MetaInfo", "PermMask",
+  ].map((name) => name.toLowerCase()),
+);
+
+function isReservedColumnName(name: string): boolean {
+  return RESERVED_COLUMN_NAMES.has(name.trim().toLowerCase());
+}
+
+function answerColumnName(questionName: string): string {
+  return isReservedColumnName(questionName) ? `${questionName}_Answer` : questionName;
+}
+
+/**
  * `quote.pdf` -> `quote_<stamp>.pdf`. Mirrors `uniqueUploadFileName` in
  * `src/utils/fileAttachments.ts`; the API does not import from `src/`.
  */
@@ -1441,6 +1466,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
     await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
 
+    // An answer to a question named like one of SharePoint's own columns gets a
+    // column of its own, created the first time it is needed.
+    const movedAnswers = Object.keys(submissionBody).filter(isReservedColumnName);
+    for (const name of movedAnswers) {
+      submissionBody[answerColumnName(name)] = submissionBody[name];
+      delete submissionBody[name];
+    }
+    if (movedAnswers.length > 0) {
+      await ensureListColumns(token, listTitle, movedAnswers.map((name) => ({
+        name: answerColumnName(name),
+        displayName: answerColumnName(name),
+        type: "note" as const,
+      })));
+    }
+
     let resolveColumnKey = await getColumnKeyResolver(token, listTitle);
 
     // ── Reference number ──────────────────────────────────────────────────
@@ -1498,7 +1538,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // column first rather than let SharePoint refuse the submission.
     const longFileAnswers = schema.fields
       .filter((field) => field.kind === "file")
-      .map((field) => field.name)
+      .map((field) => answerColumnName(field.name))
       .filter((name) => typeof submissionBody[name] === "string" && (submissionBody[name] as string).length > SP_TEXT_COLUMN_MAX);
     if (longFileAnswers.length > 0) {
       const spToken = await getSharePointToken();
@@ -1692,6 +1732,7 @@ export const __test__ = {
   createResponseItem,
   graphUrlFieldValue,
   omitUrlPatchFields,
+  answerColumnName,
   fileAnswerUrls,
   handlePublicUpload,
   parseDataUri,

@@ -12,6 +12,8 @@
  * which question it came from.
  */
 
+import { answerColumnName, isReservedColumnName, questionNameForReservedKey } from "./reservedColumns";
+
 /**
  * SharePoint cuts a column's internal name down to 32 characters.
  *
@@ -79,7 +81,7 @@ export function createResponseKeyResolver(responseData: Record<string, unknown> 
   // Longest first, so the first prefix found is the closest fit.
   shortenedCandidates.sort((a, b) => b.normalized.length - a.normalized.length);
 
-  return (name: string) => {
+  const resolve = (name: string): string | undefined => {
     if (!name) return undefined;
     if (Object.prototype.hasOwnProperty.call(data, name)) return name;
 
@@ -93,6 +95,11 @@ export function createResponseKeyResolver(responseData: Record<string, unknown> 
       (candidate) => candidate.normalized.length < normalized.length && normalized.startsWith(candidate.normalized),
     )?.key;
   };
+
+  // A question named like one of SharePoint's own columns (`attachments`) is
+  // stored under `<name>_Answer`; the built-in column of that name holds
+  // SharePoint's value, never the answer.
+  return (name: string) => (name && isReservedColumnName(name) ? resolve(answerColumnName(name)) : resolve(name));
 }
 
 export type QuestionNameResolver = (storedKey: string) => string | undefined;
@@ -129,6 +136,11 @@ export function createQuestionNameResolver(names: Iterable<string>): QuestionNam
 
   return (storedKey: string) => {
     if (!storedKey) return undefined;
+    // `attachments_Answer` is the answer to `attachments`; the built-in
+    // `Attachments` column is SharePoint's own and answers nothing.
+    const moved = questionNameForReservedKey(storedKey);
+    if (moved) return authored.has(moved) ? moved : byNormalizedName.get(normalizeResponseKey(moved));
+    if (isReservedColumnName(storedKey)) return undefined;
     if (authored.has(storedKey)) return storedKey;
 
     const normalized = normalizeResponseKey(storedKey);

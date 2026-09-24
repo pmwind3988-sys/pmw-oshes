@@ -282,6 +282,8 @@ export function textFieldSchemaAsNote(schemaXml: string): string {
  */
 export function unsavableAnswerReason(value: unknown, kind: number | undefined): string {
   if (value === null || value === undefined) return "";
+  // 19: SharePoint's own "Attachments" flag, which no answer may be written to.
+  if (kind === 19) return "that name belongs to SharePoint's own Attachments column";
   if (kind === SP_FIELD_KIND.boolean && typeof value !== "boolean") return "its SharePoint column only takes Yes or No";
   if (kind === SP_FIELD_KIND.number && typeof value !== "number") return "its SharePoint column only takes a number";
   return "";

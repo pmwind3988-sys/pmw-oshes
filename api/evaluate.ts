@@ -125,7 +125,12 @@ function collectMediaFieldNames(surveyJson: unknown): Set<string> {
       if (!isRecord(element)) continue;
       const type = typeof element.type === "string" ? element.type : "";
       const name = typeof element.name === "string" ? element.name : "";
-      if (name && ["signaturepad", "imageupload", "file"].includes(type)) names.add(name);
+      if (name && ["signaturepad", "imageupload", "file"].includes(type)) {
+        names.add(name);
+        // A question named like a SharePoint column (`attachments`) is stored
+        // under `<name>_Answer`; see RESERVED_COLUMN_NAMES in submit-form.ts.
+        names.add(`${name}_Answer`);
+      }
       walk(element.elements);
       walk(element.templateElements);
     }
