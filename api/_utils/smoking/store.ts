@@ -7,12 +7,22 @@ import {
   updateListItemFields,
   type GraphListItem,
 } from "../graphClient.js";
+import { LONG_BREAK_MS, normalizeScanLimits, type ScanLimits } from "./scanRules.js";
 import { SMOKING_LISTS, type SmokingArea, type SmokingBreak, type SmokingProfile, type StoredProfile } from "./schema.js";
 
 export type NewBreak = Pick<
   SmokingBreak,
   "email" | "fullName" | "department" | "position" | "company" | "areaInCode" | "areaInName" | "timeIn"
->;
+> & { flagReason?: string };
+
+/** Settings change rarely; a minute's delay reaching every scan is fine, a SharePoint read per scan is not. */
+const LIMITS_CACHE_MS = 60_000;
+let limitsCache: { at: number; limits: ScanLimits } | null = null;
+
+/** Tests only: forget the cached settings. */
+export function clearLimitsCache(): void {
+  limitsCache = null;
+}
 
 export interface BreakClose {
   timeOut: string;
@@ -28,7 +38,10 @@ export interface SmokingStore {
   touchProfile(id: string, now: Date): Promise<void>;
   findArea(code: string): Promise<SmokingArea | null>;
   openBreaksFor(email: string): Promise<SmokingBreak[]>;
-  lastClosedBreakFor(email: string): Promise<SmokingBreak | null>;
+  /** The break this person most recently scanned out of, if that was at or after `since`. */
+  lastClosedBreakFor(email: string, since: Date): Promise<SmokingBreak | null>;
+  /** OSHES's limits from the Settings tab. Throws when SharePoint cannot be read. */
+  readLimits(): Promise<ScanLimits>;
   createBreak(input: NewBreak): Promise<string>;
   closeBreak(id: string, close: BreakClose): Promise<void>;
   deleteBreak(id: string): Promise<void>;
@@ -124,13 +137,21 @@ export function createGraphSmokingStore(getToken: () => Promise<string> = getGra
       );
       return items.map(toBreak).sort((a, b) => a.timeIn.localeCompare(b.timeIn) || Number(a.id) - Number(b.id));
     },
-    /** Most recently closed break, for the double-scan check on the way out. */
-    async lastClosedBreakFor(email) {
+    /**
+     * Most recently closed break, for the repeat-scan and rest-time checks.
+     * SharePoint hands rows back oldest first, so an unbounded query stops
+     * seeing a regular smoker's latest break once they pass 50. Bounding on
+     * TimeIn (indexed) keeps it to recent rows: a break that ended at or after
+     * `since` started no more than 12 hours before it, or it was closed stale.
+     */
+    async lastClosedBreakFor(email, since) {
+      const earliestStart = new Date(since.getTime() - LONG_BREAK_MS).toISOString();
       const items = await query(
         SMOKING_LISTS.log,
-        `${graphFieldEquals("Email", email)} and ${graphFieldEquals("Status", "closed")}`,
+        `${graphFieldEquals("Email", email)} and ${graphFieldEquals("Status", "closed")} and fields/TimeIn ge '${earliestStart}'`,
       );
-      const closed = items.map(toBreak).filter((b) => b.timeOut);
+      const sinceIso = since.toISOString();
+      const closed = items.map(toBreak).filter((b) => b.timeOut && new Date(b.timeOut).toISOString() >= sinceIso);
       closed.sort((a, b) => (b.timeOut as string).localeCompare(a.timeOut as string));
       return closed[0] ?? null;
     },
@@ -146,8 +167,25 @@ export function createGraphSmokingStore(getToken: () => Promise<string> = getGra
         AreaInCode: input.areaInCode,
         AreaInName: input.areaInName,
         TimeIn: input.timeIn,
+        ...(input.flagReason ? { FlagReason: input.flagReason } : {}),
       });
       return id;
+    },
+    /**
+     * The first row of Smoking Settings; defaults when OSHES has not saved any
+     * yet. A failed read is not cached, so the next scan tries again.
+     */
+    async readLimits() {
+      if (limitsCache && Date.now() - limitsCache.at < LIMITS_CACHE_MS) return limitsCache.limits;
+      const [item] = await queryListItems(await getToken(), SMOKING_LISTS.settings, { top: 1 });
+      const f = item?.fields ?? {};
+      const limits = normalizeScanLimits({
+        ignoreRepeatSeconds: f.IgnoreRepeatSeconds,
+        minBreakSeconds: f.MinBreakSeconds,
+        restSeconds: f.RestSeconds,
+      });
+      limitsCache = { at: Date.now(), limits };
+      return limits;
     },
     async closeBreak(id, close) {
       await updateListItemFields(await getToken(), SMOKING_LISTS.log, id, {

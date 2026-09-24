@@ -1,4 +1,4 @@
-import { DOUBLE_SCAN_WINDOW_MS, decideScan } from "./scanRules.js";
+import { DEFAULT_SCAN_LIMITS, decideScan, earlyStartFlag, type ScanLimits } from "./scanRules.js";
 import type { SmokingStore } from "./store.js";
 
 export type ScanOutcome =
@@ -26,19 +26,27 @@ export async function recordScan(
   if (!profile) return { result: "no-profile" };
   if (profile.blocked) return { result: "blocked" };
 
+  // A SharePoint hiccup reading the settings must never stop a scan.
+  const limits: ScanLimits = await store.readLimits().catch(() => DEFAULT_SCAN_LIMITS);
+
   const [oldestOpen] = await store.openBreaksFor(input.email);
-  const decision = decideScan(oldestOpen ?? null, input.now);
+  const decision = decideScan(oldestOpen ?? null, input.now, limits);
   const nowIso = input.now.toISOString();
 
   if (decision.kind === "already-in") {
     return { result: "already-in", timeIn: decision.openBreak.timeIn, areaName: decision.openBreak.areaInName };
   }
 
+  let earlyStart = "";
   if (decision.kind === "open") {
-    const lastClosed = await store.lastClosedBreakFor(input.email);
-    if (lastClosed?.timeOut && input.now.getTime() - new Date(lastClosed.timeOut).getTime() < DOUBLE_SCAN_WINDOW_MS) {
+    const lookbackSeconds = Math.max(limits.ignoreRepeatSeconds, limits.restSeconds);
+    const since = new Date(input.now.getTime() - lookbackSeconds * 1000);
+    const lastClosed = lookbackSeconds ? await store.lastClosedBreakFor(input.email, since) : null;
+    const lastOut = lastClosed?.timeOut ? new Date(lastClosed.timeOut) : null;
+    if (lastClosed?.timeOut && lastOut && input.now.getTime() - lastOut.getTime() < limits.ignoreRepeatSeconds * 1000) {
       return { result: "already-out", timeOut: lastClosed.timeOut, areaName: lastClosed.areaOutName };
     }
+    earlyStart = earlyStartFlag(lastOut, input.now, limits);
   }
 
   if (decision.kind === "close") {
@@ -71,7 +79,7 @@ export async function recordScan(
     return outcome.result === "in" ? { ...outcome, previousMissedScanOut: true } : outcome;
   }
 
-  return openNewBreak(store, profile, area, nowIso);
+  return openNewBreak(store, profile, area, nowIso, earlyStart);
 }
 
 async function openNewBreak(
@@ -79,6 +87,7 @@ async function openNewBreak(
   profile: { email: string; fullName: string; department: string; position: string; company: string },
   area: { code: string; name: string },
   nowIso: string,
+  flagReason = "",
 ): Promise<ScanOutcome> {
   const createdId = await store.createBreak({
     email: profile.email,
@@ -89,6 +98,7 @@ async function openNewBreak(
     areaInCode: area.code,
     areaInName: area.name,
     timeIn: nowIso,
+    flagReason,
   });
 
   const open = await store.openBreaksFor(profile.email);

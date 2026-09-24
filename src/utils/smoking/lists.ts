@@ -8,6 +8,7 @@ export const SMOKING_LISTS = {
   profiles: "Smoking Profiles",
   log: "Smoking Log",
   areas: "Smoking Areas",
+  settings: "Smoking Settings",
 } as const;
 
 /** Every scan filters on these; unindexed they fail once the log passes 5,000 rows. */

@@ -9,6 +9,7 @@ export const SMOKING_LISTS = {
   profiles: "Smoking Profiles",
   log: "Smoking Log",
   areas: "Smoking Areas",
+  settings: "Smoking Settings",
 } as const;
 
 /** Title on Smoking Profiles holds the email too, so the list reads sensibly in SharePoint. */
@@ -27,6 +28,9 @@ export const LOG_COLUMNS = [
 
 /** Title on Smoking Areas is the area's name. */
 export const AREA_COLUMNS = ["Code", "Active"] as const;
+
+/** One row: OSHES's scan limits, in whole seconds. See `ScanLimits` in scanRules.ts. */
+export const SETTINGS_COLUMNS = ["IgnoreRepeatSeconds", "MinBreakSeconds", "RestSeconds"] as const;
 
 export const FLAG_OPEN_LONG = "Open over 12 hours";
 export const FLAG_LASTED_LONG = "Lasted over 12 hours";

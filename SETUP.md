@@ -311,8 +311,8 @@ will not re-send. The response reports `{ examined, sent, failed }`.
 ## F. Smoking log
 
 The smoking log is a separate feature optionally running on the same SharePoint site.
-Its three lists — `Smoking Profiles`, `Smoking Log`, `Smoking Areas` — are created
-automatically on first use.
+Its four lists — `Smoking Profiles`, `Smoking Log`, `Smoking Areas`, `Smoking Settings` —
+are created automatically on first use.
 
 1. **Google sign-in (≈10 min):** Set up OAuth 2.0 for the `/smoke` page.
    - Google Cloud Console → Create or choose a project → *OAuth consent screen*:
@@ -349,11 +349,17 @@ automatically on first use.
    — type yours."
 
 4. **First run:** An OSHES admin opens *Smoking log* in the portal. This creates the
-   three lists. The admin then adds each area on the *Areas* tab and prints its poster.
+   four lists. The admin then adds each area on the *Areas* tab and prints its poster.
    - Admins can *Show QR* on the Areas tab to download the QR as PNG or print the A4
      poster (Save as PDF from the print window)
    - The *People* tab can Block/Unblock or Remove a person — removal deletes only their
      profile; their break records stay. Blocked people are refused at scan time by the server
+   - The *Settings* tab sets the scan limits, in seconds or minutes: how long a repeat scan
+     is ignored as a double tap (default 1 minute, nothing recorded), the minimum break
+     length, and the rest time between breaks. A break that is too short or started too
+     soon is still recorded but flagged for review. 0 turns a limit off. Changes reach
+     scans within a minute; until the list exists or if it cannot be read, scans use the
+     defaults
 
 5. **Microsoft sign-in:** Uses the existing app registration from section B. Nothing
    to add — it only accepts PMW accounts.

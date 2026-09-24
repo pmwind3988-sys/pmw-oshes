@@ -14,6 +14,7 @@ import ResolveFlagDialog from "../../components/smoking/ResolveFlagDialog";
 import SmokingAreasTab from "../../components/smoking/SmokingAreasTab";
 import SmokingLogTable from "../../components/smoking/SmokingLogTable";
 import SmokingPeopleTab from "../../components/smoking/SmokingPeopleTab";
+import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import SmokingTotalsTable from "../../components/smoking/SmokingTotalsTable";
 import {
   applyEdit,
@@ -30,7 +31,7 @@ import {
 import { deleteBreak, ensureSmokingLists, loadBreaks, resolveFlag, saveBreakChanges } from "../../utils/smoking/adminStore";
 import type { SmokingBreak } from "../../utils/smoking/schema";
 
-type Tab_ = "log" | "totals" | "areas" | "people";
+type Tab_ = "log" | "totals" | "areas" | "people" | "settings";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -236,6 +237,7 @@ export default function SmokingLogScreen() {
         <Tab value="totals" label="Totals" />
         {access.isAdmin && <Tab value="areas" label="Areas" />}
         <Tab value="people" label="People" />
+        {access.isAdmin && <Tab value="settings" label="Settings" />}
       </Tabs>
 
       {(tab === "log" || tab === "totals") && (
@@ -351,6 +353,7 @@ export default function SmokingLogScreen() {
 
       {tab === "areas" && access.isAdmin && <SmokingAreasTab />}
       {tab === "people" && <SmokingPeopleTab />}
+      {tab === "settings" && access.isAdmin && <SmokingSettingsTab />}
 
       <BreakEditDialog open={!!editTarget} target={editTarget} busy={busy} onCancel={() => setEditTarget(null)} onSave={handleEditSave} />
       <ResolveFlagDialog

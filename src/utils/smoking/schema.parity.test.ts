@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as server from "../../../api/_utils/smoking/schema.js";
+import * as serverRules from "../../../api/_utils/smoking/scanRules.js";
 import { flagReasonFor as serverFlag } from "../../../api/_utils/smoking/scanRules.js";
 import * as browser from "./schema";
 
@@ -15,6 +16,24 @@ describe("smoking schema parity", () => {
     expect(columnsOf(server.SMOKING_LISTS.profiles)).toEqual([...server.PROFILE_COLUMNS]);
     expect(columnsOf(server.SMOKING_LISTS.log)).toEqual([...server.LOG_COLUMNS]);
     expect(columnsOf(server.SMOKING_LISTS.areas)).toEqual([...server.AREA_COLUMNS]);
+    expect(columnsOf(server.SMOKING_LISTS.settings)).toEqual([...server.SETTINGS_COLUMNS]);
+  });
+
+  it("reads and words OSHES's scan limits the same way on both sides", () => {
+    expect(browser.DEFAULT_SCAN_LIMITS).toEqual(serverRules.DEFAULT_SCAN_LIMITS);
+    expect(browser.SCAN_LIMIT_MAX).toEqual(serverRules.SCAN_LIMIT_MAX);
+    expect(browser.FLAG_SEPARATOR).toBe(serverRules.FLAG_SEPARATOR);
+    for (const raw of [
+      { ignoreRepeatSeconds: "30", minBreakSeconds: 300.7, restSeconds: 1800 },
+      { ignoreRepeatSeconds: "x", minBreakSeconds: -1, restSeconds: null },
+      { ignoreRepeatSeconds: 1e9, minBreakSeconds: 1e9, restSeconds: 1e9 },
+    ]) {
+      expect(browser.normalizeScanLimits(raw)).toEqual(serverRules.normalizeScanLimits(raw));
+    }
+    for (const s of [0, 1, 45, 60, 90, 599, 3600, 4500, 86_400]) {
+      expect(browser.formatSpan(s)).toBe(serverRules.formatSpan(s));
+    }
+    expect(browser.joinFlags("A", "A; B", "")).toBe(serverRules.joinFlags("A", "A; B", ""));
   });
 
   it("flags the same way on both sides", () => {

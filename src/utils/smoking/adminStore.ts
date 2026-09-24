@@ -1,5 +1,8 @@
 import { ensureListSchema, spDelete, spGet, spPatch, spPost } from "../formBuilderSP";
-import { SMOKING_LISTS, SMOKING_LIST_SCHEMAS, type SmokingArea, type SmokingBreak, type SmokingProfile } from "./schema";
+import {
+  DEFAULT_SCAN_LIMITS, SMOKING_LISTS, SMOKING_LIST_SCHEMAS, normalizeScanLimits,
+  type ScanLimits, type SmokingArea, type SmokingBreak, type SmokingProfile,
+} from "./schema";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
 
@@ -176,4 +179,44 @@ export async function setProfileBlocked(token: string, id: string, blocked: bool
 /** Removes the profile only — break records in Smoking Log are untouched. */
 export async function deleteProfile(token: string, id: string): Promise<void> {
   await spDelete(token, `${items(SMOKING_LISTS.profiles)}(${id})`);
+}
+
+export interface StoredScanLimits {
+  /** The Smoking Settings row, or "" before OSHES has saved any limits. */
+  id: string;
+  limits: ScanLimits;
+}
+
+export function rowToScanLimits(row: Record<string, unknown> | undefined): StoredScanLimits {
+  if (!row) return { id: "", limits: { ...DEFAULT_SCAN_LIMITS } };
+  return {
+    id: str(row.Id ?? row.ID),
+    limits: normalizeScanLimits({
+      ignoreRepeatSeconds: row.IgnoreRepeatSeconds,
+      minBreakSeconds: row.MinBreakSeconds,
+      restSeconds: row.RestSeconds,
+    }),
+  };
+}
+
+export function scanLimitsRow(limits: ScanLimits): Record<string, unknown> {
+  const clean = normalizeScanLimits(limits);
+  return {
+    Title: "Scan limits",
+    IgnoreRepeatSeconds: clean.ignoreRepeatSeconds,
+    MinBreakSeconds: clean.minBreakSeconds,
+    RestSeconds: clean.restSeconds,
+  };
+}
+
+/** The server reads the first row, so this reads and writes that same row. */
+export async function loadScanLimits(token: string): Promise<StoredScanLimits> {
+  const data = (await spGet(token, `${items(SMOKING_LISTS.settings)}?$top=1&$orderby=Id`)) as { value?: Record<string, unknown>[] };
+  return rowToScanLimits(data.value?.[0]);
+}
+
+export async function saveScanLimits(token: string, id: string, limits: ScanLimits): Promise<void> {
+  const row = scanLimitsRow(limits);
+  if (id) await spPatch(token, `${items(SMOKING_LISTS.settings)}(${id})`, row);
+  else await spPost(token, items(SMOKING_LISTS.settings), row);
 }

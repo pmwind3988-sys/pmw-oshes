@@ -1,6 +1,6 @@
 import { csvRow } from "../csv";
 import { MALAYSIA_TIME_LABEL, formatMalaysiaDateTime } from "../malaysiaTime";
-import { flagReasonFor, type SmokingBreak, type SmokingProfile } from "./schema";
+import { flagReasonFor, joinFlags, scanTimeFlags, type SmokingBreak, type SmokingProfile } from "./schema";
 
 /** `loadProfiles` rows: a registered person plus when they were first/last seen. */
 export interface SmokingProfileRow extends SmokingProfile {
@@ -56,7 +56,7 @@ function resolutionCovers(b: SmokingBreak): boolean {
 
 export function effectiveFlag(b: SmokingBreak, now: Date): string {
   if (resolutionCovers(b)) return "";
-  return b.flagReason || flagReasonFor(new Date(b.timeIn), b.timeOut ? new Date(b.timeOut) : null, now);
+  return joinFlags(b.flagReason, flagReasonFor(new Date(b.timeIn), b.timeOut ? new Date(b.timeOut) : null, now));
 }
 
 export function filterBreaks(breaks: SmokingBreak[], f: BreakFilters, now: Date): SmokingBreak[] {
@@ -70,8 +70,12 @@ export function filterBreaks(breaks: SmokingBreak[], f: BreakFilters, now: Date)
     .sort((a, b) => b.timeIn.localeCompare(a.timeIn));
 }
 
+/**
+ * Open and under 12 hours old. A break open longer is a forgotten scan-out,
+ * resolved or not; a break flagged for starting too soon is still someone out.
+ */
 export function currentlyOut(breaks: SmokingBreak[], now: Date): SmokingBreak[] {
-  return breaks.filter((b) => !b.timeOut && effectiveFlag(b, now) === "");
+  return breaks.filter((b) => !b.timeOut && flagReasonFor(new Date(b.timeIn), null, now) === "");
 }
 
 /** "Nobody on a break now" / "1 person on a break now" / "N people on a break now". */
@@ -124,7 +128,9 @@ export function applyEdit(before: SmokingBreak, edit: BreakEdit, now: Date): Smo
     timeIn: timeIn.toISOString(),
     timeOut: timeOut ? timeOut.toISOString() : null,
     durationMinutes: timeOut ? Math.round((timeOut.getTime() - timeIn.getTime()) / 60_000) : null,
-    flagReason: timeOut ? flagReasonFor(timeIn, timeOut, now) : "",
+    // Too-short and too-soon were judged at scan time against OSHES's limits as
+    // they stood then; the edit keeps them. Only the 12-hour flag follows the times.
+    flagReason: joinFlags(scanTimeFlags(before.flagReason), timeOut ? flagReasonFor(timeIn, timeOut, now) : ""),
   };
 }
 
