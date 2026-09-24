@@ -19,8 +19,12 @@ export function formatDuration(minutes: number): string {
 
 export function describeOutcome(outcome: ScanOutcome): OutcomeView {
   switch (outcome.result) {
-    case "in":
-      return { tone: "in", headline: `IN · ${formatMyt(outcome.timeIn)}`, detail: outcome.areaName };
+    case "in": {
+      const detail = outcome.previousMissedScanOut
+        ? `${outcome.areaName} · Your last break had no scan-out — OSHES will check it.`
+        : outcome.areaName;
+      return { tone: "in", headline: `IN · ${formatMyt(outcome.timeIn)}`, detail };
+    }
     case "out": {
       const parts = [formatDuration(outcome.durationMinutes), outcome.areaName];
       if (outcome.flagged) parts.push("OSHES will check this one — you may have missed a scan-out");

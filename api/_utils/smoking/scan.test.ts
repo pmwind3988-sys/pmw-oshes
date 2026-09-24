@@ -80,11 +80,31 @@ describe("recordScan", () => {
     expect(store.breaks[0].timeOut).toBeNull();
   });
 
-  it("flags a break that lasted over 12 hours", async () => {
+  it("closes a break left open overnight as stale and flagged, then opens a fresh one", async () => {
     await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-23T02:00:00Z") });
     const outcome = await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
-    expect(outcome).toMatchObject({ result: "out", flagged: true, durationMinutes: 1440 });
-    expect(store.breaks[0].flagReason).toBe("Lasted over 12 hours");
+    expect(outcome).toEqual({
+      result: "in", timeIn: "2026-09-24T02:00:00.000Z", areaName: "Block A", previousMissedScanOut: true,
+    });
+    expect(store.breaks).toHaveLength(2);
+    expect(store.breaks[0]).toMatchObject({
+      timeOut: "2026-09-24T02:00:00.000Z", durationMinutes: 1440, flagReason: "Lasted over 12 hours",
+      areaOutCode: "AAA111", areaOutName: "Block A",
+    });
+    expect(store.breaks[1]).toMatchObject({ timeIn: "2026-09-24T02:00:00.000Z", timeOut: null, areaInCode: "AAA111" });
+  });
+
+  it("closes a break left open 13 hours as stale and flagged, then opens a fresh one", async () => {
+    await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
+    const outcome = await recordScan(store, { email: ALI.email, areaCode: "BBB222", now: at("2026-09-24T15:00:00Z") });
+    expect(outcome).toEqual({
+      result: "in", timeIn: "2026-09-24T15:00:00.000Z", areaName: "Block B", previousMissedScanOut: true,
+    });
+    expect(store.breaks).toHaveLength(2);
+    expect(store.breaks[0]).toMatchObject({
+      timeOut: "2026-09-24T15:00:00.000Z", durationMinutes: 780, flagReason: "Lasted over 12 hours",
+    });
+    expect(store.breaks[1]).toMatchObject({ timeIn: "2026-09-24T15:00:00.000Z", timeOut: null, areaInCode: "BBB222" });
   });
 
   it("records nothing on a retired or unknown poster", async () => {

@@ -47,7 +47,7 @@ to any other part of the portal.
 | No open break | Open a break: time in = now, area in = this area |
 | Open break, opened **less than 1 minute** ago | No change; show "You're already in since 10:42" |
 | Open break, opened 1 minute or more ago | Close it: time out = now, area out = this area (may differ from area in) |
-| Open break older than 12 hours | Still closed by this scan, as above; the row is flagged "Lasted over 12 hours" |
+| Open break older than 12 hours | Old break is closed at this scan's time and flagged "Lasted over 12 hours"; this scan is recorded as a new IN |
 | Area code unknown or retired | Nothing recorded; show "This poster is no longer in use" |
 
 At most one open break per email. Concurrent scans must not create two open

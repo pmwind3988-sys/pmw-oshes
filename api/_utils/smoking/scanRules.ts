@@ -7,7 +7,8 @@ export const LONG_BREAK_MS = 12 * 60 * 60 * 1000;
 export type ScanDecision =
   | { kind: "open" }
   | { kind: "already-in"; openBreak: SmokingBreak }
-  | { kind: "close"; openBreak: SmokingBreak; durationMinutes: number; flagReason: string };
+  | { kind: "close"; openBreak: SmokingBreak; durationMinutes: number; flagReason: string }
+  | { kind: "close-stale-and-open"; openBreak: SmokingBreak; durationMinutes: number; flagReason: string };
 
 export function durationMinutes(timeIn: Date, timeOut: Date): number {
   return Math.round((timeOut.getTime() - timeIn.getTime()) / 60_000);
@@ -23,10 +24,10 @@ export function decideScan(openBreak: SmokingBreak | null, now: Date): ScanDecis
   if (!openBreak) return { kind: "open" };
   const timeIn = new Date(openBreak.timeIn);
   if (now.getTime() - timeIn.getTime() < DOUBLE_SCAN_WINDOW_MS) return { kind: "already-in", openBreak };
-  return {
-    kind: "close",
-    openBreak,
-    durationMinutes: durationMinutes(timeIn, now),
-    flagReason: flagReasonFor(timeIn, now, now),
-  };
+  const minutes = durationMinutes(timeIn, now);
+  const flagReason = flagReasonFor(timeIn, now, now);
+  if (now.getTime() - timeIn.getTime() > LONG_BREAK_MS) {
+    return { kind: "close-stale-and-open", openBreak, durationMinutes: minutes, flagReason };
+  }
+  return { kind: "close", openBreak, durationMinutes: minutes, flagReason };
 }

@@ -12,6 +12,13 @@ describe("describeOutcome", () => {
     expect(describeOutcome({ result: "in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A" }))
       .toEqual({ tone: "in", headline: "IN · 10:42", detail: "Block A" });
   });
+  it("reads IN after a missed scan-out on the previous break", () => {
+    expect(describeOutcome({
+      result: "in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A", previousMissedScanOut: true,
+    })).toEqual({
+      tone: "in", headline: "IN · 10:42", detail: "Block A · Your last break had no scan-out — OSHES will check it.",
+    });
+  });
   it("reads OUT with the duration", () => {
     expect(describeOutcome({
       result: "out", timeIn: "2026-09-24T02:42:00Z", timeOut: "2026-09-24T02:49:00Z",

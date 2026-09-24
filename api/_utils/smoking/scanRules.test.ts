@@ -48,9 +48,23 @@ describe("decideScan", () => {
     });
   });
 
-  it("closes a break left open overnight and flags it", () => {
+  it("closes a break left open overnight as a stale break and opens a new one", () => {
     const open = openBreak("2026-09-23T02:00:00Z");
     const decision = decideScan(open, at("2026-09-24T02:00:00Z"));
-    expect(decision).toMatchObject({ kind: "close", durationMinutes: 1440, flagReason: FLAG_LASTED_LONG });
+    expect(decision).toMatchObject({
+      kind: "close-stale-and-open", openBreak: open, durationMinutes: 1440, flagReason: FLAG_LASTED_LONG,
+    });
+  });
+
+  it("still just closes a break that is exactly 12 hours old", () => {
+    const open = openBreak("2026-09-23T02:00:00Z");
+    const decision = decideScan(open, at("2026-09-23T14:00:00Z"));
+    expect(decision).toMatchObject({ kind: "close", durationMinutes: 720, flagReason: "" });
+  });
+
+  it("still just closes a break that is under 12 hours old", () => {
+    const open = openBreak("2026-09-23T02:00:00Z");
+    const decision = decideScan(open, at("2026-09-23T13:59:00Z"));
+    expect(decision).toMatchObject({ kind: "close", durationMinutes: 719, flagReason: "" });
   });
 });

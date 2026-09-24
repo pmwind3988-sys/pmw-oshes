@@ -2,7 +2,7 @@ import { DOUBLE_SCAN_WINDOW_MS, decideScan } from "./scanRules.js";
 import type { SmokingStore } from "./store.js";
 
 export type ScanOutcome =
-  | { result: "in"; timeIn: string; areaName: string }
+  | { result: "in"; timeIn: string; areaName: string; previousMissedScanOut?: true }
   | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
   | { result: "already-in"; timeIn: string; areaName: string }
   | { result: "already-out"; timeOut: string; areaName: string }
@@ -59,6 +59,27 @@ export async function recordScan(
     };
   }
 
+  if (decision.kind === "close-stale-and-open") {
+    await store.closeBreak(decision.openBreak.id, {
+      timeOut: nowIso,
+      areaOutCode: area.code,
+      areaOutName: area.name,
+      durationMinutes: decision.durationMinutes,
+      flagReason: decision.flagReason,
+    });
+    const outcome = await openNewBreak(store, profile, area, nowIso);
+    return outcome.result === "in" ? { ...outcome, previousMissedScanOut: true } : outcome;
+  }
+
+  return openNewBreak(store, profile, area, nowIso);
+}
+
+async function openNewBreak(
+  store: SmokingStore,
+  profile: { email: string; fullName: string; department: string; position: string; company: string },
+  area: { code: string; name: string },
+  nowIso: string,
+): Promise<ScanOutcome> {
   const createdId = await store.createBreak({
     email: profile.email,
     fullName: profile.fullName,
@@ -70,7 +91,7 @@ export async function recordScan(
     timeIn: nowIso,
   });
 
-  const open = await store.openBreaksFor(input.email);
+  const open = await store.openBreaksFor(profile.email);
   const keeper = open[0];
   if (keeper && keeper.id !== createdId) {
     await store.deleteBreak(createdId);
