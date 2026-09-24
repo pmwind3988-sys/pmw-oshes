@@ -13,10 +13,11 @@ import {
 } from "../utils/smoking/api";
 import { loadGoogleIdentity, renderGoogleButton } from "../utils/smoking/googleSignIn";
 import { describeOutcome, type OutcomeView } from "../utils/smoking/outcome";
+import { checkPoster } from "../utils/smoking/poster";
 import type { SmokingProfile } from "../utils/smoking/schema";
 import { PDPA_CONSENT_LABEL, PDPA_SUMMARY } from "../utils/pdpa";
 
-type Stage = "loading" | "signin" | "profile" | "result" | "error";
+type Stage = "checking" | "loading" | "signin" | "profile" | "home" | "result" | "error";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
@@ -36,28 +37,37 @@ interface ProfileDraft {
 }
 
 /**
- * The page a smoking-area poster opens. Sign in once, register once, then every
- * scan is IN or OUT — the server decides which.
+ * The page a smoking-area poster opens, and the smoking log's front door.
+ *
+ * From a poster (`/smoke?area=CODE`) the poster is checked first: a retired or
+ * unknown one says so before anyone is asked to sign in. A live one asks for a
+ * sign-in once and a profile once, then every scan is IN or OUT — the server
+ * decides which.
+ *
+ * Opened directly (`/smoke`) there is nothing to record: the page signs the
+ * smoker in, takes their profile, and tells them to scan a poster to start.
  */
 export default function SmokingScanPage() {
   const [params] = useSearchParams();
   const areaCode = (params.get("area") ?? "").trim().toUpperCase();
   const [stage, setStage] = useState<Stage>(() => {
-    if (!areaCode) return "result";
+    if (areaCode) return "checking";
     return readStoredPass() ? "loading" : "signin";
   });
   const [areaName, setAreaName] = useState("");
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [homeName, setHomeName] = useState("");
   const [error, setError] = useState("");
-  const [view, setView] = useState<OutcomeView | null>(areaCode ? null : describeOutcome({ result: "retired-area" }));
+  const [view, setView] = useState<OutcomeView | null>(null);
   const [draft, setDraft] = useState<ProfileDraft>({ fullName: "", department: "", position: "", staffId: "", company: "PMW" });
   const [departments, setDepartments] = useState<string[]>([]);
   const [departmentsFromList, setDepartmentsFromList] = useState(true);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const googleButton = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
-  const shouldAutoScanRef = useRef(readStoredPass() && areaCode);
+  const startedRef = useRef(false);
 
   /** The server refused because OSHES turned this person's access off. Never a retryable failure. */
   const showBlocked = useCallback(() => {
@@ -93,8 +103,14 @@ export default function SmokingScanPage() {
     setStage("profile");
   }, []);
 
+  const goHome = useCallback((fullName: string) => {
+    setHomeName(fullName);
+    setStage("home");
+  }, []);
+
   const scan = useCallback(async () => {
     setBusy(true);
+    setStage("loading");
     try {
       const outcome = await callSmoking<ScanOutcome>("scan", { areaCode });
       if (outcome.result === "no-profile") {
@@ -111,12 +127,42 @@ export default function SmokingScanPage() {
     }
   }, [areaCode, fail, openProfile]);
 
+  /** Opened without a poster: confirm the saved pass still holds, then greet or ask for a profile. */
+  const loadHome = useCallback(async () => {
+    try {
+      const { profile } = await callSmoking<{ profile: SmokingProfile | null }>("profile-get");
+      if (profile) goHome(profile.fullName);
+      else await openProfile(null);
+    } catch (e) {
+      fail(e);
+    }
+  }, [fail, goHome, openProfile]);
+
+  /** Opened from a poster: a retired poster says so before anyone is asked to sign in. */
+  const checkThenScan = useCallback(async () => {
+    try {
+      const poster = await checkPoster(areaCode);
+      if (poster.kind === "retired") {
+        setView(describeOutcome({ result: "retired-area" }));
+        setStage("result");
+        return;
+      }
+      setAreaName(poster.name);
+      setPosterOpen(true);
+      if (readStoredPass()) await scan();
+      else setStage("signin");
+    } catch (e) {
+      fail(e);
+    }
+  }, [areaCode, fail, scan]);
+
   const afterSignIn = useCallback(async (provider: "google" | "microsoft", idToken: string) => {
     try {
       const result = await callSmoking<SignInResult>("signin", { provider, idToken });
       storePass(result.pass);
       if (!result.profile) await openProfile(null, result.name);
-      else await scan();
+      else if (areaCode) await scan();
+      else goHome(result.profile.fullName);
     } catch (e) {
       if (e instanceof SmokingApiError && e.code === "blocked") {
         showBlocked();
@@ -125,24 +171,30 @@ export default function SmokingScanPage() {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
       setStage("signin");
     }
-  }, [openProfile, scan, showBlocked]);
+  }, [areaCode, goHome, openProfile, scan, showBlocked]);
 
-  // Fetch area header.
+  // Once per page load, whichever way the smoker came in. The first stage was
+  // already set to match, so neither call needs to set it again.
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    if (!areaCode) return;
-    callSmoking<{ name: string; active: boolean }>("area", { code: areaCode })
-      .then((area) => setAreaName(area.name))
-      .catch(() => setAreaName(""));
-  }, [areaCode]);
+    if (startedRef.current) return;
+    startedRef.current = true;
+    const start = areaCode ? checkThenScan : readStoredPass() ? loadHome : null;
+    if (start) void start();
+  }, [areaCode, checkThenScan, loadHome]);
 
-  // Auto-scan if already signed in.
-  useEffect(() => {
-    if (initializedRef.current && shouldAutoScanRef.current) {
+  /** "Try again" repeats whatever failed: the poster check, the scan, or loading the home screen. */
+  const retry = () => {
+    setError("");
+    if (!areaCode) {
+      setStage("loading");
+      void loadHome();
+    } else if (posterOpen) {
       void scan();
+    } else {
+      setStage("checking");
+      void checkThenScan();
     }
-  }, [scan]);
+  };
 
   // Google's button needs the element on screen before it can draw into it.
   useEffect(() => {
@@ -166,7 +218,17 @@ export default function SmokingScanPage() {
     setError("");
     try {
       await callSmoking("profile-save", { ...draft, departmentFromList: departmentsFromList });
-      await scan();
+      // An edit only saves: going back must not record a second scan. A first
+      // registration from a poster records the scan that brought them here.
+      if (editingProfile) {
+        setEditingProfile(false);
+        if (areaCode) setStage("result");
+        else goHome(draft.fullName);
+      } else if (areaCode) {
+        await scan();
+      } else {
+        goHome(draft.fullName);
+      }
     } catch (e) {
       if (e instanceof SmokingApiError && e.code === "blocked") {
         showBlocked();
@@ -180,9 +242,25 @@ export default function SmokingScanPage() {
 
   const editProfile = () => {
     callSmoking<{ profile: SmokingProfile | null }>("profile-get")
-      .then(({ profile }) => openProfile(profile))
+      .then(({ profile }) => {
+        setEditingProfile(Boolean(profile));
+        return openProfile(profile);
+      })
       .catch(fail);
   };
+
+  const signOut = () => {
+    clearStoredPass();
+    setError("");
+    setStage("signin");
+  };
+
+  const accountLinks = (
+    <Stack sx={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+      <Link component="button" onClick={editProfile}>Edit my profile</Link>
+      <Link component="button" onClick={signOut}>Not you?</Link>
+    </Stack>
+  );
 
   const required = draft.fullName.trim() && draft.department.trim() && draft.position.trim();
 
@@ -191,16 +269,24 @@ export default function SmokingScanPage() {
       <Stack spacing={3} sx={{ width: "100%", maxWidth: 420 }}>
         <Box>
           <Typography variant="overline" color="text.secondary">OSHES · Smoking log</Typography>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>{areaName || "Smoking area"}</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            {areaCode ? areaName || "Smoking area" : "Welcome"}
+          </Typography>
         </Box>
 
         {error && stage !== "error" && <Alert severity="error">{error}</Alert>}
 
-        {stage === "loading" && <Typography color="text.secondary">Recording…</Typography>}
+        {stage === "checking" && <Typography color="text.secondary">Checking this poster…</Typography>}
+
+        {stage === "loading" && (
+          <Typography color="text.secondary">{areaCode ? "Recording…" : "Loading…"}</Typography>
+        )}
 
         {stage === "signin" && (
           <Stack spacing={2} sx={{ alignItems: "center" }}>
-            <Typography>Sign in once. After that, just scan.</Typography>
+            <Typography>
+              {areaCode ? "Sign in once. After that, just scan." : "Sign in once, then scan the poster at your smoking area."}
+            </Typography>
             <div ref={googleButton} />
             {!GOOGLE_CLIENT_ID && <Alert severity="warning">Google sign-in is not set up yet. Tell OSHES.</Alert>}
             <Link component="button" onClick={signInMicrosoft} underline="hover">
@@ -242,8 +328,20 @@ export default function SmokingScanPage() {
               }
             />
             <Button variant="contained" size="large" disabled={!required || !pdpaAccepted || busy} onClick={saveProfile}>
-              Save and record this scan
+              {editingProfile || !areaCode ? "Save" : "Save and record this scan"}
             </Button>
+          </Stack>
+        )}
+
+        {stage === "home" && (
+          <Stack spacing={2}>
+            <Typography sx={{ fontSize: 32, fontWeight: 800, lineHeight: 1.15 }}>
+              {homeName ? `You're signed in, ${homeName}.` : "You're signed in."}
+            </Typography>
+            <Typography variant="h6">
+              To start, scan the QR poster at your smoking area with your phone camera.
+            </Typography>
+            {accountLinks}
           </Stack>
         )}
 
@@ -253,19 +351,15 @@ export default function SmokingScanPage() {
               {view.headline}
             </Typography>
             <Typography variant="h6">{view.detail}</Typography>
-            {!blocked && (
-              <Stack sx={{ flexDirection: "row" }} spacing={2}>
-                <Link component="button" onClick={editProfile}>Edit my profile</Link>
-                <Link component="button" onClick={() => { clearStoredPass(); setStage("signin"); }}>Not you?</Link>
-              </Stack>
-            )}
+            {/* Only someone signed in has a profile to edit or an account to leave. */}
+            {!blocked && readStoredPass() && accountLinks}
           </Stack>
         )}
 
         {stage === "error" && (
           <Stack spacing={2}>
             <Alert severity="error">{error}</Alert>
-            <Button variant="contained" size="large" disabled={busy} onClick={() => void scan()}>Try again</Button>
+            <Button variant="contained" size="large" disabled={busy} onClick={retry}>Try again</Button>
           </Stack>
         )}
       </Stack>

@@ -86,8 +86,11 @@ export async function handleSmoking(req: SmokingRequest, deps: SmokingDeps): Pro
   if (!holder) return fail(401, "signin-required");
 
   switch (action) {
-    case "profile-get":
-      return ok({ profile: publicProfile(await deps.store.findProfile(holder.email)) });
+    case "profile-get": {
+      const profile = await deps.store.findProfile(holder.email);
+      if (profile?.blocked) return fail(403, "blocked");
+      return ok({ profile: publicProfile(profile) });
+    }
 
     case "profile-save": {
       const existing = await deps.store.findProfile(holder.email);
