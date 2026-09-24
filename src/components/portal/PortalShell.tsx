@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
+import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
 import type { IconComponent } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
@@ -37,6 +37,7 @@ const SCREEN_ICON: Partial<Record<PortalScreen, IconComponent>> = {
   cat: CategoryOutlinedIcon,
   people: GroupOutlinedIcon,
   audit: HistoryOutlinedIcon,
+  smoking: SmokingRoomsOutlinedIcon,
   settings: SettingsOutlinedIcon,
 };
 

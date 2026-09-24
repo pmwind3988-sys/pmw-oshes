@@ -531,3 +531,13 @@ export const Palette = make("Palette", (
     <circle cx="15.5" cy="8.5" r="1.1" />
   </>
 ));
+
+export const SmokingRoomsOutlined = make("SmokingRoomsOutlined", (
+  <>
+    <path d="M7 3h10c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z" />
+    <path d="M9 10c0 .55-.45 1-1 1s-1-.45-1-1 .45-1 1-1 1 .45 1 1z" />
+    <path d="M15 10c0 .55-.45 1-1 1s-1-.45-1-1 .45-1 1-1 1 .45 1 1z" />
+    <path d="M12 20c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4z" />
+    <path d="M12 22v4M14 24h-4" />
+  </>
+));

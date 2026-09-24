@@ -11,6 +11,7 @@ import FileFormScreen from "./portal/FileFormScreen";
 import CatalogueScreen from "./portal/CatalogueScreen";
 import PeopleScreen from "./portal/PeopleScreen";
 import AuditScreen from "./portal/AuditScreen";
+import SmokingLogScreen from "./portal/SmokingLogScreen";
 import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
@@ -30,6 +31,8 @@ function ScreenBody() {
       return <PeopleScreen />;
     case "audit":
       return <AuditScreen />;
+    case "smoking":
+      return <SmokingLogScreen />;
     case "settings":
       return <SettingsScreen />;
     // Two framings of one table: what you filed, and everything you may see.

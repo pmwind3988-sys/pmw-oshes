@@ -154,6 +154,7 @@ describe("navigation", () => {
       "Form catalogue",
       "People & roles",
       "Audit trail",
+      "Smoking log",
       "Settings",
     ]);
   });
@@ -168,7 +169,7 @@ describe("navigation", () => {
     const audit = labels(input({ userEmail: "nurul@pmw.gov.my", isAuditor: true }));
     expect(audit).not.toContain("To approve");
     expect(audit).not.toContain("File a form");
-    expect(audit).toEqual(["Home", "My submissions", "Today", "Records", "Audit trail", "Settings"]);
+    expect(audit).toEqual(["Home", "My submissions", "Today", "Records", "Audit trail", "Smoking log", "Settings"]);
   });
 
   it("counts each item against its own set", () => {
@@ -202,6 +203,13 @@ describe("navigation", () => {
     // but a reassignment can land at any time and must not bounce back to Home.
     const fresh = allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })));
     expect(fresh).toContain("queue");
+  });
+
+  it("shows the smoking log to admins and auditors only", () => {
+    expect(labels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toContain("Smoking log");
+    expect(labels(input({ userEmail: "aud@pmw.gov.my", isAuditor: true }))).toContain("Smoking log");
+    expect(labels(input({ userEmail: "nurul@pmw.gov.my" }))).not.toContain("Smoking log");
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).not.toContain("smoking");
   });
 });
 

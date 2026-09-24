@@ -48,6 +48,7 @@ export type PortalScreen =
   | "cat"
   | "people"
   | "audit"
+  | "smoking"
   | "settings";
 
 export interface PortalNavItem {

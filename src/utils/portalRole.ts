@@ -252,6 +252,16 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
         caption: "Every action, in order",
       });
     }
+    // Its own list, not a form: OSHES's view of the smoking-area posters.
+    if (access.isAdmin || access.isAuditor) {
+      oversight.push({
+        screen: "smoking",
+        label: "Smoking log",
+        count: null,
+        hint: "Who scanned in and out at the smoking areas, and for how long",
+        caption: "Smoking breaks",
+      });
+    }
     sections.push({
       id: "oversight",
       label: access.canSeeEveryRecord ? "Oversight" : "Beyond your own filings",
