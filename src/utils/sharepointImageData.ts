@@ -270,6 +270,46 @@ export async function imageSourceToDataUrl(token: string, source: string, cache:
   return "";
 }
 
+/** A sign-in page answered with 200 instead of the file that was asked for. */
+function looksLikeHtml(bytes: Uint8Array): boolean {
+  const head = new TextDecoder().decode(bytes.slice(0, 256)).trim().toLowerCase();
+  return head.startsWith("<!doctype html") || head.startsWith("<html");
+}
+
+/**
+ * The bytes of any stored file — a PDF, a photo, a spreadsheet — not just a
+ * picture. Same routes and the same credentials as {@link imageSourceToDataUrl},
+ * but nothing is re-encoded: the caller decides what the bytes are.
+ *
+ * Returns `null` when no route produced the file, rather than throwing.
+ */
+export async function fetchSharePointFileBytes(token: string, source: string): Promise<Uint8Array | null> {
+  const absolute = toAbsoluteSharePointUrl(source.trim());
+  if (!absolute || absolute.startsWith("data:")) return null;
+
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: "*/*" };
+  const candidateUrls = [
+    sharePointFileValueUrl(absolute),
+    sharePointDownloadAspxUrl(absolute),
+  ].filter((url): url is string => !!url);
+  candidateUrls.push(absolute);
+
+  for (const requestUrl of candidateUrls) {
+    try {
+      const response = await fetchWithAuthRecovery(requestUrl, {
+        headers: requestUrl !== absolute || isSharePointSource(absolute) ? authHeaders : undefined,
+      });
+      if (!response.ok) continue;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length === 0 || looksLikeHtml(bytes)) continue;
+      return bytes;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function imageSourceFromString(value: string, siteUrl = SP_SITE_URL): string {
   const trimmed = value.trim();
   const parsed = parseMaybeJson(trimmed);

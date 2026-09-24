@@ -12,7 +12,9 @@ import { parseForm, type NativeForm } from "../native/schema";
 import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers } from "../utils/formBuilderSP";
+import { fileQuestions, uniqueUploadFileName, uploadStamp } from "../utils/fileAttachments";
+import { uploadPublicAttachments } from "../utils/publicFileUpload";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -268,13 +270,14 @@ function uploadCandidateFromValue(value: unknown): UploadCandidate | null {
   return null;
 }
 
-function uploadFileName(fieldName: string, candidate: UploadCandidate, index?: number): string {
-  const originalName = candidate.name?.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-  if (originalName) return originalName;
-  const mimeMatch = candidate.content.match(/^data:([\w/+-]+);/);
+function uploadFileName(fieldName: string, candidate: UploadCandidate, index = 0): string {
+  // Stamped even when the file kept its own name: every upload for a form goes
+  // into one library, and a second "quote.pdf" used to replace the first.
+  const stamp = uploadStamp(Date.now(), index);
+  if (candidate.name?.trim()) return uniqueUploadFileName(candidate.name, stamp);
+  const mimeMatch = candidate.content.match(/^data:([^;,]+)[;,]/);
   const ext = (mimeMatch ? mimeMatch[1].split('/').pop() || 'bin' : 'bin').replace(/[^a-zA-Z0-9]/g, '') || 'bin';
-  const suffix = index === undefined ? "" : `_${index}`;
-  return `${fieldName}_${Date.now()}${suffix}.${ext}`;
+  return uniqueUploadFileName(`${fieldName}.${ext}`, stamp);
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -1179,6 +1182,19 @@ export default function DynamicFormPage() {
           await new Promise((r) => setTimeout(r, 1500));
         }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
+        // Several attached files are stored as a list of their addresses, which
+        // outgrows a single line of text after two or three long names. Widen
+        // the column first rather than let SharePoint refuse the submission.
+        const longFileAnswers = fileQuestions(formData?.surveyJson)
+          .map((question) => question.name)
+          .filter((name) => {
+            const value = body[name];
+            const stored = Array.isArray(value) ? JSON.stringify(value) : typeof value === "string" ? value : "";
+            return stored.length > SP_TEXT_COLUMN_MAX;
+          });
+        if (longFileAnswers.length > 0) {
+          await ensureColumnsHoldLongText(token, cfg.Title as string, longFileAnswers);
+        }
         const { resolveColumnKey, isMultiValueColumn } = await getSharePointColumnResolvers(token, cfg.Title as string);
         let result: { Id?: number } | undefined;
         try {
@@ -1470,6 +1486,28 @@ export default function DynamicFormPage() {
             for (const page of pages) { if (page.elements) walk(page.elements); }
           }
         }
+
+        // Attachments go first, a piece at a time: carried inside the
+        // submission they pushed it past the ~4.5 MB a serverless request may
+        // be, and the whole form failed.
+        await uploadPublicAttachments(body, enrichedSurveyJson || formData?.surveyJson, {
+          listTitle: cfg.Title as string,
+          formVersion: cfg.CurrentVersion as string | undefined,
+          publishKey: (cfg.CurrentPublishKey as string | undefined) || publishKey || undefined,
+        }, async (payload) => {
+          const uploadRes = await fetch("/api/submit-form", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
+          const reply = await uploadRes.json().catch(() => ({})) as Record<string, unknown>;
+          if (!uploadRes.ok) throw new Error(typeof reply.error === "string" ? reply.error : `Upload failed: ${uploadRes.status}`);
+          return reply;
+        });
 
         const res = await fetch("/api/submit-form", {
           method: "POST",

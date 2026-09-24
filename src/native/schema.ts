@@ -201,6 +201,28 @@ const num = (v: unknown, fallback: number): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/**
+ * What the submission path accepts per file. A limit the server will not
+ * honour is a promise to the respondent that breaks after they press Submit.
+ */
+export const MAX_UPLOAD_MB = 10;
+
+/**
+ * The per-file limit, in megabytes.
+ *
+ * SurveyJS publishes `maxSize` in bytes — the builder's default is 10485760 —
+ * but hand-written forms (the demo among them) give it in megabytes. Reading
+ * every value as megabytes turned a 10 MB limit into ten million, so nothing was
+ * refused at the form and the upload failed after submit instead. No sensible
+ * megabyte figure is above 1024, so anything bigger is bytes.
+ */
+export function fileSizeLimitMb(raw: unknown): number {
+  const value = num(raw, 0);
+  if (value <= 0) return MAX_UPLOAD_MB;
+  const mb = value > 1024 ? value / (1024 * 1024) : value;
+  return Math.min(MAX_UPLOAD_MB, Math.round(mb * 100) / 100);
+}
+
 const optNum = (v: unknown): number | undefined => {
   const n = num(v, NaN);
   return Number.isFinite(n) ? n : undefined;
@@ -468,7 +490,7 @@ function toElement(raw: Raw, parentId: string, index: number): NativeElement {
 
     acceptedTypes: str(raw.acceptedTypes ?? raw.acceptedTypes ?? raw.accept),
     allowMultiple: bool(raw.allowMultiple),
-    maxSizeMb: num(raw.maxSize, 0),
+    maxSizeMb: fileSizeLimitMb(raw.maxSize),
 
     columns: toColumns(raw.columns ?? raw.tableConfigColumns ?? raw.matrixColumns),
     minRows: num(raw.minRows ?? raw.rowCount, 1),

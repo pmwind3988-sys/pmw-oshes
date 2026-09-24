@@ -142,6 +142,74 @@ export async function getListFieldsViaSPRest(token: string, listName: string): P
     }));
 }
 
+/** What a single line of text holds. SharePoint refuses anything longer. */
+export const SP_TEXT_COLUMN_MAX = 255;
+
+/**
+ * A single-line text column's definition, rewritten as multi-line plain text.
+ * Mirrors `textFieldSchemaAsNote` in `src/utils/formBuilderSP.ts` (the API
+ * does not import from `src/`). Returns "" for anything that is not
+ * single-line text, so no other column is ever touched.
+ */
+export function textFieldSchemaAsNote(schemaXml: string): string {
+  if (!/^<Field\b[^>]*\sType="Text"/.test(schemaXml)) return "";
+  return schemaXml.replace(/^<Field\b[^>]*?(?=\/?>)/, (open) => {
+    let next = open
+      .replace(/\sType="Text"/, ' Type="Note"')
+      .replace(/\s+MaxLength="[^"]*"/, "");
+    // Added straight after the element name, so a self-closing tag stays whole.
+    const extra = [
+      /\sNumLines=/.test(next) ? "" : ' NumLines="6"',
+      /\sRichText=/.test(next) ? "" : ' RichText="FALSE"',
+      /\sUnlimitedLengthInDocumentLibrary=/.test(next) ? "" : ' UnlimitedLengthInDocumentLibrary="TRUE"',
+    ].join("");
+    next = next.replace(/^<Field\b/, `<Field${extra}`);
+    return next;
+  });
+}
+
+/**
+ * Convert any of the named columns that are still single-line text into
+ * multi-line text. A file question's answer lists every attached file's
+ * address, which outgrows 255 characters after two or three long names.
+ */
+export async function ensureFieldsHoldLongTextViaSPRest(
+  token: string,
+  listName: string,
+  fieldNames: string[],
+): Promise<string[]> {
+  if (fieldNames.length === 0) return [];
+  const wanted = new Set(fieldNames.map((name) => name.toLowerCase()));
+  const data = await spGet<{
+    value?: Array<{ Id?: string; InternalName?: string; Title?: string; FieldTypeKind?: number; SchemaXml?: string }>;
+  }>(
+    token,
+    `${spListEndpoint(listName)}/fields?$select=Id,InternalName,Title,FieldTypeKind,SchemaXml&$top=5000`,
+    `SP REST fields ${listName}`,
+  );
+  const widened: string[] = [];
+  let digest: string | null = null;
+  for (const field of data.value || []) {
+    const names = [field.InternalName, field.Title].filter(Boolean).map((name) => String(name).toLowerCase());
+    if (!names.some((name) => wanted.has(name))) continue;
+    if (field.FieldTypeKind !== 2 || !field.Id || !field.SchemaXml) continue;
+    const schemaXml = textFieldSchemaAsNote(field.SchemaXml);
+    if (!schemaXml) continue;
+    digest ??= await getSpDigest(token);
+    const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/fields('${escapeODataString(field.Id)}')`, {
+      method: "POST",
+      headers: mergeHeaders(token, digest),
+      body: JSON.stringify({ __metadata: { type: "SP.Field" }, SchemaXml: schemaXml }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`SP REST widen field ${res.status}: ${text.slice(0, 300)}`);
+    }
+    widened.push(String(field.InternalName));
+  }
+  return widened;
+}
+
 /** SharePoint's own template numbers: a custom list, and a document library. */
 const SP_BASE_TEMPLATE = { genericList: 100, documentLibrary: 101 } as const;
 

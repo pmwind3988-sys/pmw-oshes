@@ -875,6 +875,29 @@ export async function uploadFileToDriveItem(
 }
 
 /**
+ * Opens a Graph upload session for one file, so its bytes can be sent in
+ * several requests instead of one. A serverless request body is capped well
+ * below the size of a scanned document, so anything larger has to arrive in
+ * pieces. `fail` rather than `replace`: the name is already unique, and a
+ * collision must never overwrite somebody else's file.
+ */
+export async function createDriveUploadSession(
+  token: string,
+  listDisplayName: string,
+  fileName: string,
+): Promise<string> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const data = (await graphPost(
+    token,
+    `/sites/${siteId}/lists/${listId}/drive/root:/${encodeURIComponent(fileName)}:/createUploadSession`,
+    { item: { "@microsoft.graph.conflictBehavior": "fail" } },
+  )) as { uploadUrl?: string };
+  if (!data.uploadUrl) throw new Error("Graph did not return an upload URL.");
+  return data.uploadUrl;
+}
+
+/**
  * Uploads binary content to a SharePoint document library via Graph API drive endpoint.
  * Returns the web URL of the uploaded file.
  */

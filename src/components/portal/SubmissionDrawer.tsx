@@ -25,7 +25,12 @@ import {
   signLayer,
 } from "../../utils/portalActions";
 import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
-import { downloadRecordPdf } from "../../utils/portalPdf";
+import {
+  attachmentDownloadMessage,
+  downloadRecordPdf,
+  downloadRecordPdfWithAttachments,
+  recordAttachments,
+} from "../../utils/portalPdf";
 import { recordKey } from "../../utils/portalRecords";
 import { SeverityPill, StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
@@ -105,7 +110,7 @@ export default function SubmissionDrawer() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   /** Which PDF job is running, so the split control can say which one. */
-  const [pdfBusy, setPdfBusy] = useState<"" | "download" | "regenerate">("");
+  const [pdfBusy, setPdfBusy] = useState<"" | "download" | "attachments" | "regenerate">("");
   const [pdfMenu, setPdfMenu] = useState<HTMLElement | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -177,6 +182,13 @@ export default function SubmissionDrawer() {
   };
 
   const formSurveyJson = record ? surveyJsonByForm[record.listTitle] ?? record.submission.surveyJson ?? null : null;
+  const attachmentCount = useMemo(
+    () => (record ? recordAttachments(record, formSurveyJson).length : 0),
+    [record, formSurveyJson],
+  );
+  // Administrators only: it fetches every attached file, which can be large,
+  // and the plain download already links each one.
+  const canDownloadWithAttachments = Boolean(record) && access.isAdmin && Boolean(spClient);
 
   const handlePdf = async () => {
     if (!record || pdfBusy) return;
@@ -185,6 +197,18 @@ export default function SubmissionDrawer() {
       await downloadRecordPdf(record, formSurveyJson, spClient);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not generate the PDF.");
+    } finally {
+      setPdfBusy("");
+    }
+  };
+
+  const handlePdfWithAttachments = async () => {
+    if (!record || pdfBusy || !spClient) return;
+    setPdfBusy("attachments");
+    try {
+      toast(attachmentDownloadMessage(await downloadRecordPdfWithAttachments(record, formSurveyJson, spClient)));
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not build the PDF with attachments.");
     } finally {
       setPdfBusy("");
     }
@@ -367,9 +391,9 @@ export default function SubmissionDrawer() {
                     "Download" should do. */}
                 <ButtonGroup variant={hasActions ? "text" : "outlined"} sx={{ alignItems: "stretch" }}>
                   <Button onClick={() => void handlePdf()} disabled={Boolean(pdfBusy)} sx={{ minHeight: 40 }}>
-                    {pdfBusy === "download" ? "Preparing…" : "Download PDF"}
+                    {pdfBusy === "download" || pdfBusy === "attachments" ? "Preparing…" : "Download PDF"}
                   </Button>
-                  {canRegenerate && (
+                  {(canRegenerate || canDownloadWithAttachments) && (
                     <Button
                       aria-label="Other PDF actions"
                       aria-haspopup="menu"
@@ -384,6 +408,9 @@ export default function SubmissionDrawer() {
                 </ButtonGroup>
                 {pdfBusy === "regenerate" && (
                   <Typography sx={{ fontSize: 12, color: editorial.muted }}>Rebuilding the stored PDF…</Typography>
+                )}
+                {pdfBusy === "attachments" && (
+                  <Typography sx={{ fontSize: 12, color: editorial.muted }}>Adding the attachments…</Typography>
                 )}
 
                 {(canCancel || canDelete) && (
@@ -425,21 +452,45 @@ export default function SubmissionDrawer() {
         transformOrigin={{ vertical: "bottom", horizontal: "left" }}
         slotProps={{ paper: { sx: { maxWidth: 320 } } }}
       >
-        <MenuItem
-          onClick={() => {
-            setPdfMenu(null);
-            void handleRegeneratePdf();
-          }}
-        >
-          <ListItemText
-            primary="Re-generate PDF"
-            secondary="Rebuilds it from the record as it stands and replaces the stored copy"
-            slotProps={{
-              primary: { sx: { fontSize: 13.5, fontWeight: 700 } },
-              secondary: { sx: { fontSize: 11.5, whiteSpace: "normal" } },
+        {canDownloadWithAttachments && (
+          <MenuItem
+            disabled={attachmentCount === 0}
+            onClick={() => {
+              setPdfMenu(null);
+              void handlePdfWithAttachments();
             }}
-          />
-        </MenuItem>
+          >
+            <ListItemText
+              primary="Download PDF with attachments"
+              secondary={
+                attachmentCount === 0
+                  ? "Nothing is attached to this record"
+                  : `The record, then its ${attachmentCount} attached ${attachmentCount === 1 ? "file" : "files"} on the pages after it`
+              }
+              slotProps={{
+                primary: { sx: { fontSize: 13.5, fontWeight: 700 } },
+                secondary: { sx: { fontSize: 11.5, whiteSpace: "normal" } },
+              }}
+            />
+          </MenuItem>
+        )}
+        {canRegenerate && (
+          <MenuItem
+            onClick={() => {
+              setPdfMenu(null);
+              void handleRegeneratePdf();
+            }}
+          >
+            <ListItemText
+              primary="Re-generate PDF"
+              secondary="Rebuilds it from the record as it stands and replaces the stored copy"
+              slotProps={{
+                primary: { sx: { fontSize: 13.5, fontWeight: 700 } },
+                secondary: { sx: { fontSize: 11.5, whiteSpace: "normal" } },
+              }}
+            />
+          </MenuItem>
+        )}
       </Menu>
 
       <WithdrawDialog
