@@ -2,7 +2,7 @@ import type { DepartmentList } from "./departments.js";
 import { IdTokenError, type VerifiedIdentity } from "./idToken.js";
 import { issuePass, readPass } from "./pass.js";
 import { recordScan } from "./scan.js";
-import type { SmokingProfile } from "./schema.js";
+import type { SmokingProfile, StoredProfile } from "./schema.js";
 import type { SmokingStore } from "./store.js";
 
 export interface SmokingDeps {
@@ -38,10 +38,10 @@ function bearer(headers: SmokingRequest["headers"]): string {
   return value.startsWith("Bearer ") ? value.slice(7).trim() : "";
 }
 
-/** The profile as the smoker sees it — never the SharePoint item id. */
-function publicProfile(profile: (SmokingProfile & { id?: string }) | null): SmokingProfile | null {
+/** The profile as the smoker sees it — never the SharePoint item id or the blocked flag. */
+function publicProfile(profile: StoredProfile | null): SmokingProfile | null {
   if (!profile) return null;
-  const { id: _id, ...rest } = profile;
+  const { id: _id, blocked: _blocked, ...rest } = profile;
   return rest;
 }
 
@@ -63,6 +63,7 @@ export async function handleSmoking(req: SmokingRequest, deps: SmokingDeps): Pro
       throw error;
     }
     const profile = await deps.store.findProfile(identity.email);
+    if (profile?.blocked) return fail(403, "blocked");
     if (profile) await deps.store.touchProfile(profile.id, now);
     return ok({
       pass: issuePass(identity.email, identity.method, deps.passSecret, now),
@@ -89,6 +90,8 @@ export async function handleSmoking(req: SmokingRequest, deps: SmokingDeps): Pro
       return ok({ profile: publicProfile(await deps.store.findProfile(holder.email)) });
 
     case "profile-save": {
+      const existing = await deps.store.findProfile(holder.email);
+      if (existing?.blocked) return fail(403, "blocked");
       const profile: SmokingProfile = {
         email: holder.email,
         fullName: text(body.fullName),
@@ -111,8 +114,11 @@ export async function handleSmoking(req: SmokingRequest, deps: SmokingDeps): Pro
       return ok({ departments: list.departments, fromList: list.fromList });
     }
 
-    case "scan":
-      return ok(await recordScan(deps.store, { email: holder.email, areaCode: text(body.areaCode, 20), now }));
+    case "scan": {
+      const outcome = await recordScan(deps.store, { email: holder.email, areaCode: text(body.areaCode, 20), now });
+      if (outcome.result === "blocked") return fail(403, "blocked");
+      return ok(outcome);
+    }
 
     default:
       // This should never be reached since we validated above, but TypeScript wants it

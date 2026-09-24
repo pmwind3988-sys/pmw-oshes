@@ -6,7 +6,8 @@ export type ScanOutcome =
   | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
   | { result: "already-in"; timeIn: string; areaName: string }
   | { result: "retired-area" }
-  | { result: "no-profile" };
+  | { result: "no-profile" }
+  | { result: "blocked" };
 
 /**
  * One scan, decided on the server's clock. At most one open break per person:
@@ -22,6 +23,7 @@ export async function recordScan(
 
   const profile = await store.findProfile(input.email);
   if (!profile) return { result: "no-profile" };
+  if (profile.blocked) return { result: "blocked" };
 
   const [oldestOpen] = await store.openBreaksFor(input.email);
   const decision = decideScan(oldestOpen ?? null, input.now);

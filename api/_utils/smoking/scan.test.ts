@@ -4,7 +4,7 @@ import type { SmokingArea, SmokingBreak, SmokingProfile } from "./schema.js";
 import type { BreakClose, NewBreak, SmokingStore } from "./store.js";
 
 class FakeStore implements SmokingStore {
-  profiles = new Map<string, SmokingProfile & { id: string }>();
+  profiles = new Map<string, SmokingProfile & { id: string; blocked: boolean }>();
   areas: SmokingArea[] = [
     { id: "1", code: "AAA111", name: "Block A", active: true },
     { id: "2", code: "BBB222", name: "Block B", active: true },
@@ -39,9 +39,9 @@ class FakeStore implements SmokingStore {
   async deleteBreak(id: string) { this.breaks = this.breaks.filter((b) => b.id !== id); }
 }
 
-const ALI: SmokingProfile & { id: string } = {
+const ALI: SmokingProfile & { id: string; blocked: boolean } = {
   id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
-  position: "Technician", staffId: "", company: "PMW", signInMethod: "google",
+  position: "Technician", staffId: "", company: "PMW", signInMethod: "google", blocked: false,
 };
 const at = (iso: string) => new Date(iso);
 
@@ -93,6 +93,13 @@ describe("recordScan", () => {
   it("asks for a profile first", async () => {
     await expect(recordScan(store, { email: "new@gmail.com", areaCode: "AAA111", now: at("2026-09-24T02:42:00Z") }))
       .resolves.toEqual({ result: "no-profile" });
+  });
+
+  it("refuses a blocked person, recording nothing", async () => {
+    store.profiles.set(ALI.email, { ...ALI, blocked: true });
+    await expect(recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:42:00Z") }))
+      .resolves.toEqual({ result: "blocked" });
+    expect(store.breaks).toHaveLength(0);
   });
 
   it("leaves one open break when two scans race", async () => {

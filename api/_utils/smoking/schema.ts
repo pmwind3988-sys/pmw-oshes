@@ -15,6 +15,7 @@ export const SMOKING_LISTS = {
 export const PROFILE_COLUMNS = [
   "Email", "FullName", "Department", "DepartmentFromList", "Position",
   "StaffId", "Company", "SignInMethod", "FirstSeen", "LastSeen",
+  "Blocked", "BlockedBy", "BlockedAt",
 ] as const;
 
 export const LOG_COLUMNS = [
@@ -43,6 +44,9 @@ export interface SmokingProfile {
   company: string;
   signInMethod: SignInMethod;
 }
+
+/** The profile as the store and the admin tooling see it — never shown to the smoker as-is. */
+export type StoredProfile = SmokingProfile & { id: string; blocked: boolean };
 
 export interface SmokingArea {
   id: string;

@@ -83,6 +83,56 @@ describe("handleSmoking", () => {
     expect(res).toEqual({ status: 200, body: { result: "in", timeIn: "2026-09-24T02:42:00.000Z", areaName: "Block A" } });
   });
 
+  it("refuses to sign in a blocked person and issues no pass", async () => {
+    const d = deps({}, {
+      findProfile: vi.fn().mockResolvedValue({
+        id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
+        position: "Tech", staffId: "", company: "PMW", signInMethod: "google", blocked: true,
+      }),
+    });
+    const res = await handleSmoking(post({ action: "signin", provider: "google", idToken: "t" }), d);
+    expect(res).toEqual({ status: 403, body: { error: "blocked" } });
+    expect(res.body.pass).toBeUndefined();
+  });
+
+  it("refuses a blocked person's scan", async () => {
+    const d = deps({}, {
+      findProfile: vi.fn().mockResolvedValue({
+        id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
+        position: "Tech", staffId: "", company: "PMW", signInMethod: "google", blocked: true,
+      }),
+    });
+    const res = await handleSmoking(post({ action: "scan", areaCode: "AAA111" }, pass()), d);
+    expect(res).toEqual({ status: 403, body: { error: "blocked" } });
+  });
+
+  it("refuses a blocked person's profile-save without writing it", async () => {
+    const d = deps({}, {
+      findProfile: vi.fn().mockResolvedValue({
+        id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
+        position: "Tech", staffId: "", company: "PMW", signInMethod: "google", blocked: true,
+      }),
+    });
+    const res = await handleSmoking(post({
+      action: "profile-save", fullName: "Ali", department: "QA/QC", position: "Technician",
+    }, pass()), d);
+    expect(res).toEqual({ status: 403, body: { error: "blocked" } });
+    expect(d.store.saveProfile).not.toHaveBeenCalled();
+  });
+
+  it("never lets the smoker see their own blocked flag or the profile's id", async () => {
+    const d = deps({}, {
+      findProfile: vi.fn().mockResolvedValue({
+        id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
+        position: "Tech", staffId: "", company: "PMW", signInMethod: "google", blocked: false,
+      }),
+    });
+    const res = await handleSmoking(post({ action: "profile-get" }, pass()), d);
+    expect(res.status).toBe(200);
+    expect(res.body.profile).not.toHaveProperty("id");
+    expect(res.body.profile).not.toHaveProperty("blocked");
+  });
+
   it("names an area without a pass, for the page header", async () => {
     const res = await handleSmoking(post({ action: "area", code: "aaa111" }), deps());
     expect(res).toEqual({ status: 200, body: { name: "Block A", active: true } });

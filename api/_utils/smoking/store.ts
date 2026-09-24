@@ -7,7 +7,7 @@ import {
   updateListItemFields,
   type GraphListItem,
 } from "../graphClient.js";
-import { SMOKING_LISTS, type SmokingArea, type SmokingBreak, type SmokingProfile } from "./schema.js";
+import { SMOKING_LISTS, type SmokingArea, type SmokingBreak, type SmokingProfile, type StoredProfile } from "./schema.js";
 
 export type NewBreak = Pick<
   SmokingBreak,
@@ -23,7 +23,7 @@ export interface BreakClose {
 }
 
 export interface SmokingStore {
-  findProfile(email: string): Promise<(SmokingProfile & { id: string }) | null>;
+  findProfile(email: string): Promise<StoredProfile | null>;
   saveProfile(profile: SmokingProfile, now: Date): Promise<void>;
   touchProfile(id: string, now: Date): Promise<void>;
   findArea(code: string): Promise<SmokingArea | null>;
@@ -56,7 +56,7 @@ export function toBreak(item: GraphListItem): SmokingBreak {
   };
 }
 
-export function toProfile(item: GraphListItem): SmokingProfile & { id: string } {
+export function toProfile(item: GraphListItem): StoredProfile {
   const f = item.fields;
   return {
     id: item.id,
@@ -68,6 +68,7 @@ export function toProfile(item: GraphListItem): SmokingProfile & { id: string } 
     staffId: str(f.StaffId),
     company: str(f.Company),
     signInMethod: str(f.SignInMethod) === "microsoft" ? "microsoft" : "google",
+    blocked: str(f.Blocked) === "yes",
   };
 }
 

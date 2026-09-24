@@ -19,4 +19,12 @@ describe("store mapping", () => {
   it("remembers a typed-in department", () => {
     expect(toProfile({ id: "9", fields: { Email: "a@b.com", DepartmentFromList: "no" } }).departmentFromList).toBe(false);
   });
+
+  it("reads a blocked profile", () => {
+    expect(toProfile({ id: "9", fields: { Email: "a@b.com", Blocked: "yes" } }).blocked).toBe(true);
+  });
+
+  it("treats a profile as not blocked unless marked yes", () => {
+    expect(toProfile({ id: "9", fields: { Email: "a@b.com" } }).blocked).toBe(false);
+  });
 });
