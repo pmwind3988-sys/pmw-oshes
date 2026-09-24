@@ -14,7 +14,8 @@ import "../native/native-form.css";
 
 import { fileQuestions, uniqueUploadFileName, uploadStamp } from "../utils/fileAttachments";
 import { uploadPublicAttachments } from "../utils/publicFileUpload";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind, unsavableAnswerReason } from "../utils/formBuilderSP";
+import { answerColumnName, isReservedColumnName } from "../utils/reservedColumns";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind, unsavableAnswerReason, ensureColumns, SP_FIELD_KIND } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -1193,11 +1194,29 @@ export default function DynamicFormPage() {
           await new Promise((r) => setTimeout(r, 1500));
         }
         const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items`;
+        // A question named like one of SharePoint's own columns — `attachments`
+        // is the one that happens — would write into that built-in column (a
+        // Yes/No flag) and fail the submission. Its answer gets a column of its
+        // own, created here the first time it is needed.
+        const movedAnswers = Object.keys(body).filter(isReservedColumnName);
+        for (const name of movedAnswers) {
+          body[answerColumnName(name)] = body[name];
+          delete body[name];
+        }
+        if (movedAnswers.length > 0) {
+          const ensured = await ensureColumns(
+            token,
+            cfg.Title as string,
+            movedAnswers.map((name) => ({ n: answerColumnName(name), k: SP_FIELD_KIND.note, ml: true })),
+          );
+          // SharePoint needs a moment after adding a column before it can be written.
+          if (ensured.created.length > 0) await new Promise((r) => setTimeout(r, 1500));
+        }
         // Several attached files are stored as a list of their addresses, which
         // outgrows a single line of text after two or three long names. Widen
         // the column first rather than let SharePoint refuse the submission.
         const longFileAnswers = fileQuestions(formData?.surveyJson)
-          .map((question) => question.name)
+          .map((question) => answerColumnName(question.name))
           .filter((name) => {
             const value = body[name];
             const stored = Array.isArray(value) ? JSON.stringify(value) : typeof value === "string" ? value : "";

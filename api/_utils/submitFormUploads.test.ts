@@ -133,3 +133,11 @@ describe("a file column too short for several files", () => {
     expect(textFieldSchemaAsNote('<Field Type="Number" Name="x" />')).toBe("");
   });
 });
+
+describe("a public answer named like a SharePoint column", () => {
+  it("is stored under its own column, matching the browser's rule", () => {
+    expect(submitForm.answerColumnName("attachments")).toBe("attachments_Answer");
+    expect(submitForm.answerColumnName("Attachments")).toBe("Attachments_Answer");
+    expect(submitForm.answerColumnName("location")).toBe("location");
+  });
+});
