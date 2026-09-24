@@ -1,0 +1,124 @@
+import { ensureListSchema, spDelete, spGet, spPatch, spPost } from "../formBuilderSP";
+import { SMOKING_LISTS, SMOKING_LIST_SCHEMAS, type SmokingArea, type SmokingBreak, type SmokingProfile } from "./schema";
+
+const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
+
+function items(list: string): string {
+  return `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(list)}')/items`;
+}
+
+const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+export async function ensureSmokingLists(token: string): Promise<void> {
+  for (const schema of SMOKING_LIST_SCHEMAS) await ensureListSchema(token, schema);
+}
+
+export function rowToBreak(row: Record<string, unknown>): SmokingBreak {
+  const duration = row.DurationMinutes;
+  return {
+    id: str(row.Id),
+    email: str(row.Email),
+    fullName: str(row.FullName),
+    department: str(row.Department),
+    position: str(row.Position),
+    company: str(row.Company),
+    areaInCode: str(row.AreaInCode),
+    areaInName: str(row.AreaInName),
+    areaOutCode: str(row.AreaOutCode),
+    areaOutName: str(row.AreaOutName),
+    timeIn: str(row.TimeIn),
+    timeOut: str(row.TimeOut) || null,
+    durationMinutes: duration == null || duration === "" ? null : Number(duration),
+    flagReason: str(row.FlagReason),
+    resolutionNote: str(row.ResolutionNote),
+    resolvedBy: str(row.ResolvedBy),
+    resolvedAt: str(row.ResolvedAt),
+  };
+}
+
+export function rowToArea(row: Record<string, unknown>): SmokingArea {
+  return { id: str(row.Id), name: str(row.Title), code: str(row.Code), active: str(row.Active) !== "no" };
+}
+
+export function rowToProfile(row: Record<string, unknown>): SmokingProfile & { id: string; firstSeen: string; lastSeen: string } {
+  return {
+    id: str(row.Id),
+    email: str(row.Email),
+    fullName: str(row.FullName),
+    department: str(row.Department),
+    departmentFromList: str(row.DepartmentFromList) !== "no",
+    position: str(row.Position),
+    staffId: str(row.StaffId),
+    company: str(row.Company),
+    signInMethod: str(row.SignInMethod) === "microsoft" ? "microsoft" : "google",
+    firstSeen: str(row.FirstSeen),
+    lastSeen: str(row.LastSeen),
+  };
+}
+
+export function breakFilterFor(fromIso: string, toIso: string): string {
+  return `(TimeIn ge datetime'${fromIso}' and TimeIn lt datetime'${toIso}') or Status eq 'open'`;
+}
+
+/** Follows SharePoint's paging so a busy month is never silently cut at 2,000 rows. */
+async function readAll(token: string, url: string): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  let next: string | undefined = url;
+  while (next) {
+    const page = (await spGet(token, next)) as { value?: Record<string, unknown>[]; "odata.nextLink"?: string };
+    rows.push(...(page.value ?? []));
+    next = page["odata.nextLink"];
+  }
+  return rows;
+}
+
+export async function loadBreaks(token: string, fromIso: string, toIso: string): Promise<SmokingBreak[]> {
+  const filter = encodeURIComponent(breakFilterFor(fromIso, toIso));
+  return (await readAll(token, `${items(SMOKING_LISTS.log)}?$filter=${filter}&$top=2000`)).map(rowToBreak);
+}
+
+export async function saveBreak(token: string, b: SmokingBreak): Promise<void> {
+  await spPatch(token, `${items(SMOKING_LISTS.log)}(${b.id})`, {
+    FullName: b.fullName,
+    Department: b.department,
+    Position: b.position,
+    Company: b.company,
+    AreaInName: b.areaInName,
+    AreaOutName: b.areaOutName,
+    TimeIn: b.timeIn,
+    TimeOut: b.timeOut,
+    Status: b.timeOut ? "closed" : "open",
+    DurationMinutes: b.durationMinutes,
+    FlagReason: b.flagReason,
+  });
+}
+
+export async function resolveFlag(token: string, id: string, note: string, by: string, at: Date): Promise<void> {
+  await spPatch(token, `${items(SMOKING_LISTS.log)}(${id})`, {
+    ResolutionNote: note.trim(),
+    ResolvedBy: by,
+    ResolvedAt: at.toISOString(),
+  });
+}
+
+export async function deleteBreak(token: string, id: string): Promise<void> {
+  await spDelete(token, `${items(SMOKING_LISTS.log)}(${id})`);
+}
+
+export async function loadAreas(token: string): Promise<SmokingArea[]> {
+  return (await readAll(token, `${items(SMOKING_LISTS.areas)}?$top=500`)).map(rowToArea)
+    .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
+}
+
+export async function createArea(token: string, name: string, code: string): Promise<void> {
+  await spPost(token, items(SMOKING_LISTS.areas), { Title: name.trim(), Code: code, Active: "yes" });
+}
+
+export async function updateArea(token: string, area: SmokingArea): Promise<void> {
+  await spPatch(token, `${items(SMOKING_LISTS.areas)}(${area.id})`, { Title: area.name.trim(), Active: area.active ? "yes" : "no" });
+}
+
+export async function loadProfiles(token: string) {
+  return (await readAll(token, `${items(SMOKING_LISTS.profiles)}?$top=2000`)).map(rowToProfile)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
