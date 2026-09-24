@@ -541,3 +541,28 @@ export const SmokingRoomsOutlined = make("SmokingRoomsOutlined", (
     <path d="M7 12v4" />
   </>
 ));
+
+export const Printer = make("Printer", (
+  <>
+    <path d="M6 9V2h12v7" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="8" rx="1" />
+  </>
+));
+
+export const QrCode = make("QrCode", (
+  <>
+    <rect x="3" y="3" width="5" height="5" rx="1" />
+    <rect x="16" y="3" width="5" height="5" rx="1" />
+    <rect x="3" y="16" width="5" height="5" rx="1" />
+    <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+    <path d="M21 21v.01" />
+    <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+    <path d="M3 12h.01" />
+    <path d="M12 3h.01" />
+    <path d="M12 16v.01" />
+    <path d="M16 12h1" />
+    <path d="M21 12v.01" />
+    <path d="M12 21v-1" />
+  </>
+));

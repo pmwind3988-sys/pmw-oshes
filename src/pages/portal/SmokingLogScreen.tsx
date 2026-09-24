@@ -11,7 +11,9 @@ import BreakEditDialog, { isoToMytInput, mytInputToIso } from "../../components/
 import DeleteBreakDialog from "../../components/smoking/DeleteBreakDialog";
 import OnBreakButton from "../../components/smoking/OnBreakButton";
 import ResolveFlagDialog from "../../components/smoking/ResolveFlagDialog";
+import SmokingAreasTab from "../../components/smoking/SmokingAreasTab";
 import SmokingLogTable from "../../components/smoking/SmokingLogTable";
+import SmokingPeopleTab from "../../components/smoking/SmokingPeopleTab";
 import SmokingTotalsTable from "../../components/smoking/SmokingTotalsTable";
 import {
   applyEdit,
@@ -214,12 +216,14 @@ export default function SmokingLogScreen() {
         title="Smoking log"
         subtitle="every break scanned in and out, with edits, flags and deletions kept in the audit trail"
         actions={
-          <>
-            <OnBreakButton outNow={outNow} />
-            <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
-              Export to CSV
-            </Button>
-          </>
+          (tab === "log" || tab === "totals") && (
+            <>
+              <OnBreakButton outNow={outNow} />
+              <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
+                Export to CSV
+              </Button>
+            </>
+          )
         }
       />
 
@@ -344,6 +348,9 @@ export default function SmokingLogScreen() {
           )}
         </>
       )}
+
+      {tab === "areas" && access.isAdmin && <SmokingAreasTab />}
+      {tab === "people" && <SmokingPeopleTab />}
 
       <BreakEditDialog open={!!editTarget} target={editTarget} busy={busy} onCancel={() => setEditTarget(null)} onSave={handleEditSave} />
       <ResolveFlagDialog
