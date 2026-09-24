@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Autocomplete, Box, Button, Link, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Checkbox, FormControlLabel, Link, Stack, TextField, Typography } from "@mui/material";
 import { msalInstance } from "../auth/msalConfig";
 import {
   callSmoking,
@@ -14,6 +14,7 @@ import {
 import { loadGoogleIdentity, renderGoogleButton } from "../utils/smoking/googleSignIn";
 import { describeOutcome, type OutcomeView } from "../utils/smoking/outcome";
 import type { SmokingProfile } from "../utils/smoking/schema";
+import { PDPA_CONSENT_LABEL, PDPA_SUMMARY } from "../utils/pdpa";
 
 type Stage = "loading" | "signin" | "profile" | "result" | "error";
 
@@ -41,7 +42,10 @@ interface ProfileDraft {
 export default function SmokingScanPage() {
   const [params] = useSearchParams();
   const areaCode = (params.get("area") ?? "").trim().toUpperCase();
-  const [stage, setStage] = useState<Stage>("loading");
+  const [stage, setStage] = useState<Stage>(() => {
+    if (!areaCode) return "result";
+    return readStoredPass() ? "loading" : "signin";
+  });
   const [areaName, setAreaName] = useState("");
   const [error, setError] = useState("");
   const [view, setView] = useState<OutcomeView | null>(areaCode ? null : describeOutcome({ result: "retired-area" }));
@@ -49,8 +53,10 @@ export default function SmokingScanPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [departmentsFromList, setDepartmentsFromList] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const googleButton = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
+  const shouldAutoScanRef = useRef(readStoredPass() && areaCode);
 
   const fail = useCallback((e: unknown) => {
     if (e instanceof SmokingApiError && e.code === "signin-required") {
@@ -104,20 +110,22 @@ export default function SmokingScanPage() {
     }
   }, [openProfile, scan]);
 
-  // First load: area header, then either scan straight away or ask to sign in.
+  // Fetch area header.
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
-    if (!areaCode) {
-      setStage("result");
-      return;
-    }
+    if (!areaCode) return;
     callSmoking<{ name: string; active: boolean }>("area", { code: areaCode })
       .then((area) => setAreaName(area.name))
       .catch(() => setAreaName(""));
-    if (readStoredPass()) void scan();
-    else setStage("signin");
-  }, [areaCode, scan]);
+  }, [areaCode]);
+
+  // Auto-scan if already signed in.
+  useEffect(() => {
+    if (initializedRef.current && shouldAutoScanRef.current) {
+      void scan();
+    }
+  }, [scan]);
 
   // Google's button needs the element on screen before it can draw into it.
   useEffect(() => {
@@ -199,12 +207,20 @@ export default function SmokingScanPage() {
               onChange={(e) => setDraft({ ...draft, staffId: e.target.value })} />
             <TextField label="Company" required value={draft.company}
               onChange={(e) => setDraft({ ...draft, company: e.target.value })} />
-            <Typography variant="body2" color="text.secondary">
-              OSHES records your name, email, department, position, company and the times you scan in and out at
-              smoking areas. It is used for workplace safety records and is not shared outside PMW. See the{" "}
-              <Link href="/privacy" target="_blank">privacy notice</Link>.
-            </Typography>
-            <Button variant="contained" size="large" disabled={!required || busy} onClick={saveProfile}>
+            <FormControlLabel
+              control={<Checkbox checked={pdpaAccepted} onChange={(e) => setPdpaAccepted(e.target.checked)} />}
+              label={
+                <Typography variant="body2" sx={{ color: "text.secondary", lineHeight: 1.6 }}>
+                  <strong>{PDPA_CONSENT_LABEL}</strong>
+                  <br />
+                  {PDPA_SUMMARY}{" "}
+                  <Link href="/privacy" target="_blank" rel="noopener noreferrer">
+                    View Privacy Notice
+                  </Link>
+                </Typography>
+              }
+            />
+            <Button variant="contained" size="large" disabled={!required || !pdpaAccepted || busy} onClick={saveProfile}>
               Save and record this scan
             </Button>
           </Stack>
