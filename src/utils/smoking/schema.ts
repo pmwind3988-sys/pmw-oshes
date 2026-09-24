@@ -18,6 +18,55 @@ export function flagReasonFor(timeIn: Date, timeOut: Date | null, now: Date): st
   return now.getTime() - timeIn.getTime() > LONG_BREAK_MS ? FLAG_OPEN_LONG : "";
 }
 
+/** OSHES's scan limits, in whole seconds — see `ScanLimits` in `api/_utils/smoking/scanRules.ts`. */
+export interface ScanLimits {
+  ignoreRepeatSeconds: number;
+  minBreakSeconds: number;
+  restSeconds: number;
+}
+
+export const DEFAULT_SCAN_LIMITS: ScanLimits = { ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 };
+
+export const SCAN_LIMIT_MAX: ScanLimits = { ignoreRepeatSeconds: 10 * 60, minBreakSeconds: 12 * 60 * 60, restSeconds: 24 * 60 * 60 };
+
+export function normalizeScanLimits(raw: Partial<Record<keyof ScanLimits, unknown>>): ScanLimits {
+  const read = (key: keyof ScanLimits): number => {
+    const value = raw[key];
+    const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+    if (!Number.isFinite(n) || n < 0) return DEFAULT_SCAN_LIMITS[key];
+    return Math.min(Math.floor(n), SCAN_LIMIT_MAX[key]);
+  };
+  return { ignoreRepeatSeconds: read("ignoreRepeatSeconds"), minBreakSeconds: read("minBreakSeconds"), restSeconds: read("restSeconds") };
+}
+
+/** "45 s", "5 min", "1 min 30 s", "1 h 15 min". */
+export function formatSpan(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rest = s % 60;
+  const parts: string[] = [];
+  if (h) parts.push(`${h} h`);
+  if (m) parts.push(`${m} min`);
+  if (rest && !h) parts.push(`${rest} s`);
+  return parts.join(" ") || "0 s";
+}
+
+export const FLAG_SEPARATOR = "; ";
+
+export function joinFlags(...flags: string[]): string {
+  const parts = flags.flatMap((f) => f.split(FLAG_SEPARATOR)).map((f) => f.trim()).filter(Boolean);
+  return [...new Set(parts)].join(FLAG_SEPARATOR);
+}
+
+/**
+ * The flags a scan raised against OSHES's limits (too short, too soon), which
+ * only the scan could judge. An admin edit keeps these and re-derives the rest.
+ */
+export function scanTimeFlags(flagReason: string): string {
+  return joinFlags(...flagReason.split(FLAG_SEPARATOR).filter((f) => f !== FLAG_OPEN_LONG && f !== FLAG_LASTED_LONG));
+}
+
 const text = (n: string) => ({ n, k: SP_FIELD_KIND.text });
 const when = (n: string) => ({ n, k: SP_FIELD_KIND.dateTime });
 
@@ -45,6 +94,15 @@ export const SMOKING_LIST_SCHEMAS: SpListSchema[] = [
     title: SMOKING_LISTS.areas,
     description: "Smoking log: one row per smoking area poster",
     columns: [text("Code"), text("Active")],
+  },
+  {
+    title: SMOKING_LISTS.settings,
+    description: "Smoking log: OSHES's scan limits, one row, in seconds",
+    columns: [
+      { n: "IgnoreRepeatSeconds", k: SP_FIELD_KIND.number },
+      { n: "MinBreakSeconds", k: SP_FIELD_KIND.number },
+      { n: "RestSeconds", k: SP_FIELD_KIND.number },
+    ],
   },
 ];
 

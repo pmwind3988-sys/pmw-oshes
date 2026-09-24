@@ -9,6 +9,7 @@ import { DEFAULT_PORTAL_PREFS } from "../../utils/portalPrefs";
 import HomeScreen from "./HomeScreen";
 import FormHubScreen from "./FormHubScreen";
 import RecordsScreen from "./RecordsScreen";
+import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import { OverviewTab } from "../../components/portal/RecordDetail";
 import type {
   ApprovalLayerConfig,
@@ -242,5 +243,20 @@ describe("OverviewTab", () => {
     const html = renderToStaticMarkup(<OverviewTab record={recordFor(3)} />);
     expect(html).toContain("SLA target");
     expect(html).toContain("On target");
+  });
+});
+
+describe("SmokingSettingsTab", () => {
+  it("shows the three scan limits, with Save for an admin", () => {
+    const html = render(<SmokingSettingsTab />, contextValue());
+    expect(html).toContain("Settings");
+    expect(html).toContain("Save");
+    expect(html).toContain("0 turns a limit off");
+  });
+
+  it("offers no Save to a read-only account", () => {
+    const value = contextValue();
+    const html = render(<SmokingSettingsTab />, { ...value, access: { ...value.access, readOnly: true } });
+    expect(html).not.toContain(">Save<");
   });
 });

@@ -22,6 +22,10 @@ describe("effectiveFlag", () => {
   it("computes open-over-12h at read time", () => {
     expect(effectiveFlag(brk({ timeIn: "2026-09-23T23:00:00Z", timeOut: null, durationMinutes: null }), now)).toBe("Open over 12 hours");
   });
+  it("adds open-over-12h to a break already flagged for starting too soon", () => {
+    const b = brk({ timeIn: "2026-09-23T23:00:00Z", timeOut: null, durationMinutes: null, flagReason: "Started 5 min after the last break (rest is 30 min)" });
+    expect(effectiveFlag(b, now)).toBe("Started 5 min after the last break (rest is 30 min); Open over 12 hours");
+  });
   it("clears once resolved after the break closed", () => {
     expect(effectiveFlag(brk({ flagReason: "Lasted over 12 hours", timeOut: "2026-09-24T02:49:00Z", resolvedAt: "2026-09-24T05:00:00Z" }), now)).toBe("");
   });
@@ -73,6 +77,13 @@ describe("currentlyOut", () => {
     });
     expect(currentlyOut([resolvedOpen], now).map((r) => r.id)).toEqual([]);
   });
+  it("still counts someone whose break was flagged for starting too soon — they are out right now", () => {
+    const early = brk({
+      id: "9", timeIn: "2026-09-24T11:50:00Z", timeOut: null, durationMinutes: null,
+      flagReason: "Started 10 min after the last break (rest is 30 min)",
+    });
+    expect(currentlyOut([early], now).map((r) => r.id)).toEqual(["9"]);
+  });
 });
 
 describe("computeTotals", () => {
@@ -109,6 +120,30 @@ describe("applyEdit", () => {
     expect(describeChange(before, after)).toBe(
       "Time out: 24/09/2026 10:00 AM → 23/09/2026 10:10 AM; Duration: 1440 min → 10 min; Flag: Lasted over 12 hours → —",
     );
+  });
+
+  it("keeps a flag only the scan could judge, while re-deriving the 12-hour one", () => {
+    const before = brk({
+      timeIn: "2026-09-23T02:00:00Z", timeOut: "2026-09-24T02:00:00Z", durationMinutes: 1440,
+      flagReason: "Started 10 min after the last break (rest is 30 min); Lasted over 12 hours",
+    });
+    const after = applyEdit(before, {
+      timeIn: "2026-09-23T02:00:00Z", timeOut: "2026-09-23T02:10:00Z", areaInName: "Block A", areaOutName: "Block A",
+      fullName: "Ali", department: "QA/QC", position: "Tech", company: "PMW",
+    }, now);
+    expect(after.flagReason).toBe("Started 10 min after the last break (rest is 30 min)");
+  });
+
+  it("keeps an early-start flag on a break that is still open", () => {
+    const before = brk({
+      timeIn: "2026-09-24T11:50:00Z", timeOut: null, durationMinutes: null,
+      flagReason: "Started 10 min after the last break (rest is 30 min)",
+    });
+    const after = applyEdit(before, {
+      timeIn: "2026-09-24T11:50:00Z", timeOut: "", areaInName: "Block A", areaOutName: "",
+      fullName: "Ali B", department: "QA/QC", position: "Tech", company: "PMW",
+    }, now);
+    expect(after.flagReason).toBe("Started 10 min after the last break (rest is 30 min)");
   });
 });
 

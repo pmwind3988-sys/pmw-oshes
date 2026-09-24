@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { breakFilterFor, changedBreakFields, nextPageUrl, rowToArea, rowToBreak, rowToProfile } from "./adminStore";
+import {
+  breakFilterFor, changedBreakFields, nextPageUrl, rowToArea, rowToBreak, rowToProfile, rowToScanLimits, scanLimitsRow,
+} from "./adminStore";
 import type { SmokingBreak } from "./schema";
 
 function brk(o: Partial<SmokingBreak> = {}): SmokingBreak {
@@ -102,6 +104,23 @@ describe("changedBreakFields", () => {
       Status: "closed",
       DurationMinutes: 9,
       FlagReason: "",
+    });
+  });
+});
+
+describe("scan limits row", () => {
+  it("reads the usual limits before OSHES has saved any", () => {
+    expect(rowToScanLimits(undefined)).toEqual({ id: "", limits: { ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 } });
+  });
+
+  it("reads a saved row", () => {
+    expect(rowToScanLimits({ Id: 1, IgnoreRepeatSeconds: 30, MinBreakSeconds: 300, RestSeconds: 1800 }))
+      .toEqual({ id: "1", limits: { ignoreRepeatSeconds: 30, minBreakSeconds: 300, restSeconds: 1800 } });
+  });
+
+  it("writes whole, capped seconds", () => {
+    expect(scanLimitsRow({ ignoreRepeatSeconds: 30.9, minBreakSeconds: 300, restSeconds: 999_999 })).toEqual({
+      Title: "Scan limits", IgnoreRepeatSeconds: 30, MinBreakSeconds: 300, RestSeconds: 86_400,
     });
   });
 });

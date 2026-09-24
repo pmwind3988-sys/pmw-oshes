@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { recordScan } from "./scan.js";
+import { DEFAULT_SCAN_LIMITS, type ScanLimits } from "./scanRules.js";
 import type { SmokingArea, SmokingBreak, SmokingProfile } from "./schema.js";
 import type { BreakClose, NewBreak, SmokingStore } from "./store.js";
 
@@ -14,6 +15,14 @@ class FakeStore implements SmokingStore {
   nextId = 100;
   /** Simulates a second phone's scan landing between our create and re-check. */
   racer: NewBreak | null = null;
+  limits: ScanLimits | Error = DEFAULT_SCAN_LIMITS;
+  /** Each lookup records how far back it was asked to look. */
+  lastClosedSince: Date[] = [];
+
+  async readLimits() {
+    if (this.limits instanceof Error) throw this.limits;
+    return this.limits;
+  }
 
   async findProfile(email: string) { return this.profiles.get(email) ?? null; }
   async saveProfile() {}
@@ -23,8 +32,9 @@ class FakeStore implements SmokingStore {
     return this.breaks.filter((b) => b.email === email && !b.timeOut)
       .sort((a, b) => a.timeIn.localeCompare(b.timeIn) || Number(a.id) - Number(b.id));
   }
-  async lastClosedBreakFor(email: string) {
-    const closed = this.breaks.filter((b) => b.email === email && b.timeOut)
+  async lastClosedBreakFor(email: string, since: Date) {
+    this.lastClosedSince.push(since);
+    const closed = this.breaks.filter((b) => b.email === email && b.timeOut && new Date(b.timeOut) >= since)
       .sort((a, b) => (b.timeOut as string).localeCompare(a.timeOut as string));
     return closed[0] ?? null;
   }
@@ -35,7 +45,7 @@ class FakeStore implements SmokingStore {
       await this.createBreak(r);
     }
     const id = String(this.nextId++);
-    this.breaks.push({ ...input, id, areaOutCode: "", areaOutName: "", timeOut: null, durationMinutes: null, flagReason: "" });
+    this.breaks.push({ ...input, id, areaOutCode: "", areaOutName: "", timeOut: null, durationMinutes: null, flagReason: input.flagReason ?? "" });
     return id;
   }
   async closeBreak(id: string, close: BreakClose) {
@@ -151,5 +161,71 @@ describe("recordScan", () => {
     const outcome = await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:42:00Z") });
     expect(outcome.result).toBe("already-in");
     expect(store.breaks.filter((b) => !b.timeOut)).toHaveLength(1);
+  });
+});
+
+describe("recordScan with OSHES limits", () => {
+  const scan = (areaCode: string, iso: string) => recordScan(store, { email: ALI.email, areaCode, now: at(iso) });
+
+  it("records a break started before the rest time is up, and flags it", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, restSeconds: 1800 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    await scan("AAA111", "2026-09-24T02:05:00Z");
+    const outcome = await scan("AAA111", "2026-09-24T02:15:00Z");
+    expect(outcome).toEqual({ result: "in", timeIn: "2026-09-24T02:15:00.000Z", areaName: "Block A" });
+    expect(store.breaks[1].flagReason).toBe("Started 10 min after the last break (rest is 30 min)");
+  });
+
+  it("does not flag a break started once the rest time is up", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, restSeconds: 1800 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    await scan("AAA111", "2026-09-24T02:05:00Z");
+    await scan("AAA111", "2026-09-24T02:35:00Z");
+    expect(store.breaks[1].flagReason).toBe("");
+  });
+
+  it("only looks back as far as the longest limit for the last break", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, restSeconds: 1800 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    expect(store.lastClosedSince.at(-1)?.toISOString()).toBe("2026-09-24T01:30:00.000Z");
+  });
+
+  it("records a break shorter than the minimum, and flags it", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, minBreakSeconds: 300 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    const outcome = await scan("AAA111", "2026-09-24T02:03:00Z");
+    expect(outcome).toMatchObject({ result: "out", durationMinutes: 3, flagged: true });
+    expect(store.breaks[0].flagReason).toBe("Shorter than the 5 min minimum");
+  });
+
+  it("keeps the early-start flag when that break is scanned out", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, restSeconds: 1800 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    await scan("AAA111", "2026-09-24T02:05:00Z");
+    await scan("AAA111", "2026-09-24T02:15:00Z");
+    const outcome = await scan("AAA111", "2026-09-24T02:25:00Z");
+    expect(outcome).toMatchObject({ result: "out", flagged: true });
+    expect(store.breaks[1].flagReason).toBe("Started 10 min after the last break (rest is 30 min)");
+  });
+
+  it("does not call the fresh break after a missed scan-out an early start", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, restSeconds: 1800 };
+    await scan("AAA111", "2026-09-23T02:00:00Z");
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    expect(store.breaks[1].flagReason).toBe("");
+  });
+
+  it("uses the configured window for a repeat scan after scanning out", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, ignoreRepeatSeconds: 10 };
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    await scan("AAA111", "2026-09-24T02:10:00Z");
+    await expect(scan("AAA111", "2026-09-24T02:10:05Z")).resolves.toMatchObject({ result: "already-out" });
+    await expect(scan("AAA111", "2026-09-24T02:10:20Z")).resolves.toMatchObject({ result: "in" });
+  });
+
+  it("still scans, on the usual limits, when the settings cannot be read", async () => {
+    store.limits = new Error("Graph GET 503");
+    await scan("AAA111", "2026-09-24T02:00:00Z");
+    await expect(scan("AAA111", "2026-09-24T02:00:30Z")).resolves.toMatchObject({ result: "already-in" });
   });
 });
