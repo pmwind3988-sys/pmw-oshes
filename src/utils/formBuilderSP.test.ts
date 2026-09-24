@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SP_FIELD_KIND,
   coerceForColumnKind,
+  unsavableAnswerReason,
   createSharePointColumnKeyResolver,
   createSharePointColumnKindResolver,
   createSharePointMultiValueResolver,
@@ -82,5 +83,19 @@ describe("an answer written to a typed SharePoint column", () => {
     expect(kindOf("hotWork")).toBe(SP_FIELD_KIND.boolean);
     expect(kindOf("Hot Work")).toBe(SP_FIELD_KIND.boolean);
     expect(kindOf("missing")).toBeUndefined();
+  });
+});
+
+describe("an answer SharePoint would refuse", () => {
+  it("is caught before posting, with a reason a person can act on", () => {
+    expect(unsavableAnswerReason("N/A", SP_FIELD_KIND.boolean)).toMatch(/Yes or No/);
+    expect(unsavableAnswerReason("twelve", SP_FIELD_KIND.number)).toMatch(/number/);
+  });
+
+  it("lets through anything the column will take", () => {
+    expect(unsavableAnswerReason(true, SP_FIELD_KIND.boolean)).toBe("");
+    expect(unsavableAnswerReason(null, SP_FIELD_KIND.boolean)).toBe("");
+    expect(unsavableAnswerReason(4, SP_FIELD_KIND.number)).toBe("");
+    expect(unsavableAnswerReason("anything", SP_FIELD_KIND.text)).toBe("");
   });
 });
