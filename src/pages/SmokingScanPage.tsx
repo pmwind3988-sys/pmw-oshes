@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Alert, Autocomplete, Box, Button, Checkbox, FormControlLabel, Link, Stack, TextField, Typography } from "@mui/material";
-import { msalInstance } from "../auth/msalConfig";
+import { smokingMsal } from "../auth/smokingMsal";
 import {
   callSmoking,
   clearStoredPass,
@@ -206,7 +206,9 @@ export default function SmokingScanPage() {
 
   const signInMicrosoft = async () => {
     try {
-      const result = await msalInstance.loginPopup({ scopes: ["openid", "profile", "email"], prompt: "select_account" });
+      // Its own in-memory sign-in, never the portal's: see smokingMsal.ts.
+      const msal = await smokingMsal();
+      const result = await msal.loginPopup({ scopes: ["openid", "profile", "email"], prompt: "select_account" });
       await afterSignIn("microsoft", result.idToken);
     } catch {
       setError("Microsoft sign-in was cancelled or blocked.");

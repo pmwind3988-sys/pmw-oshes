@@ -16,6 +16,7 @@ if (missing.length > 0) {
 }
 
 import { msalInstance } from "./auth/msalConfig";
+import { isPopupSignInResponse } from "./auth/popupResponse";
 import AuthProvider from "./auth/AuthProvider";
 import type { AuthenticationResult } from "@azure/msal-browser";
 import "./index.css";
@@ -72,7 +73,15 @@ async function initializeMsal() {
   }
 }
 
-initializeMsal().then(() => {
+if (isPopupSignInResponse(window)) {
+  // A sign-in popup coming back from Microsoft: pass the answer to the page
+  // that opened it and close. Loading the portal here is what showed people a
+  // second sign-in inside the popup and left them stuck. See popupResponse.ts.
+  document.body.textContent = "Signing you in…";
+  import("@azure/msal-browser/redirect-bridge")
+    .then(({ broadcastResponseToMainFrame }) => broadcastResponseToMainFrame())
+    .catch(() => window.close());
+} else initializeMsal().then(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <BrowserRouter>
