@@ -92,20 +92,46 @@ export async function loadBreaks(token: string, fromIso: string, toIso: string):
   return (await readAll(token, `${items(SMOKING_LISTS.log)}?$filter=${filter}&$top=2000`)).map(rowToBreak);
 }
 
-export async function saveBreak(token: string, b: SmokingBreak): Promise<void> {
-  await spPatch(token, `${items(SMOKING_LISTS.log)}(${b.id})`, {
-    FullName: b.fullName,
-    Department: b.department,
-    Position: b.position,
-    Company: b.company,
-    AreaInName: b.areaInName,
-    AreaOutName: b.areaOutName,
-    TimeIn: b.timeIn,
-    TimeOut: b.timeOut,
-    Status: b.timeOut ? "closed" : "open",
-    DurationMinutes: b.durationMinutes,
-    FlagReason: b.flagReason,
-  });
+/** `before`/`after` field → SharePoint column, written only when it actually changed. */
+const BREAK_FIELD_MAP: Array<[keyof SmokingBreak, string]> = [
+  ["fullName", "FullName"],
+  ["department", "Department"],
+  ["position", "Position"],
+  ["company", "Company"],
+  ["areaInName", "AreaInName"],
+  ["areaInCode", "AreaInCode"],
+  ["areaOutName", "AreaOutName"],
+  ["areaOutCode", "AreaOutCode"],
+  ["timeIn", "TimeIn"],
+  ["timeOut", "TimeOut"],
+];
+
+/**
+ * A pure diff of two break snapshots into the SharePoint columns that actually
+ * changed. An admin edit must not blindly rewrite the whole row: another scan
+ * (or another admin) may have closed this break after the page loaded, and a
+ * blind PATCH of the in-memory row would silently reopen it. Status,
+ * DurationMinutes and FlagReason are derived from the times, so they're only
+ * recomputed (and written) when TimeIn or TimeOut actually changed.
+ */
+export function changedBreakFields(before: SmokingBreak, after: SmokingBreak): Record<string, unknown> {
+  const changes: Record<string, unknown> = {};
+  for (const [key, column] of BREAK_FIELD_MAP) {
+    if (before[key] !== after[key]) changes[column] = after[key];
+  }
+  if (before.timeIn !== after.timeIn || before.timeOut !== after.timeOut) {
+    changes.Status = after.timeOut ? "closed" : "open";
+    changes.DurationMinutes = after.durationMinutes;
+    changes.FlagReason = after.flagReason;
+  }
+  return changes;
+}
+
+/** Writes only what `changedBreakFields` finds different — see its doc comment. */
+export async function saveBreakChanges(token: string, before: SmokingBreak, after: SmokingBreak): Promise<void> {
+  const changes = changedBreakFields(before, after);
+  if (Object.keys(changes).length === 0) return;
+  await spPatch(token, `${items(SMOKING_LISTS.log)}(${after.id})`, changes);
 }
 
 export async function resolveFlag(token: string, id: string, note: string, by: string, at: Date): Promise<void> {

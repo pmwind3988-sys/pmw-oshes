@@ -27,7 +27,7 @@ import {
   type BreakEdit,
   type BreakFilters,
 } from "../../utils/smoking/adminData";
-import { deleteBreak, ensureSmokingLists, loadBreaks, resolveFlag, saveBreak } from "../../utils/smoking/adminStore";
+import { deleteBreak, ensureSmokingLists, loadBreaks, resolveFlag, saveBreakChanges } from "../../utils/smoking/adminStore";
 import type { SmokingBreak } from "../../utils/smoking/schema";
 
 type Tab_ = "log" | "totals" | "areas" | "people";
@@ -141,7 +141,7 @@ export default function SmokingLogScreen() {
     void runWrite(async () => {
       const after = applyEdit(before, edit, new Date());
       const token = await spClient.acquireToken();
-      await saveBreak(token, after);
+      await saveBreakChanges(token, before, after);
       const entry = await writeAuditEntry(spClient, {
         reference: breakReference(after),
         who: userEmail,

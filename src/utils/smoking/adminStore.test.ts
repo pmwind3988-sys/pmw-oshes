@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { breakFilterFor, nextPageUrl, rowToArea, rowToBreak, rowToProfile } from "./adminStore";
+import { breakFilterFor, changedBreakFields, nextPageUrl, rowToArea, rowToBreak, rowToProfile } from "./adminStore";
+import type { SmokingBreak } from "./schema";
+
+function brk(o: Partial<SmokingBreak> = {}): SmokingBreak {
+  return {
+    id: "1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", position: "Tech", company: "PMW",
+    areaInCode: "AAA111", areaInName: "Block A", areaOutCode: "AAA111", areaOutName: "Block A",
+    timeIn: "2026-09-24T02:42:00Z", timeOut: "2026-09-24T02:49:00Z", durationMinutes: 7, flagReason: "", ...o,
+  };
+}
 
 describe("admin store mapping", () => {
   it("reads a SharePoint REST row into a break", () => {
@@ -45,5 +54,54 @@ describe("admin store mapping", () => {
 
   it("treats a profile as not blocked unless marked yes", () => {
     expect(rowToProfile({ Id: 9, Email: "a@b.com" })).toMatchObject({ blocked: false, blockedBy: "", blockedAt: "" });
+  });
+});
+
+describe("changedBreakFields", () => {
+  it("writes nothing for an unchanged row", () => {
+    const b = brk();
+    expect(changedBreakFields(b, b)).toEqual({});
+  });
+
+  it("writes only the field that changed on a department-only edit — no TimeOut/Status touched", () => {
+    const before = brk();
+    const after = brk({ department: "OSHES" });
+    expect(changedBreakFields(before, after)).toEqual({ Department: "OSHES" });
+  });
+
+  it("writes area codes too, not just names", () => {
+    const before = brk();
+    const after = brk({ areaInCode: "BBB222", areaInName: "Block B" });
+    expect(changedBreakFields(before, after)).toEqual({ AreaInCode: "BBB222", AreaInName: "Block B" });
+  });
+
+  it("reopens the break when the time out is cleared, recomputing status/duration/flag/area-out", () => {
+    const before = brk({
+      timeIn: "2026-09-23T02:00:00Z", timeOut: "2026-09-24T02:00:00Z", durationMinutes: 1440,
+      flagReason: "Lasted over 12 hours", areaOutCode: "AAA111", areaOutName: "Block A",
+    });
+    const after = brk({
+      timeIn: "2026-09-23T02:00:00Z", timeOut: null, durationMinutes: null,
+      flagReason: "", areaOutCode: "", areaOutName: "",
+    });
+    expect(changedBreakFields(before, after)).toEqual({
+      TimeOut: null,
+      Status: "open",
+      DurationMinutes: null,
+      FlagReason: "",
+      AreaOutName: "",
+      AreaOutCode: "",
+    });
+  });
+
+  it("recomputes status/duration/flag when time in changes, even if time out did not", () => {
+    const before = brk({ timeIn: "2026-09-24T02:42:00Z", timeOut: "2026-09-24T02:49:00Z", durationMinutes: 7, flagReason: "" });
+    const after = brk({ timeIn: "2026-09-24T02:40:00Z", timeOut: "2026-09-24T02:49:00Z", durationMinutes: 9, flagReason: "" });
+    expect(changedBreakFields(before, after)).toEqual({
+      TimeIn: "2026-09-24T02:40:00Z",
+      Status: "closed",
+      DurationMinutes: 9,
+      FlagReason: "",
+    });
   });
 });
