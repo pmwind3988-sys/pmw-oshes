@@ -9,6 +9,16 @@ function items(list: string): string {
 
 const str = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
 
+const MAX_PAGES = 20;
+
+/** Converts a relative odata.nextLink into an absolute URL, or returns absolute links unchanged. */
+export function nextPageUrl(link: string | undefined): string | undefined {
+  if (!link) return undefined;
+  if (/^https?:\/\//i.test(link)) return link;
+  const siteUrl = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
+  return `${siteUrl}/_api/${link.replace(/^\/+/, "")}`;
+}
+
 export async function ensureSmokingLists(token: string): Promise<void> {
   for (const schema of SMOKING_LIST_SCHEMAS) await ensureListSchema(token, schema);
 }
@@ -60,14 +70,14 @@ export function breakFilterFor(fromIso: string, toIso: string): string {
   return `(TimeIn ge datetime'${fromIso}' and TimeIn lt datetime'${toIso}') or Status eq 'open'`;
 }
 
-/** Follows SharePoint's paging so a busy month is never silently cut at 2,000 rows. */
+/** Follows SharePoint's paging so a busy month is never silently cut at 2,000 rows. Caps at MAX_PAGES to prevent infinite loops. */
 async function readAll(token: string, url: string): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
   let next: string | undefined = url;
-  while (next) {
-    const page = (await spGet(token, next)) as { value?: Record<string, unknown>[]; "odata.nextLink"?: string };
-    rows.push(...(page.value ?? []));
-    next = page["odata.nextLink"];
+  for (let page = 0; next && page < MAX_PAGES; page++) {
+    const data = (await spGet(token, next)) as { value?: Record<string, unknown>[]; "odata.nextLink"?: string };
+    rows.push(...(data.value ?? []));
+    next = nextPageUrl(data["odata.nextLink"]);
   }
   return rows;
 }

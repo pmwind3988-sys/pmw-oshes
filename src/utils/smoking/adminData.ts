@@ -94,6 +94,7 @@ export function applyEdit(before: SmokingBreak, edit: BreakEdit, now: Date): Smo
     company: edit.company.trim(),
     areaInName: edit.areaInName,
     areaOutName: timeOut ? edit.areaOutName : "",
+    areaOutCode: timeOut ? before.areaOutCode : "",
     timeIn: timeIn.toISOString(),
     timeOut: timeOut ? timeOut.toISOString() : null,
     durationMinutes: timeOut ? Math.round((timeOut.getTime() - timeIn.getTime()) / 60_000) : null,
