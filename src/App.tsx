@@ -279,6 +279,7 @@ const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadPublicReportPage = () => import("./pages/PublicReportPage");
+const loadSmokingScanPage = () => import("./pages/SmokingScanPage");
 const loadShareLinkPage = () => import("./pages/ShareLinkPage");
 const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
 const loadNativeFormPreviewPage = () => import("./pages/NativeFormPreviewPage");
@@ -289,6 +290,7 @@ function isPublicRoutePath(pathname: string): boolean {
     pathname === "/privacy" ||
     pathname === "/report" ||
     pathname === "/track" ||
+    pathname === "/smoke" ||
     // Public review links are forwarded to people without an account, so the
     // page that hands the link on must open without one too.
     pathname === "/share-link" ||
@@ -1406,6 +1408,14 @@ export default function App() {
             element={
               <ErrorBoundary>
                 <LazyRoute load={loadPublicReportPage} fallback={<LoadingScreen status="Loading tracking..." />} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/smoke"
+            element={
+              <ErrorBoundary>
+                <LazyRoute load={loadSmokingScanPage} fallback={<LoadingScreen status="Opening the smoking log..." />} />
               </ErrorBoundary>
             }
           />
