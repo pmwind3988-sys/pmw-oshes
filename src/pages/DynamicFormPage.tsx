@@ -14,7 +14,7 @@ import "../native/native-form.css";
 
 import { fileQuestions, uniqueUploadFileName, uploadStamp } from "../utils/fileAttachments";
 import { uploadPublicAttachments } from "../utils/publicFileUpload";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -104,6 +104,7 @@ function mapBodyToSharePointColumnKeys(
   resolveColumnKey: (fieldName: string) => string | null,
   listTitle: string,
   isMultiValueColumn: (fieldName: string) => boolean = () => false,
+  columnKind: (fieldName: string) => number | undefined = () => undefined,
 ): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [fieldName, value] of Object.entries(body)) {
@@ -116,7 +117,7 @@ function mapBodyToSharePointColumnKeys(
     // list landing in a Text column) still travels as JSON text.
     mapped[columnKey] = Array.isArray(value) && !isMultiValueColumn(fieldName)
       ? JSON.stringify(value)
-      : value;
+      : coerceForColumnKind(value, columnKind(fieldName));
   }
   return mapped;
 }
@@ -1195,13 +1196,13 @@ export default function DynamicFormPage() {
         if (longFileAnswers.length > 0) {
           await ensureColumnsHoldLongText(token, cfg.Title as string, longFileAnswers);
         }
-        const { resolveColumnKey, isMultiValueColumn } = await getSharePointColumnResolvers(token, cfg.Title as string);
+        const { resolveColumnKey, isMultiValueColumn, columnKind } = await getSharePointColumnResolvers(token, cfg.Title as string);
         let result: { Id?: number } | undefined;
         try {
           result = await spPost(
             token,
             listUrl,
-            mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
+            mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn, columnKind),
           ) as { Id?: number };
         } catch (submitErr) {
           const msg = submitErr instanceof Error ? submitErr.message : String(submitErr);
@@ -1213,7 +1214,7 @@ export default function DynamicFormPage() {
             result = await spPost(
               token,
               listUrl,
-              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn, columnKind),
             ) as { Id?: number };
           } else if (msg.includes('_Response') || msg.includes('_Json')) {
             // Retry without _Response/_Json columns (matrix fields published before
@@ -1226,7 +1227,7 @@ export default function DynamicFormPage() {
             result = await spPost(
               token,
               listUrl,
-              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn),
+              mapBodyToSharePointColumnKeys(body, resolveColumnKey, cfg.Title as string, isMultiValueColumn, columnKind),
             ) as { Id?: number };
           } else {
             throw submitErr;
