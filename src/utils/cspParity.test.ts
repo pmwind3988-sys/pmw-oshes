@@ -3,11 +3,17 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('Content Security Policy parity', () => {
-  const googleSources = [
-    'https://accounts.google.com/gsi/client',
-    'https://accounts.google.com/gsi/style',
-    'https://accounts.google.com/gsi/',
-  ];
+  /** Splits a CSP string into a map of directive name -> raw source list text. */
+  function parseDirectives(csp: string): Record<string, string> {
+    const directives: Record<string, string> = {};
+    for (const part of csp.split(';')) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const [name, ...rest] = trimmed.split(/\s+/);
+      directives[name] = rest.join(' ');
+    }
+    return directives;
+  }
 
   function extractCSPFromIndexHtml(): string {
     const indexPath = resolve(process.cwd(), 'index.html');
@@ -39,24 +45,23 @@ describe('Content Security Policy parity', () => {
     return (cspHeader as { value: string }).value;
   }
 
-  it('index.html should contain all Google sign-in sources', () => {
-    const csp = extractCSPFromIndexHtml();
-    for (const source of googleSources) {
-      expect(csp).toContain(source);
-    }
+  function expectGoogleSignInDirectives(csp: string): void {
+    const directives = parseDirectives(csp);
+    expect(directives['script-src']).toContain('https://accounts.google.com/gsi/client');
+    expect(directives['style-src']).toContain('https://accounts.google.com/gsi/style');
+    expect(directives['connect-src']).toContain('https://accounts.google.com/gsi/');
+    expect(directives['frame-src']).toContain('https://accounts.google.com/gsi/');
+  }
+
+  it('index.html should contain all Google sign-in sources, per directive', () => {
+    expectGoogleSignInDirectives(extractCSPFromIndexHtml());
   });
 
-  it('vite.config.ts should contain all Google sign-in sources', () => {
-    const csp = extractCSPFromViteConfig();
-    for (const source of googleSources) {
-      expect(csp).toContain(source);
-    }
+  it('vite.config.ts should contain all Google sign-in sources, per directive', () => {
+    expectGoogleSignInDirectives(extractCSPFromViteConfig());
   });
 
-  it('vercel.json should contain all Google sign-in sources', () => {
-    const csp = extractCSPFromVercelJson();
-    for (const source of googleSources) {
-      expect(csp).toContain(source);
-    }
+  it('vercel.json should contain all Google sign-in sources, per directive', () => {
+    expectGoogleSignInDirectives(extractCSPFromVercelJson());
   });
 });
