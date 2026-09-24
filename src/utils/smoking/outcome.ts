@@ -28,6 +28,8 @@ export function describeOutcome(outcome: ScanOutcome): OutcomeView {
     }
     case "already-in":
       return { tone: "info", headline: `Already in since ${formatMyt(outcome.timeIn)}`, detail: "Scan again when you leave." };
+    case "already-out":
+      return { tone: "info", headline: `Already out at ${formatMyt(outcome.timeOut)}`, detail: "Scan when you next arrive." };
     case "retired-area":
       return { tone: "warn", headline: "This poster is no longer in use", detail: "Nothing was recorded. Use the poster at your smoking area." };
     case "no-profile":

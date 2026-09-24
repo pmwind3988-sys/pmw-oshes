@@ -7,6 +7,7 @@ export type ScanOutcome =
   | { result: "in"; timeIn: string; areaName: string }
   | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
   | { result: "already-in"; timeIn: string; areaName: string }
+  | { result: "already-out"; timeOut: string; areaName: string }
   | { result: "retired-area" }
   | { result: "no-profile" }
   | { result: "blocked" };

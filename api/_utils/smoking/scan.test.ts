@@ -23,6 +23,11 @@ class FakeStore implements SmokingStore {
     return this.breaks.filter((b) => b.email === email && !b.timeOut)
       .sort((a, b) => a.timeIn.localeCompare(b.timeIn) || Number(a.id) - Number(b.id));
   }
+  async lastClosedBreakFor(email: string) {
+    const closed = this.breaks.filter((b) => b.email === email && b.timeOut)
+      .sort((a, b) => (b.timeOut as string).localeCompare(a.timeOut as string));
+    return closed[0] ?? null;
+  }
   async createBreak(input: NewBreak) {
     if (this.racer) {
       const r = this.racer;
@@ -100,6 +105,22 @@ describe("recordScan", () => {
     await expect(recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:42:00Z") }))
       .resolves.toEqual({ result: "blocked" });
     expect(store.breaks).toHaveLength(0);
+  });
+
+  it("records nothing on a re-scan soon after scanning out — a shaky-hand double tap, not a new break", async () => {
+    await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
+    await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:10:00Z") });
+    const outcome = await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:10:20Z") });
+    expect(outcome).toEqual({ result: "already-out", timeOut: "2026-09-24T02:10:00.000Z", areaName: "Block A" });
+    expect(store.breaks).toHaveLength(1);
+  });
+
+  it("opens a fresh break on a re-scan well after scanning out", async () => {
+    await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
+    await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:10:00Z") });
+    const outcome = await recordScan(store, { email: ALI.email, areaCode: "BBB222", now: at("2026-09-24T02:12:00Z") });
+    expect(outcome).toEqual({ result: "in", timeIn: "2026-09-24T02:12:00.000Z", areaName: "Block B" });
+    expect(store.breaks).toHaveLength(2);
   });
 
   it("leaves one open break when two scans race", async () => {

@@ -28,6 +28,7 @@ export interface SmokingStore {
   touchProfile(id: string, now: Date): Promise<void>;
   findArea(code: string): Promise<SmokingArea | null>;
   openBreaksFor(email: string): Promise<SmokingBreak[]>;
+  lastClosedBreakFor(email: string): Promise<SmokingBreak | null>;
   createBreak(input: NewBreak): Promise<string>;
   closeBreak(id: string, close: BreakClose): Promise<void>;
   deleteBreak(id: string): Promise<void>;
@@ -122,6 +123,16 @@ export function createGraphSmokingStore(getToken: () => Promise<string> = getGra
         `${graphFieldEquals("Email", email)} and ${graphFieldEquals("Status", "open")}`,
       );
       return items.map(toBreak).sort((a, b) => a.timeIn.localeCompare(b.timeIn) || Number(a.id) - Number(b.id));
+    },
+    /** Most recently closed break, for the double-scan check on the way out. */
+    async lastClosedBreakFor(email) {
+      const items = await query(
+        SMOKING_LISTS.log,
+        `${graphFieldEquals("Email", email)} and ${graphFieldEquals("Status", "closed")}`,
+      );
+      const closed = items.map(toBreak).filter((b) => b.timeOut);
+      closed.sort((a, b) => (b.timeOut as string).localeCompare(a.timeOut as string));
+      return closed[0] ?? null;
     },
     async createBreak(input) {
       const { id } = await createListItem(await getToken(), SMOKING_LISTS.log, {

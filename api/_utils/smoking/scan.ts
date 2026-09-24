@@ -1,10 +1,11 @@
-import { decideScan } from "./scanRules.js";
+import { DOUBLE_SCAN_WINDOW_MS, decideScan } from "./scanRules.js";
 import type { SmokingStore } from "./store.js";
 
 export type ScanOutcome =
   | { result: "in"; timeIn: string; areaName: string }
   | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
   | { result: "already-in"; timeIn: string; areaName: string }
+  | { result: "already-out"; timeOut: string; areaName: string }
   | { result: "retired-area" }
   | { result: "no-profile" }
   | { result: "blocked" };
@@ -31,6 +32,13 @@ export async function recordScan(
 
   if (decision.kind === "already-in") {
     return { result: "already-in", timeIn: decision.openBreak.timeIn, areaName: decision.openBreak.areaInName };
+  }
+
+  if (decision.kind === "open") {
+    const lastClosed = await store.lastClosedBreakFor(input.email);
+    if (lastClosed?.timeOut && input.now.getTime() - new Date(lastClosed.timeOut).getTime() < DOUBLE_SCAN_WINDOW_MS) {
+      return { result: "already-out", timeOut: lastClosed.timeOut, areaName: lastClosed.areaOutName };
+    }
   }
 
   if (decision.kind === "close") {
