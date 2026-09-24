@@ -121,6 +121,17 @@ describe("handleSmoking", () => {
     expect(d.store.saveProfile).not.toHaveBeenCalled();
   });
 
+  it("refuses a blocked person's profile-get, so the home screen cannot greet them", async () => {
+    const d = deps({}, {
+      findProfile: vi.fn().mockResolvedValue({
+        id: "p1", email: "ali@gmail.com", fullName: "Ali", department: "QA/QC", departmentFromList: true,
+        position: "Tech", staffId: "", company: "PMW", signInMethod: "google", blocked: true,
+      }),
+    });
+    const res = await handleSmoking(post({ action: "profile-get" }, pass()), d);
+    expect(res).toEqual({ status: 403, body: { error: "blocked" } });
+  });
+
   it("never lets the smoker see their own blocked flag or the profile's id", async () => {
     const d = deps({}, {
       findProfile: vi.fn().mockResolvedValue({
