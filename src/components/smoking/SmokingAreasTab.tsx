@@ -5,7 +5,7 @@ import { Callout, DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty 
 import { Ban as RetireIcon, Pencil as RenameIcon, Plus as AddIcon, Printer as PrinterIcon, QrCode as QrIcon, RotateCcw as ReactivateIcon } from "../ui/Icons";
 import { usePortal } from "../../contexts/PortalContext";
 import { writeAuditEntry } from "../../utils/portalAudit";
-import { newAreaCode } from "../../utils/smoking/adminData";
+import { uniqueAreaCode } from "../../utils/smoking/adminData";
 import { createArea, loadAreas, updateArea } from "../../utils/smoking/adminStore";
 import type { SmokingArea } from "../../utils/smoking/schema";
 import AreaDialog from "./AreaDialog";
@@ -83,7 +83,7 @@ export default function SmokingAreasTab() {
         setAreas((rows) => rows.map((a) => (a.id === after.id ? after : a)).sort(sortAreas));
         toast("Area renamed");
       } else {
-        const code = newAreaCode();
+        const code = uniqueAreaCode(areas.map((a) => a.code));
         await createArea(token, name, code);
         const entry = await writeAuditEntry(spClient, {
           reference: `SMK-AREA-${code}`,

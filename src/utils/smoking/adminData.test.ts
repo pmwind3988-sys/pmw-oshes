@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEdit, breakReference, breaksCsv, computeTotals, currentlyOut, describeChange,
-  effectiveFlag, filterBreaks, newAreaCode, onBreakLabel, validateEdit, type BreakFilters,
+  effectiveFlag, filterBreaks, newAreaCode, onBreakLabel, profilesCsv, uniqueAreaCode,
+  validateEdit, type BreakFilters, type SmokingProfileRow,
 } from "./adminData";
 import type { SmokingBreak } from "./schema";
 
@@ -104,6 +105,32 @@ describe("export and references", () => {
   it("makes unambiguous area codes", () => {
     expect(newAreaCode(() => 0)).toBe("AAAAAA");
     expect(newAreaCode()).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
+  });
+  it("exports one header and one row per registered person, escaping and typed-department noted", () => {
+    const profile: SmokingProfileRow = {
+      id: "1", email: "ali@gmail.com", fullName: "Ali, Tan", department: "QA/QC", departmentFromList: false,
+      position: "Tech", staffId: "S001", company: "PMW", signInMethod: "google",
+      firstSeen: "2026-09-01T00:00:00Z", lastSeen: "2026-09-24T02:00:00Z",
+    };
+    const csv = profilesCsv([profile]).split("\r\n");
+    expect(csv).toHaveLength(2);
+    expect(csv[0]).toBe('"Name","Email","Department","Position","Company","Staff ID","Signed in with","First seen","Last seen"');
+    expect(csv[1]).toContain('"Ali, Tan"');
+    expect(csv[1]).toContain('"QA/QC (typed)"');
+  });
+});
+
+describe("uniqueAreaCode", () => {
+  it("skips a code that already exists and returns the next one", () => {
+    let call = 0;
+    const random = () => {
+      call += 1;
+      return call === 1 ? 0 : 0.5; // first call reproduces "AAAAAA" (already taken), then a different code
+    };
+    expect(uniqueAreaCode(["AAAAAA"], random)).not.toBe("AAAAAA");
+  });
+  it("throws when every attempt collides", () => {
+    expect(() => uniqueAreaCode(["AAAAAA"], () => 0)).toThrow("Could not make a unique area code — try again.");
   });
 });
 

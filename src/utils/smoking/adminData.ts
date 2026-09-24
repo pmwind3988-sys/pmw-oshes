@@ -1,6 +1,13 @@
 import { csvRow } from "../csv";
 import { MALAYSIA_TIME_LABEL, formatMalaysiaDateTime } from "../malaysiaTime";
-import { flagReasonFor, type SmokingBreak } from "./schema";
+import { flagReasonFor, type SmokingBreak, type SmokingProfile } from "./schema";
+
+/** `loadProfiles` rows: a registered person plus when they were first/last seen. */
+export interface SmokingProfileRow extends SmokingProfile {
+  id: string;
+  firstSeen: string;
+  lastSeen: string;
+}
 
 export interface BreakFilters {
   from: string;
@@ -158,4 +165,40 @@ export function newAreaCode(random: () => number = Math.random): string {
   let code = "";
   for (let i = 0; i < 6; i++) code += AREA_CODE_ALPHABET[Math.floor(random() * AREA_CODE_ALPHABET.length)];
   return code;
+}
+
+const MAX_AREA_CODE_TRIES = 20;
+
+/** `newAreaCode`, retried until it lands outside `existing` — two posters must never share a code. */
+export function uniqueAreaCode(existing: string[], random: () => number = Math.random): string {
+  const taken = new Set(existing);
+  for (let i = 0; i < MAX_AREA_CODE_TRIES; i++) {
+    const code = newAreaCode(random);
+    if (!taken.has(code)) return code;
+  }
+  throw new Error("Could not make a unique area code — try again.");
+}
+
+export const signInMethodLabel = (method: SmokingProfile["signInMethod"]) => (method === "microsoft" ? "Microsoft" : "Google");
+
+export const departmentLabel = (p: SmokingProfile) => (p.departmentFromList ? p.department : `${p.department} (typed)`);
+
+export function profilesCsv(profiles: SmokingProfileRow[]): string {
+  const lines = [csvRow(["Name", "Email", "Department", "Position", "Company", "Staff ID", "Signed in with", "First seen", "Last seen"])];
+  for (const p of profiles) {
+    lines.push(
+      csvRow([
+        p.fullName,
+        p.email,
+        departmentLabel(p),
+        p.position,
+        p.company,
+        p.staffId,
+        signInMethodLabel(p.signInMethod),
+        formatMalaysiaDateTime(p.firstSeen),
+        formatMalaysiaDateTime(p.lastSeen),
+      ]),
+    );
+  }
+  return lines.join("\r\n");
 }

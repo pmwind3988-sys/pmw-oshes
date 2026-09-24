@@ -69,7 +69,7 @@ export default function AreaQrDialog({
       <DialogTitle>{area?.name} — QR code</DialogTitle>
       <DialogContent>
         {area && !area.active && (
-          <Callout tone="error" sx={{ mb: 2 }}>
+          <Callout tone="warning" sx={{ mb: 2 }}>
             This area is retired — its poster no longer records scans.
           </Callout>
         )}

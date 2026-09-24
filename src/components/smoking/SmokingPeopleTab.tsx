@@ -4,34 +4,12 @@ import { editorial } from "../../theme/editorial";
 import { Callout, DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../Widget";
 import { Download as DownloadIcon } from "../ui/Icons";
 import { usePortal } from "../../contexts/PortalContext";
-import { csvRow, downloadCsv } from "../../utils/csv";
+import { downloadCsv } from "../../utils/csv";
 import { formatMalaysiaDateTime, malaysiaDateStamp } from "../../utils/malaysiaTime";
+import { departmentLabel, profilesCsv, signInMethodLabel, type SmokingProfileRow } from "../../utils/smoking/adminData";
 import { loadProfiles } from "../../utils/smoking/adminStore";
 
-type Profile = Awaited<ReturnType<typeof loadProfiles>>[number];
-
-const signInLabel = (method: Profile["signInMethod"]) => (method === "microsoft" ? "Microsoft" : "Google");
-const departmentLabel = (p: Profile) => (p.departmentFromList ? p.department : `${p.department} (typed)`);
-
-function profilesCsv(profiles: Profile[]): string {
-  const lines = [csvRow(["Name", "Email", "Department", "Position", "Company", "Staff ID", "Signed in with", "First seen", "Last seen"])];
-  for (const p of profiles) {
-    lines.push(
-      csvRow([
-        p.fullName,
-        p.email,
-        departmentLabel(p),
-        p.position,
-        p.company,
-        p.staffId,
-        signInLabel(p.signInMethod),
-        formatMalaysiaDateTime(p.firstSeen),
-        formatMalaysiaDateTime(p.lastSeen),
-      ]),
-    );
-  }
-  return lines.join("\r\n");
-}
+type Profile = SmokingProfileRow;
 
 export default function SmokingPeopleTab() {
   const { spClient, toast } = usePortal();
@@ -115,7 +93,7 @@ export default function SmokingPeopleTab() {
               <DataCell muted>{p.position}</DataCell>
               <DataCell muted>{p.company}</DataCell>
               <DataCell muted>{p.staffId}</DataCell>
-              <DataCell muted>{signInLabel(p.signInMethod)}</DataCell>
+              <DataCell muted>{signInMethodLabel(p.signInMethod)}</DataCell>
               <DataCell muted nowrap>
                 {formatMalaysiaDateTime(p.firstSeen)}
               </DataCell>
