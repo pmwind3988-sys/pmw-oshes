@@ -274,6 +274,19 @@ export function textFieldSchemaAsNote(schemaXml: string): string {
  * any that are still single-line text. Called only for an answer that would not
  * otherwise fit, so a form whose answers are short never has its list changed.
  */
+/**
+ * Why SharePoint would refuse this value for a column of this type, in words a
+ * respondent can act on, or "" when it will be accepted. Checked before posting
+ * because SharePoint's own refusal ("Cannot convert a primitive value to the
+ * expected type 'Edm.Boolean'") names neither the question nor the answer.
+ */
+export function unsavableAnswerReason(value: unknown, kind: number | undefined): string {
+  if (value === null || value === undefined) return "";
+  if (kind === SP_FIELD_KIND.boolean && typeof value !== "boolean") return "its SharePoint column only takes Yes or No";
+  if (kind === SP_FIELD_KIND.number && typeof value !== "number") return "its SharePoint column only takes a number";
+  return "";
+}
+
 export async function ensureColumnsHoldLongText(
   token: string,
   listTitle: string,

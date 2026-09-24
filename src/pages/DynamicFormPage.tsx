@@ -14,7 +14,7 @@ import "../native/native-form.css";
 
 import { fileQuestions, uniqueUploadFileName, uploadStamp } from "../utils/fileAttachments";
 import { uploadPublicAttachments } from "../utils/publicFileUpload";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind, unsavableAnswerReason } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -115,9 +115,19 @@ function mapBodyToSharePointColumnKeys(
     }
     // A MultiChoice column wants the array itself; anything else (a multi-file
     // list landing in a Text column) still travels as JSON text.
-    mapped[columnKey] = Array.isArray(value) && !isMultiValueColumn(fieldName)
-      ? JSON.stringify(value)
-      : coerceForColumnKind(value, columnKind(fieldName));
+    const kind = columnKind(fieldName);
+    const shaped = coerceForColumnKind(
+      Array.isArray(value) && !isMultiValueColumn(fieldName) ? JSON.stringify(value) : value,
+      kind,
+    );
+    // Said here, by name, rather than left to SharePoint, whose refusal names
+    // neither the question nor the answer.
+    const reason = unsavableAnswerReason(shaped, kind);
+    if (reason) {
+      const shown = typeof shaped === "string" ? shaped : JSON.stringify(shaped);
+      throw new Error(`The answer to "${fieldName}" ("${shown.slice(0, 80)}") cannot be saved: ${reason}. The form and its SharePoint list disagree about this question; ask an OSHES admin to republish the form.`);
+    }
+    mapped[columnKey] = shaped;
   }
   return mapped;
 }
