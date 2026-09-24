@@ -20,23 +20,21 @@ describe("admin store mapping", () => {
     );
   });
 
-  it("returns absolute URLs unchanged", () => {
+  it("converts realistic relative SharePoint odata.nextLink to absolute", () => {
+    // SharePoint relative links are relative to /_api/, not including it
+    const relative = "Web/Lists(guid'00000000-0000-0000-0000-000000000000')/Items?%24skiptoken=Paged%3dTRUE%26p_ID%3d2000";
+    const siteUrl = (import.meta.env.VITE_SP_SITE_URL as string || "").replace(/\/$/, "");
+    const expected = `${siteUrl}/_api/${relative}`;
+    expect(nextPageUrl(relative)).toBe(expected);
+  });
+
+  it("returns absolute https URLs unchanged", () => {
     const absolute = "https://contoso.sharepoint.com/sites/mysite/_api/web/lists/getbytitle('Items')/items?$skiptoken=123";
     expect(nextPageUrl(absolute)).toBe(absolute);
   });
 
-  it("returns undefined for empty or falsy links", () => {
+  it("returns undefined for falsy links", () => {
     expect(nextPageUrl(undefined)).toBeUndefined();
     expect(nextPageUrl("")).toBeUndefined();
-  });
-
-  it("converts relative odata.nextLink by prepending site URL and _api path", () => {
-    const relative = "/_api/web/lists/getbytitle('Items')/items?$skiptoken=123";
-    const result = nextPageUrl(relative);
-    // Verify it's converted to absolute (starts with https or contains _api path)
-    expect(result).toBeDefined();
-    expect(result).toContain("/_api/");
-    // Verify the path is preserved
-    expect(result).toContain("getbytitle('Items')/items?$skiptoken=123");
   });
 });
