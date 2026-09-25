@@ -4,6 +4,10 @@ export interface OutcomeView {
   tone: "in" | "out" | "info" | "warn";
   headline: string;
   detail: string;
+  /** Something OSHES will follow up, shown apart from the result so it is not missed. */
+  note?: string;
+  /** What to do next, when there is a next scan to make. */
+  hint?: string;
 }
 
 const MYT = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -20,15 +24,23 @@ export function formatDuration(minutes: number): string {
 export function describeOutcome(outcome: ScanOutcome): OutcomeView {
   switch (outcome.result) {
     case "in": {
-      const detail = outcome.previousMissedScanOut
-        ? `${outcome.areaName} · Your last break had no scan-out — OSHES will check it.`
-        : outcome.areaName;
-      return { tone: "in", headline: `IN · ${formatMyt(outcome.timeIn)}`, detail };
+      const view: OutcomeView = {
+        tone: "in",
+        headline: `IN · ${formatMyt(outcome.timeIn)}`,
+        detail: outcome.areaName,
+        hint: "Scan this poster again when you leave.",
+      };
+      if (outcome.previousMissedScanOut) view.note = "Your last break had no scan-out — OSHES will check it.";
+      return view;
     }
     case "out": {
-      const parts = [formatDuration(outcome.durationMinutes), outcome.areaName];
-      if (outcome.flagged) parts.push("OSHES will check this one — you may have missed a scan-out");
-      return { tone: "out", headline: `OUT · ${formatMyt(outcome.timeOut)}`, detail: parts.join(" · ") };
+      const view: OutcomeView = {
+        tone: "out",
+        headline: `OUT · ${formatMyt(outcome.timeOut)}`,
+        detail: `${formatDuration(outcome.durationMinutes)} · ${outcome.areaName}`,
+      };
+      if (outcome.flagged) view.note = "OSHES will check this one — you may have missed a scan-out.";
+      return view;
     }
     case "already-in":
       return { tone: "info", headline: `Already in since ${formatMyt(outcome.timeIn)}`, detail: "Scan again when you leave." };
