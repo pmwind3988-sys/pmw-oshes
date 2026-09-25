@@ -132,4 +132,35 @@ describe("shared layers stay unassigned until someone completes them", () => {
     expect(layerRecipients(layer("solo@x.com", "user"), "")).toEqual(["solo@x.com"]);
     expect(layerRecipients(undefined, "")).toEqual([]);
   });
+
+  // Permit to Work: six evaluators, but the notice goes to the OSHES shared
+  // mailbox only, and whoever picks it up there acts under their own name.
+  it("sends a Send-only layer's notice to its Notify also mailboxes alone", () => {
+    const team = "ashraf@pmw-group.com; ramesh@pmw-group.com; gabriel@pmw-group.com";
+    const sendOnly = {
+      ...layer(team),
+      notifyEmails: ["pmw.oshesweb@pmw-group.com"],
+      notifyRecipientMode: "notify-only",
+    } as LayerConfigItem;
+    expect(layerRecipients(sendOnly, "")).toEqual(["pmw.oshesweb@pmw-group.com"]);
+    // Still the mailbox after someone has claimed the layer (reminders, resends).
+    expect(layerRecipients(sendOnly, "ramesh@pmw-group.com")).toEqual(["pmw.oshesweb@pmw-group.com"]);
+    // The mailbox never gains the right to act.
+    expect(canActOnLayer(sendOnly, "", "pmw.oshesweb@pmw-group.com")).toBe(false);
+    expect(canActOnLayer(sendOnly, "", "gabriel@pmw-group.com")).toBe(true);
+  });
+
+  it("copies Notify also mailboxes alongside the assignees when Send only is off", () => {
+    const copied = { ...layer("solo@x.com", "user"), notifyEmails: ["team@x.com"] } as LayerConfigItem;
+    expect(layerRecipients(copied, "")).toEqual(["solo@x.com", "team@x.com"]);
+  });
+
+  it("does not mail a shared mailbox for a layer nobody could act on", () => {
+    const orphan = {
+      ...layer("not-an-address"),
+      notifyEmails: ["team@x.com"],
+      notifyRecipientMode: "notify-only",
+    } as LayerConfigItem;
+    expect(layerRecipients(orphan, "")).toEqual([]);
+  });
 });
