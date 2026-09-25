@@ -1,4 +1,5 @@
 import type { LayerAssignee, LayerConfigItem } from "../types";
+import { resolveLayerRecipients } from "./layerRecipients";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -85,14 +86,25 @@ function normalize(value: unknown): string {
  * Who to tell that a layer is waiting. `L{n}_Email` names the holder once there
  * is one; a shared layer has none until somebody claims it, so everyone named on
  * it is told instead.
+ *
+ * The layer's "Notify also" mailboxes are added on top — or, when the layer is
+ * set to "Send only to these mailboxes", replace the people entirely: the notice
+ * lands in the shared mailbox and whichever assignee picks it up acts from
+ * there. Access is unchanged, so a mailbox can never act on a layer itself.
+ *
+ * A layer with nobody able to act stays empty, so callers still refuse to route
+ * a notice nobody could complete.
  */
 export function layerRecipients(
   layer: LayerConfigItem | undefined,
   storedLayerEmail: unknown,
 ): string[] {
   const stored = String(storedLayerEmail ?? "").trim();
-  if (EMAIL_RE.test(stored)) return [stored];
-  return layer ? validFixedAssigneeEmails(layer.assignee) : [];
+  const actors = EMAIL_RE.test(stored)
+    ? [stored]
+    : layer ? validFixedAssigneeEmails(layer.assignee) : [];
+  if (actors.length === 0) return [];
+  return resolveLayerRecipients(actors, layer);
 }
 
 /**

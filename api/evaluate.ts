@@ -12,6 +12,7 @@ import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { denyLayerItemAccess } from "./_utils/layerItemAccess.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
+import { resolveLayerRecipients, type LayerNotifyConfig } from "./_utils/layerRecipients.js";
 
 /**
  * What a link issued before bindings existed is told. Deliberately the same
@@ -70,10 +71,17 @@ const RECIPIENT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /**
  * Who to tell that a layer is waiting. `L{n}_Email` names the holder once there
  * is one; a shared layer ("users" assignee) has none until somebody claims it,
- * so everyone the config names is told instead.
+ * so everyone the config names is told instead. The layer's "Notify also"
+ * mailboxes are added, or replace the people on a "Send only" layer.
  * Mirrors src/utils/layerAssignees.ts — api/ does not import from src/.
  */
 function nextLayerRecipients(layer: Record<string, unknown> | undefined, storedEmail: string): string[] {
+  const actors = nextLayerActors(layer, storedEmail);
+  if (actors.length === 0) return [];
+  return resolveLayerRecipients(actors, layer as LayerNotifyConfig | undefined);
+}
+
+function nextLayerActors(layer: Record<string, unknown> | undefined, storedEmail: string): string[] {
   const stored = storedEmail.trim();
   if (RECIPIENT_EMAIL_RE.test(stored)) return [stored];
 

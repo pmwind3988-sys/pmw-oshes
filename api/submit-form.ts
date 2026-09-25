@@ -26,6 +26,7 @@ import {
 } from "./_utils/referenceNumber.js";
 import { ensureReferenceColumns } from "./_utils/provisioning.js";
 import { linkTokenField, mintLinkToken } from "./_utils/linkToken.js";
+import { resolveLayerRecipients, type NotifyRecipientMode } from "./_utils/layerRecipients.js";
 import {
   buildWorkflowActionEmail,
   getApplicationBaseUrl,
@@ -93,6 +94,8 @@ interface ApiLayerConfigItem {
   title?: string;
   publicToken?: string;
   emailSchedule?: WorkflowEmailScheduleConfig;
+  notifyEmails?: string[];
+  notifyRecipientMode?: NotifyRecipientMode;
 }
 
 interface ApiLayerConfig {
@@ -1168,13 +1171,21 @@ async function resolveLayerAssignee(
   return { email, name: "" };
 }
 
-/** Who to tell a layer is waiting: its holder, or everyone named on a shared layer. */
+/**
+ * Who to tell a layer is waiting: its holder, or everyone named on a shared
+ * layer — plus the layer's "Notify also" mailboxes, which replace the people
+ * entirely on a "Send only" layer.
+ * Mirrors layerRecipients() in src/utils/layerAssignees.ts.
+ */
 function layerNotificationRecipients(
   layer: ApiLayerConfigItem,
   storedEmail: string,
 ): string[] {
-  if (EMAIL_RE.test(storedEmail)) return [storedEmail];
-  return isFixedApiAssignee(layer.assignee) ? fixedAssigneeEmails(layer.assignee.value) : [];
+  const actors = EMAIL_RE.test(storedEmail)
+    ? [storedEmail]
+    : isFixedApiAssignee(layer.assignee) ? fixedAssigneeEmails(layer.assignee.value) : [];
+  if (actors.length === 0) return [];
+  return resolveLayerRecipients(actors, layer);
 }
 
 async function applyLayerConfigWorkflow(

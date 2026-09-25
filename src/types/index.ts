@@ -210,7 +210,20 @@ export interface BaseLayer {
   roleLabel?: string;
   manualPaperWhenSenderEmail?: boolean;
   submitterRoutingRules?: EvaluationSubmitterRoutingRule[];
+  /**
+   * Mailboxes that receive this layer's notification but can never act on it —
+   * typically a shared mailbox. Authored in the pmw-hrform builder ("Notify also").
+   */
+  notifyEmails?: string[];
+  /**
+   * "both" (default) mails the assignees and `notifyEmails`; "notify-only" mails
+   * `notifyEmails` alone ("Send only to these mailboxes"). The approval or
+   * evaluation still belongs to the assignees either way.
+   */
+  notifyRecipientMode?: NotifyRecipientMode;
 }
+
+export type NotifyRecipientMode = "both" | "notify-only";
 
 export interface ApprovalLayerConfig extends BaseLayer {
   type: "approval";
