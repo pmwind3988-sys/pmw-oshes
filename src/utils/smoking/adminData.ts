@@ -16,6 +16,7 @@ export interface BreakFilters {
   from: string;
   to: string;
   department: string;
+  company: string;
   area: string;
   search: string;
   flaggedOnly: boolean;
@@ -64,6 +65,7 @@ export function filterBreaks(breaks: SmokingBreak[], f: BreakFilters, now: Date)
   return breaks
     .filter((b) => b.timeIn >= f.from && b.timeIn < f.to)
     .filter((b) => !f.department || b.department === f.department)
+    .filter((b) => !f.company || b.company === f.company)
     .filter((b) => !f.area || b.areaInName === f.area || b.areaOutName === f.area)
     .filter((b) => !search || b.fullName.toLowerCase().includes(search) || b.email.includes(search))
     .filter((b) => !f.flaggedOnly || effectiveFlag(b, now) !== "")
