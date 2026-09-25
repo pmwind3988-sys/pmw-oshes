@@ -10,13 +10,17 @@ describe("formatMyt", () => {
 describe("describeOutcome", () => {
   it("reads IN", () => {
     expect(describeOutcome({ result: "in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A" }))
-      .toEqual({ tone: "in", headline: "IN · 10:42", detail: "Block A" });
+      .toEqual({ tone: "in", headline: "IN · 10:42", detail: "Block A", hint: "Scan this poster again when you leave." });
   });
   it("reads IN after a missed scan-out on the previous break", () => {
     expect(describeOutcome({
       result: "in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A", previousMissedScanOut: true,
     })).toEqual({
-      tone: "in", headline: "IN · 10:42", detail: "Block A · Your last break had no scan-out — OSHES will check it.",
+      tone: "in",
+      headline: "IN · 10:42",
+      detail: "Block A",
+      note: "Your last break had no scan-out — OSHES will check it.",
+      hint: "Scan this poster again when you leave.",
     });
   });
   it("reads OUT with the duration", () => {
@@ -29,7 +33,12 @@ describe("describeOutcome", () => {
     expect(describeOutcome({
       result: "out", timeIn: "2026-09-23T02:00:00Z", timeOut: "2026-09-24T02:00:00Z",
       areaName: "Block A", durationMinutes: 1440, flagged: true,
-    }).detail).toBe("24 h 0 min · Block A · OSHES will check this one — you may have missed a scan-out");
+    })).toEqual({
+      tone: "out",
+      headline: "OUT · 10:00",
+      detail: "24 h 0 min · Block A",
+      note: "OSHES will check this one — you may have missed a scan-out.",
+    });
   });
   it("reads a double scan", () => {
     expect(describeOutcome({ result: "already-in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A" }))
