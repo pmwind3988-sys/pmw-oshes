@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
 import { panelSx } from "../../theme/surfaces";
@@ -15,7 +15,8 @@ import SmokingAreasTab from "../../components/smoking/SmokingAreasTab";
 import SmokingLogTable from "../../components/smoking/SmokingLogTable";
 import SmokingPeopleTab from "../../components/smoking/SmokingPeopleTab";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
-import SmokingTotalsTable from "../../components/smoking/SmokingTotalsTable";
+import SmokingTotalsDashboard from "../../components/smoking/SmokingTotalsDashboard";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   applyEdit,
   breakReference,
@@ -34,6 +35,7 @@ import type { SmokingBreak } from "../../utils/smoking/schema";
 type Tab_ = "log" | "totals" | "areas" | "people" | "settings";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const AUTO_REFRESH_MS = 30_000;
 
 /** Monday 00:00 MYT of the week containing `now`, and the Monday after it. */
 function defaultWeekRange(now: Date): { from: string; to: string } {
@@ -48,6 +50,23 @@ function defaultWeekRange(now: Date): { from: string; to: string } {
 }
 
 const isoToMytDate = (iso: string) => isoToMytInput(iso).slice(0, 10);
+
+/**
+ * "Updated 10:42 · refreshes every 30 s", or — when the last try failed — how
+ * old the rows on screen are, so nobody reads a stale count as the live one.
+ */
+function RefreshStatus({ updatedAt, failed }: { updatedAt: Date | null; failed: boolean }) {
+  if (!updatedAt) return null;
+  const at = isoToMytInput(updatedAt.toISOString()).slice(11, 16);
+  return (
+    <Typography
+      role="status"
+      sx={{ fontSize: 12, whiteSpace: "nowrap", color: failed ? editorial.warning : editorial.muted, fontWeight: failed ? 700 : 400 }}
+    >
+      {failed ? `Couldn't refresh — showing ${at}` : `Updated ${at} · refreshes every 30 s`}
+    </Typography>
+  );
+}
 const mytDateToIsoStart = (dateStr: string) => mytInputToIso(`${dateStr}T00:00`);
 
 export default function SmokingLogScreen() {
@@ -59,7 +78,18 @@ export default function SmokingLogScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
+  // Bumped to reload the same dates: by the Refresh button, or by the timer.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  // The dates the rows on screen belong to. A reload of those same dates is a
+  // background refresh: the rows stay up and only get swapped when new ones land.
+  const loadedRange = useRef("");
+  const lastLoadMs = useRef(0);
+
   const [department, setDepartment] = useState("");
+  const [company, setCompany] = useState("");
   const [area, setArea] = useState("");
   const [search, setSearch] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
@@ -74,16 +104,33 @@ export default function SmokingLogScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    const rangeKey = `${range.from}|${range.to}`;
+    const background = loadedRange.current === rangeKey;
     (async () => {
-      setLoading(true);
-      setLoadError("");
+      if (background) setRefreshing(true);
+      else {
+        setLoading(true);
+        setLoadError("");
+      }
       try {
         const token = await spClient.acquireToken();
-        if (access.isAdmin) await ensureSmokingLists(token);
+        if (access.isAdmin && !background) await ensureSmokingLists(token);
         const rows = await loadBreaks(token, range.from, range.to);
-        if (!cancelled) setBreaks(rows);
+        if (cancelled) return;
+        setBreaks(rows);
+        setUpdatedAt(new Date());
+        setRefreshFailed(false);
+        setLoadError("");
+        loadedRange.current = rangeKey;
+        lastLoadMs.current = Date.now();
       } catch (error) {
         if (cancelled) return;
+        // A failed background refresh keeps the rows already on screen and
+        // says how old they are, rather than blanking a page that was fine.
+        if (background) {
+          setRefreshFailed(true);
+          return;
+        }
         setBreaks([]);
         setLoadError(
           access.isAdmin
@@ -93,21 +140,47 @@ export default function SmokingLogScreen() {
             : "OSHES hasn't set up the smoking log yet.",
         );
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [access.isAdmin, range.from, range.to, spClient]);
+  }, [access.isAdmin, range.from, range.to, spClient, refreshTick]);
+
+  const refresh = () => setRefreshTick((t) => t + 1);
+
+  // Held while a dialog is open or a write is going through — swapping the rows
+  // under someone mid-edit is how an edit lands on a stale copy — and off the
+  // tabs that don't show breaks.
+  const autoPaused = !!editTarget || !!resolveTarget || !!deleteTarget || busy || !(tab === "log" || tab === "totals");
+
+  useEffect(() => {
+    if (autoPaused) return;
+    const tickIfDue = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastLoadMs.current < AUTO_REFRESH_MS - 1000) return;
+      setRefreshTick((t) => t + 1);
+    };
+    const timer = window.setInterval(tickIfDue, AUTO_REFRESH_MS);
+    // Coming back to a tab that sat hidden catches up at once, not up to 30 s later.
+    document.addEventListener("visibilitychange", tickIfDue);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tickIfDue);
+    };
+  }, [autoPaused]);
 
   // Recomputed per render rather than memoized: "now" has to move forward as
   // the clock does, not just when the loaded rows change.
   const now = new Date();
 
   const filters: BreakFilters = useMemo(
-    () => ({ from: range.from, to: range.to, department, area, search, flaggedOnly }),
-    [range, department, area, search, flaggedOnly],
+    () => ({ from: range.from, to: range.to, department, company, area, search, flaggedOnly }),
+    [range, department, company, area, search, flaggedOnly],
   );
   // Not memoized: "now" is fresh every render, so a memo keyed on it would
   // never actually skip the recompute.
@@ -116,6 +189,10 @@ export default function SmokingLogScreen() {
 
   const departments = useMemo(
     () => [...new Set(breaks.map((b) => b.department).filter(Boolean))].sort(),
+    [breaks],
+  );
+  const companies = useMemo(
+    () => [...new Set(breaks.map((b) => b.company).filter(Boolean))].sort(),
     [breaks],
   );
   const areas = useMemo(
@@ -220,6 +297,24 @@ export default function SmokingLogScreen() {
           (tab === "log" || tab === "totals") && (
             <>
               <OnBreakButton outNow={outNow} />
+              <RefreshStatus updatedAt={updatedAt} failed={refreshFailed} />
+              <Button
+                variant="outlined"
+                onClick={refresh}
+                disabled={refreshing || loading}
+                startIcon={
+                  <RefreshIcon
+                    sx={{
+                      animation: refreshing ? "smoking-refresh-spin 0.9s linear infinite" : "none",
+                      "@keyframes smoking-refresh-spin": { to: { transform: "rotate(360deg)" } },
+                      "@media (prefers-reduced-motion: reduce)": { animation: "none" },
+                    }}
+                  />
+                }
+                sx={{ minHeight: 40 }}
+              >
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </Button>
               <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
                 Export to CSV
               </Button>
@@ -286,6 +381,21 @@ export default function SmokingLogScreen() {
             <TextField
               select
               size="small"
+              label="Company"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
+            >
+              <MenuItem value="">All companies</MenuItem>
+              {companies.map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
               label="Area"
               value={area}
               onChange={(e) => setArea(e.target.value)}
@@ -346,7 +456,7 @@ export default function SmokingLogScreen() {
               onDelete={setDeleteTarget}
             />
           ) : (
-            <SmokingTotalsTable totals={computeTotals(filtered, now)} groupByDepartment={groupByDepartment} />
+            <SmokingTotalsDashboard breaks={filtered} from={range.from} to={range.to} now={now} groupByDepartment={groupByDepartment} />
           )}
         </>
       )}

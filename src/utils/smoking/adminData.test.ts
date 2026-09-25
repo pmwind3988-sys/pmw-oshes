@@ -16,7 +16,7 @@ function brk(o: Partial<SmokingBreak>): SmokingBreak {
   };
 }
 
-const ALL: BreakFilters = { from: "2026-09-21T00:00:00Z", to: "2026-09-28T00:00:00Z", department: "", area: "", search: "", flaggedOnly: false };
+const ALL: BreakFilters = { from: "2026-09-21T00:00:00Z", to: "2026-09-28T00:00:00Z", department: "", company: "", area: "", search: "", flaggedOnly: false };
 
 describe("effectiveFlag", () => {
   it("computes open-over-12h at read time", () => {
@@ -53,8 +53,9 @@ describe("filterBreaks", () => {
   it("keeps the date range, newest first", () => {
     expect(filterBreaks(rows, ALL, now).map((r) => r.id)).toEqual(["2", "1", "4"]);
   });
-  it("filters by department, person and flag", () => {
+  it("filters by department, company, person and flag", () => {
     expect(filterBreaks(rows, { ...ALL, department: "OSHES" }, now).map((r) => r.id)).toEqual(["2"]);
+    expect(filterBreaks([...rows, brk({ id: "6", company: "Acme" })], { ...ALL, company: "Acme" }, now).map((r) => r.id)).toEqual(["6"]);
     expect(filterBreaks(rows, { ...ALL, search: "SITI" }, now).map((r) => r.id)).toEqual(["2"]);
     expect(filterBreaks(rows, { ...ALL, flaggedOnly: true }, now).map((r) => r.id)).toEqual(["4"]);
   });

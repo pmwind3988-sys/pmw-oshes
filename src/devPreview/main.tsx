@@ -17,8 +17,17 @@ import CatalogueScreen from "../pages/portal/CatalogueScreen";
 import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
 import FileFormScreen from "../pages/portal/FileFormScreen";
-import { fixtureContext } from "./fixtures";
+import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
+import { NOW, fixtureContext } from "./fixtures";
+import { sampleBreaks } from "./smokingFixtures";
 import "../index.css";
+
+/** Monday 00:00 Malaysian time of this week, and the Monday after. */
+const SMOKING_WEEK = (() => {
+  const shifted = new Date(NOW.getTime() + 8 * 3_600_000);
+  const monday = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() - ((shifted.getUTCDay() + 6) % 7)) - 8 * 3_600_000;
+  return { from: new Date(monday).toISOString(), to: new Date(monday + 7 * 86_400_000).toISOString() };
+})();
 
 const SCREENS = {
   home: <HomeScreen />,
@@ -33,6 +42,9 @@ const SCREENS = {
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
   // MSAL session. Nothing here can stand in for that.
   file: <FileFormScreen />,
+  // The smoking log itself reads SharePoint directly; its Totals dashboard is
+  // shown on its own, over a sample week.
+  smoking: <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
 } as const;
 
 type ScreenKey = keyof typeof SCREENS;

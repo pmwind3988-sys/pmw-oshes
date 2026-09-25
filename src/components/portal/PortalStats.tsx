@@ -296,10 +296,13 @@ export function IntakeChart({
   days,
   onPickDay,
   height = 108,
+  unit = "filed",
 }: {
   days: DayPoint[];
   onPickDay?: (day: DayPoint) => void;
   height?: number;
+  /** Tooltip and label word after the count — "3 filed", "3 breaks". */
+  unit?: string;
 }) {
   const busiest = Math.max(...days.map((day) => day.count), 0);
   const ticks = axisTicks(busiest);
@@ -357,12 +360,12 @@ export function IntakeChart({
             {days.map((day) => {
               const pressable = Boolean(onPickDay) && day.count > 0;
               return (
-                <Tooltip key={day.key} title={`${day.label}: ${day.count} filed`} enterDelay={150}>
+                <Tooltip key={day.key} title={`${day.label}: ${day.count} ${unit}`} enterDelay={150}>
                   <Box
                     component={pressable ? "button" : "div"}
                     type={pressable ? "button" : undefined}
                     onClick={pressable ? () => onPickDay?.(day) : undefined}
-                    aria-label={pressable ? `${day.count} filed on ${day.label}` : undefined}
+                    aria-label={pressable ? `${day.count} ${unit} on ${day.label}` : undefined}
                     sx={{
                       flex: 1,
                       minWidth: 0,
