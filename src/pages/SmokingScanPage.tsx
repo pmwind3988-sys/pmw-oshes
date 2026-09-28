@@ -51,9 +51,44 @@ type Stage = "checking" | "loading" | "signin" | "profile" | "home" | "result" |
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 /**
- * How each result reads at arm's length, outdoors. Every tone carries its own
- * glyph as well as its hue, so IN and OUT still differ on a cracked screen in
- * sunlight or to someone who cannot tell green from blue.
+ * The last scan this tab recorded. The poster's code leaves the address bar the
+ * moment a scan is recorded, so a refresh cannot record another; this is what
+ * the refreshed page shows instead. Per tab, and gone when the tab closes.
+ */
+const LAST_SCAN_KEY = "oshes.smokingLastScan";
+
+function rememberScan(view: OutcomeView): void {
+  try {
+    sessionStorage.setItem(LAST_SCAN_KEY, JSON.stringify(view));
+  } catch {
+    // Private window: a refresh shows the home screen instead. Still nothing is recorded.
+  }
+}
+
+function recallScan(): OutcomeView | null {
+  try {
+    const raw = sessionStorage.getItem(LAST_SCAN_KEY);
+    return raw ? (JSON.parse(raw) as OutcomeView) : null;
+  } catch {
+    return null;
+  }
+}
+
+function forgetScan(): void {
+  try {
+    sessionStorage.removeItem(LAST_SCAN_KEY);
+  } catch {
+    // As above.
+  }
+}
+
+const REPLAY_HINT = "Refreshing doesn't record a scan. Scan the poster to record your next one.";
+
+/**
+ * How each result reads at arm's length, outdoors. A recorded IN or OUT shows
+ * the animated tick in its own hue, and its large "IN"/"OUT" headline keeps the
+ * two apart on a cracked screen in sunlight or for someone who cannot tell green
+ * from blue. The other tones carry their own glyph.
  */
 const TONE: Record<OutcomeView["tone"], { ink: string; fill: string; wash: string; icon: IconComponent }> = {
   in: { ink: editorial.success, fill: editorial.successFill, wash: editorial.successWash, icon: LogIn },
@@ -66,6 +101,53 @@ const riseIn = keyframes`
   from { transform: translateY(6px); opacity: 0; }
   to { transform: none; opacity: 1; }
 `;
+
+const popIn = keyframes`
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+`;
+
+const drawCheck = keyframes`
+  to { stroke-dashoffset: 0; }
+`;
+
+/**
+ * A success that lands: the disc pops in, then the tick draws itself across it.
+ * With reduced motion it simply appears, already drawn.
+ */
+function SuccessCheck({ fill, size = 72 }: { fill: string; size?: number }) {
+  return (
+    <Box
+      aria-hidden="true"
+      sx={{
+        display: "grid",
+        placeItems: "center",
+        width: size,
+        height: size,
+        borderRadius: radius.full,
+        backgroundColor: fill,
+        color: editorial.onStatus,
+        boxShadow: `0 6px 16px color-mix(in srgb, ${fill} 28%, transparent)`,
+        animation: `${popIn} 420ms cubic-bezier(0.16, 1, 0.3, 1) both`,
+        "& polyline": {
+          strokeDasharray: 24,
+          strokeDashoffset: 24,
+          animation: `${drawCheck} 360ms 260ms cubic-bezier(0.65, 0, 0.35, 1) forwards`,
+        },
+        "@media (prefers-reduced-motion: reduce)": {
+          animation: "none",
+          "& polyline": { animation: "none", strokeDashoffset: 0 },
+        },
+      }}
+    >
+      <svg width={size / 2} height={size / 2} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </Box>
+  );
+}
 
 /** The primary action's size: a glove-sized target, per DESIGN.md's public QR flow. */
 const TAP = { minHeight: 48 } as const;
@@ -124,17 +206,23 @@ function Pending({ label }: { label: string }) {
  * smoker in, takes their profile, and tells them to scan a poster to start.
  */
 export default function SmokingScanPage() {
-  const [params] = useSearchParams();
-  const areaCode = (params.get("area") ?? "").trim().toUpperCase();
+  const [params, setParams] = useSearchParams();
+  // Read once: the address bar loses it after the scan is recorded, but "Try
+  // again" and a profile edit still belong to the poster that opened the page.
+  const [areaCode] = useState(() => (params.get("area") ?? "").trim().toUpperCase());
+  // Opened without a poster, after a scan in this same tab: that is a refresh.
+  const [replay] = useState(() => (!areaCode && readStoredPass() ? recallScan() : null));
   const [stage, setStage] = useState<Stage>(() => {
     if (areaCode) return "checking";
+    if (replay) return "result";
     return readStoredPass() ? "loading" : "signin";
   });
   const [areaName, setAreaName] = useState("");
   const [posterOpen, setPosterOpen] = useState(false);
   const [homeName, setHomeName] = useState("");
   const [error, setError] = useState("");
-  const [view, setView] = useState<OutcomeView | null>(null);
+  const [view, setView] = useState<OutcomeView | null>(() => (replay ? { ...replay, hint: REPLAY_HINT } : null));
+  const [replayed, setReplayed] = useState(Boolean(replay));
   const [draft, setDraft] = useState<ProfileDraft>({ fullName: "", department: "", position: "", staffId: "", company: "PMW" });
   const [departments, setDepartments] = useState<string[]>([]);
   const [departmentsFromList, setDepartmentsFromList] = useState(true);
@@ -202,15 +290,23 @@ export default function SmokingScanPage() {
         await openProfile(null);
         return;
       }
+      const next = describeOutcome(outcome);
+      // Recorded, or refused as a repeat: take the poster out of the address
+      // bar and history, so pulling to refresh cannot record another scan.
+      if (outcome.result !== "blocked" && outcome.result !== "retired-area") {
+        rememberScan(next);
+        setParams({}, { replace: true });
+      }
       setBlocked(false);
-      setView(describeOutcome(outcome));
+      setReplayed(false);
+      setView(next);
       setStage("result");
     } catch (e) {
       fail(e);
     } finally {
       setBusy(false);
     }
-  }, [areaCode, fail, openProfile]);
+  }, [areaCode, fail, openProfile, setParams]);
 
   /** Opened without a poster: confirm the saved pass still holds, then greet or ask for a profile. */
   const loadHome = useCallback(async () => {
@@ -263,9 +359,9 @@ export default function SmokingScanPage() {
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    const start = areaCode ? checkThenScan : readStoredPass() ? loadHome : null;
+    const start = areaCode ? checkThenScan : !replay && readStoredPass() ? loadHome : null;
     if (start) void start();
-  }, [areaCode, checkThenScan, loadHome]);
+  }, [areaCode, replay, checkThenScan, loadHome]);
 
   /** "Try again" repeats whatever failed: the poster check, the scan, or loading the home screen. */
   const retry = () => {
@@ -351,6 +447,7 @@ export default function SmokingScanPage() {
 
   const signOut = () => {
     clearStoredPass();
+    forgetScan();
     setError("");
     setStage("signin");
   };
@@ -534,7 +631,10 @@ export default function SmokingScanPage() {
 
           {stage === "home" && (
             <>
-              <Heading>{homeName ? `You're signed in, ${homeName}.` : "You're signed in."}</Heading>
+              <Stack sx={{ alignItems: "center", mb: 2 }}>
+                <SuccessCheck fill={editorial.successFill} size={64} />
+              </Stack>
+              <Heading sx={{ textAlign: "center" }}>{homeName ? `You're signed in, ${homeName}.` : "You're signed in."}</Heading>
               <Stack sx={{ ...sunkenSx, flexDirection: "row", alignItems: "center", gap: 2, p: 2, mt: 3 }}>
                 <Box
                   sx={{
@@ -573,20 +673,24 @@ export default function SmokingScanPage() {
                   backgroundColor: tone.wash,
                 }}
               >
-                <Box
-                  sx={{
-                    display: "grid",
-                    placeItems: "center",
-                    width: 64,
-                    height: 64,
-                    borderRadius: radius.full,
-                    backgroundColor: tone.fill,
-                    color: editorial.onStatus,
-                    boxShadow: `0 6px 16px color-mix(in srgb, ${tone.fill} 28%, transparent)`,
-                  }}
-                >
-                  <ToneIcon size={30} />
-                </Box>
+                {!blocked && !replayed && (view.tone === "in" || view.tone === "out") ? (
+                  <SuccessCheck fill={tone.fill} />
+                ) : (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      placeItems: "center",
+                      width: 64,
+                      height: 64,
+                      borderRadius: radius.full,
+                      backgroundColor: tone.fill,
+                      color: editorial.onStatus,
+                      boxShadow: `0 6px 16px color-mix(in srgb, ${tone.fill} 28%, transparent)`,
+                    }}
+                  >
+                    <ToneIcon size={30} />
+                  </Box>
+                )}
                 <Heading
                   sx={{
                     fontSize: view.tone === "in" || view.tone === "out" ? 44 : 26,
