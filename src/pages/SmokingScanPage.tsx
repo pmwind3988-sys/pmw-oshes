@@ -85,14 +85,15 @@ function forgetScan(): void {
 const REPLAY_HINT = "Refreshing doesn't record a scan. Scan the poster to record your next one.";
 
 /**
- * How each result reads at arm's length, outdoors. A recorded IN or OUT shows
- * the animated tick in its own hue, and its large "IN"/"OUT" headline keeps the
- * two apart on a cracked screen in sunlight or for someone who cannot tell green
+ * How each result reads at arm's length, outdoors. A recorded check-out (break
+ * started) or check-in (break over) shows the animated tick in its own hue, and
+ * its "Checked out"/"Checked in" headline over the large time keeps the two
+ * apart on a cracked screen in sunlight or for someone who cannot tell green
  * from blue. The other tones carry their own glyph.
  */
 const TONE: Record<OutcomeView["tone"], { ink: string; fill: string; wash: string; icon: IconComponent }> = {
-  in: { ink: editorial.success, fill: editorial.successFill, wash: editorial.successWash, icon: LogIn },
-  out: { ink: editorial.pmwBlueDark, fill: editorial.pmwBlue, wash: editorial.blueWash, icon: LogOut },
+  in: { ink: editorial.success, fill: editorial.successFill, wash: editorial.successWash, icon: LogOut },
+  out: { ink: editorial.pmwBlueDark, fill: editorial.pmwBlue, wash: editorial.blueWash, icon: LogIn },
   info: { ink: editorial.ink, fill: editorial.muted, wash: editorial.neutralWash, icon: Clock },
   warn: { ink: editorial.warning, fill: editorial.warningFill, wash: editorial.warningWash, icon: AlertTriangle },
 };
@@ -199,8 +200,8 @@ function Pending({ label }: { label: string }) {
  *
  * From a poster (`/smoke?area=CODE`) the poster is checked first: a retired or
  * unknown one says so before anyone is asked to sign in. A live one asks for a
- * sign-in once and a profile once, then every scan is IN or OUT — the server
- * decides which.
+ * sign-in once and a profile once, then every scan checks the smoker out (break
+ * starts) or back in (break ends) — the server decides which.
  *
  * Opened directly (`/smoke`) there is nothing to record: the page signs the
  * smoker in, takes their profile, and tells them to scan a poster to start.
@@ -693,35 +694,25 @@ export default function SmokingScanPage() {
                 )}
                 <Heading
                   sx={{
-                    fontSize: view.tone === "in" || view.tone === "out" ? 44 : 26,
+                    fontSize: view.time ? 30 : 26,
                     fontWeight: 800,
                     lineHeight: 1.1,
                     color: tone.ink,
-                    fontVariantNumeric: "tabular-nums",
                     mt: 0.5,
                   }}
                 >
                   {view.headline}
                 </Heading>
+                {view.time && (
+                  <Typography
+                    aria-label={`at ${view.time}`}
+                    sx={{ fontSize: 52, fontWeight: 800, lineHeight: 1, color: tone.ink, fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {view.time}
+                  </Typography>
+                )}
                 <Typography sx={{ fontSize: 17, fontWeight: 600, lineHeight: 1.45, maxWidth: "32ch" }}>{view.detail}</Typography>
               </Stack>
-
-              {view.note && (
-                <Stack
-                  sx={{
-                    flexDirection: "row",
-                    gap: 1.25,
-                    mt: 2,
-                    p: 1.5,
-                    borderRadius: radius.base,
-                    border: `1px solid color-mix(in srgb, ${editorial.warning} 35%, transparent)`,
-                    backgroundColor: editorial.warningWash,
-                  }}
-                >
-                  <AlertCircle size={18} style={{ flex: "none", color: editorial.warning, marginTop: 2 }} />
-                  <Typography sx={{ fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>{view.note}</Typography>
-                </Stack>
-              )}
 
               {view.hint && (
                 <Stack sx={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 1, mt: 2, color: editorial.muted }}>

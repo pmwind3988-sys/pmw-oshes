@@ -242,7 +242,9 @@ export function PageHeader({
         spacing={{ xs: 1.5, sm: 2 }}
         sx={{ alignItems: { sm: "flex-end" }, justifyContent: "space-between", minWidth: 0 }}
       >
-        <Box sx={{ minWidth: 0 }}>
+        {/* Keeps a readable width when the actions are wide: they wrap before
+            the title breaks mid-word. */}
+        <Box sx={{ minWidth: { xs: 0, sm: 200 }, flex: { sm: "1 1 200px" } }}>
           {eyebrow && (
             <Typography
               sx={{
@@ -280,8 +282,7 @@ export function PageHeader({
         {(meta || actions) && (
           <Stack
             direction="row"
-            spacing={1.25}
-            sx={{ alignItems: "center", flex: "none", flexWrap: "wrap", rowGap: 1 }}
+            sx={{ alignItems: "center", flex: "0 1 auto", flexWrap: "wrap", gap: 1.25, justifyContent: { sm: "flex-end" } }}
           >
             {meta && (
               <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap" }}>{meta}</Typography>

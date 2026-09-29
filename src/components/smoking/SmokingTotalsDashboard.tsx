@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Box, Stack } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
-import { radius } from "../../theme/surfaces";
+import { panelSx, radius } from "../../theme/surfaces";
 import { SectionLabel, Widget, WidgetGrid } from "../Widget";
 import { BarRows, IntakeChart, StatTile, StatTileRow, type BarRow } from "../portal/PortalStats";
 import SmokingHeatmap, { type HeatMetric } from "./SmokingHeatmap";
 import SmokingTotalsTable from "./SmokingTotalsTable";
+import { useIsPhone } from "./SmokingPaging";
 import { computeTotals } from "../../utils/smoking/adminData";
 import { breakHeatmap, breakSummary, breakdownRows, breaksPerDay, type BreakdownBy } from "../../utils/smoking/analytics";
 import type { SmokingBreak } from "../../utils/smoking/schema";
@@ -62,6 +63,31 @@ function Segmented<T extends string>({
   );
 }
 
+/** The five figures as one short strip, for a phone, where five tiles fill the screen. */
+function SummaryStrip({ items }: { items: Array<{ value: string | number; label: string; alert?: boolean }> }) {
+  return (
+    <Box sx={{ ...panelSx, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", rowGap: 1.25, columnGap: 1, p: 1.5 }}>
+      {items.map((item) => (
+        <Box key={item.label} sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: item.alert ? editorial.error : editorial.ink, fontVariantNumeric: "tabular-nums" }}>
+            {item.value}
+          </Typography>
+          <Typography sx={{ fontSize: 11.5, color: editorial.muted, mt: 0.25 }}>{item.label}</Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+type PhoneSection = "table" | "when" | "days" | "where";
+
+const PHONE_SECTIONS: Array<{ value: PhoneSection; label: string }> = [
+  { value: "table", label: "Totals" },
+  { value: "when", label: "By hour" },
+  { value: "days", label: "By day" },
+  { value: "where", label: "Breakdown" },
+];
+
 const BREAKDOWN_OPTIONS: Array<{ value: BreakdownBy; label: string }> = [
   { value: "department", label: "Department" },
   { value: "company", label: "Company" },
@@ -81,15 +107,21 @@ export default function SmokingTotalsDashboard({
   to,
   now,
   groupByDepartment,
+  resetKey = "",
 }: {
   breaks: SmokingBreak[];
   from: string;
   to: string;
   now: Date;
   groupByDepartment: boolean;
+  resetKey?: string;
 }) {
   const [metric, setMetric] = useState<HeatMetric>("breaks");
   const [by, setBy] = useState<BreakdownBy>("department");
+  // A phone shows one section at a time under the tiles, not four cards to scroll past.
+  const phone = useIsPhone();
+  const [section, setSection] = useState<PhoneSection>("table");
+  const show = (s: PhoneSection) => !phone || section === s;
 
   const summary = breakSummary(breaks, now);
   const breakdown: BarRow[] = breakdownRows(breaks, by, now).map((r) => ({
@@ -104,6 +136,17 @@ export default function SmokingTotalsDashboard({
 
   return (
     <Stack spacing={2}>
+      {phone ? (
+        <SummaryStrip
+          items={[
+            { value: summary.breaks, label: summary.open ? `Breaks (+${summary.open} out)` : "Breaks" },
+            { value: tileTime(summary.totalMinutes), label: "Total time" },
+            { value: `${summary.averageMinutes} min`, label: "Average" },
+            { value: summary.people, label: "People" },
+            { value: summary.flagged, label: "Flagged", alert: summary.flagged > 0 },
+          ]}
+        />
+      ) : (
       <StatTileRow min={128}>
         <StatTile value={summary.breaks} label="Breaks" hint={summary.open ? `+${summary.open} still out` : "closed and counted"} />
         <StatTile value={tileTime(summary.totalMinutes)} label="Total time" hint={`${summary.totalMinutes} min, flagged left out`} />
@@ -111,7 +154,11 @@ export default function SmokingTotalsDashboard({
         <StatTile value={summary.people} label="People" hint="took at least one break" />
         <StatTile value={summary.flagged} label="Flagged" hint="counted separately" tone={summary.flagged ? "alert" : "muted"} />
       </StatTileRow>
+      )}
 
+      {phone && <Segmented label="Show" value={section} onChange={setSection} options={PHONE_SECTIONS} />}
+
+      {show("when") && (
       <Widget
         title="When people take breaks"
         caption="each break by the hour it started, Malaysian time"
@@ -129,11 +176,16 @@ export default function SmokingTotalsDashboard({
       >
         <SmokingHeatmap heatmap={breakHeatmap(breaks, now)} metric={metric} />
       </Widget>
+      )}
 
+      {(show("days") || show("where")) && (
       <WidgetGrid min={340}>
+        {show("days") && (
         <Widget title="Breaks per day" caption="every break by the day it started">
           <IntakeChart days={breaksPerDay(breaks, from, to, now)} unit="breaks" height={132} />
         </Widget>
+        )}
+        {show("where") && (
         <Widget title="Where the time goes" caption="counted minutes, top 10">
           {/* In the body, not the header: four choices beside the title would
               push it into a one-word column on a phone. */}
@@ -142,12 +194,16 @@ export default function SmokingTotalsDashboard({
           </Box>
           <BarRows rows={breakdown} emptyNote="No counted breaks in these filters." valueSuffix="min" />
         </Widget>
+        )}
       </WidgetGrid>
+      )}
 
+      {show("table") && (
       <Box>
         <SectionLabel sx={{ mb: 1 }}>{groupByDepartment ? "By department" : "By person"}</SectionLabel>
-        <SmokingTotalsTable totals={computeTotals(breaks, now)} groupByDepartment={groupByDepartment} />
+        <SmokingTotalsTable totals={computeTotals(breaks, now)} groupByDepartment={groupByDepartment} resetKey={resetKey} />
       </Box>
+      )}
     </Stack>
   );
 }

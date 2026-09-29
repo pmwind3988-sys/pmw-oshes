@@ -78,7 +78,7 @@ describe("recordScan", () => {
     const outcome = await recordScan(store, { email: ALI.email, areaCode: "BBB222", now: at("2026-09-24T02:49:00Z") });
     expect(outcome).toEqual({
       result: "out", timeIn: "2026-09-24T02:42:00.000Z", timeOut: "2026-09-24T02:49:00.000Z",
-      areaName: "Block B", durationMinutes: 7, flagged: false,
+      areaName: "Block B", durationMinutes: 7,
     });
     expect(store.breaks[0]).toMatchObject({ areaOutCode: "BBB222", areaOutName: "Block B", durationMinutes: 7 });
   });
@@ -94,7 +94,7 @@ describe("recordScan", () => {
     await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-23T02:00:00Z") });
     const outcome = await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
     expect(outcome).toEqual({
-      result: "in", timeIn: "2026-09-24T02:00:00.000Z", areaName: "Block A", previousMissedScanOut: true,
+      result: "in", timeIn: "2026-09-24T02:00:00.000Z", areaName: "Block A",
     });
     expect(store.breaks).toHaveLength(2);
     expect(store.breaks[0]).toMatchObject({
@@ -108,7 +108,7 @@ describe("recordScan", () => {
     await recordScan(store, { email: ALI.email, areaCode: "AAA111", now: at("2026-09-24T02:00:00Z") });
     const outcome = await recordScan(store, { email: ALI.email, areaCode: "BBB222", now: at("2026-09-24T15:00:00Z") });
     expect(outcome).toEqual({
-      result: "in", timeIn: "2026-09-24T15:00:00.000Z", areaName: "Block B", previousMissedScanOut: true,
+      result: "in", timeIn: "2026-09-24T15:00:00.000Z", areaName: "Block B",
     });
     expect(store.breaks).toHaveLength(2);
     expect(store.breaks[0]).toMatchObject({
@@ -190,12 +190,16 @@ describe("recordScan with OSHES limits", () => {
     expect(store.lastClosedSince.at(-1)?.toISOString()).toBe("2026-09-24T01:30:00.000Z");
   });
 
-  it("records a break shorter than the minimum, and flags it", async () => {
-    store.limits = { ...DEFAULT_SCAN_LIMITS, minBreakSeconds: 300 };
+  it("records a break longer than the maximum, and flags it", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, maxBreakSeconds: 300 };
     await scan("AAA111", "2026-09-24T02:00:00Z");
-    const outcome = await scan("AAA111", "2026-09-24T02:03:00Z");
-    expect(outcome).toMatchObject({ result: "out", durationMinutes: 3, flagged: true });
-    expect(store.breaks[0].flagReason).toBe("Shorter than the 5 min minimum");
+    const outcome = await scan("AAA111", "2026-09-24T02:08:00Z");
+    // Flagged for OSHES in the log, but the smoker's phone is never told.
+    expect(outcome).toEqual({
+      result: "out", timeIn: "2026-09-24T02:00:00.000Z", timeOut: "2026-09-24T02:08:00.000Z",
+      areaName: "Block A", durationMinutes: 8,
+    });
+    expect(store.breaks[0].flagReason).toBe("Longer than the 5 min maximum");
   });
 
   it("keeps the early-start flag when that break is scanned out", async () => {
@@ -204,7 +208,7 @@ describe("recordScan with OSHES limits", () => {
     await scan("AAA111", "2026-09-24T02:05:00Z");
     await scan("AAA111", "2026-09-24T02:15:00Z");
     const outcome = await scan("AAA111", "2026-09-24T02:25:00Z");
-    expect(outcome).toMatchObject({ result: "out", flagged: true });
+    expect(outcome).not.toHaveProperty("flagged");
     expect(store.breaks[1].flagReason).toBe("Started 10 min after the last break (rest is 30 min)");
   });
 

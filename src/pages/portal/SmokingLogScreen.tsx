@@ -16,6 +16,7 @@ import SmokingLogTable from "../../components/smoking/SmokingLogTable";
 import SmokingPeopleTab from "../../components/smoking/SmokingPeopleTab";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import SmokingTotalsDashboard from "../../components/smoking/SmokingTotalsDashboard";
+import { useIsPhone } from "../../components/smoking/SmokingPaging";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   applyEdit,
@@ -55,7 +56,7 @@ const isoToMytDate = (iso: string) => isoToMytInput(iso).slice(0, 10);
  * "Updated 10:42 · refreshes every 30 s", or — when the last try failed — how
  * old the rows on screen are, so nobody reads a stale count as the live one.
  */
-function RefreshStatus({ updatedAt, failed }: { updatedAt: Date | null; failed: boolean }) {
+function RefreshStatus({ updatedAt, failed, short = false }: { updatedAt: Date | null; failed: boolean; short?: boolean }) {
   if (!updatedAt) return null;
   const at = isoToMytInput(updatedAt.toISOString()).slice(11, 16);
   return (
@@ -63,7 +64,7 @@ function RefreshStatus({ updatedAt, failed }: { updatedAt: Date | null; failed: 
       role="status"
       sx={{ fontSize: 12, whiteSpace: "nowrap", color: failed ? editorial.warning : editorial.muted, fontWeight: failed ? 700 : 400 }}
     >
-      {failed ? `Couldn't refresh — showing ${at}` : `Updated ${at} · refreshes every 30 s`}
+      {failed ? `Couldn't refresh — showing ${at}` : short ? `Updated ${at}` : `Updated ${at} · refreshes every 30 s`}
     </Typography>
   );
 }
@@ -94,6 +95,11 @@ export default function SmokingLogScreen() {
   const [search, setSearch] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [groupByDepartment, setGroupByDepartment] = useState(false);
+  // On a phone the filters past the dates fold behind one button, so the
+  // first rows are on screen without scrolling past six fields.
+  const phone = useIsPhone();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const extraFilters = [department, company, area, search.trim(), flaggedOnly].filter(Boolean).length;
 
   const [editTarget, setEditTarget] = useState<SmokingBreak | null>(null);
   const [resolveTarget, setResolveTarget] = useState<SmokingBreak | null>(null);
@@ -185,6 +191,7 @@ export default function SmokingLogScreen() {
   // Not memoized: "now" is fresh every render, so a memo keyed on it would
   // never actually skip the recompute.
   const filtered = filterBreaks(breaks, filters, now);
+  const resetKey = JSON.stringify(filters);
   const outNow = currentlyOut(breaks, now);
 
   const departments = useMemo(
@@ -267,7 +274,7 @@ export default function SmokingLogScreen() {
         reference: breakReference(b),
         who: userEmail,
         event: `Smoking break deleted — ${b.fullName} <${b.email}>, ${b.areaInName} ${formatMalaysiaDateTime(b.timeIn)} → ${
-          b.timeOut ? formatMalaysiaDateTime(b.timeOut) : "no scan-out"
+          b.timeOut ? formatMalaysiaDateTime(b.timeOut) : "no check-in"
         }, ${b.durationMinutes ?? "—"} min`,
       });
       appendAudit(entry);
@@ -292,14 +299,15 @@ export default function SmokingLogScreen() {
     <Box sx={{ maxWidth: 1200 }}>
       <PageHeader
         title="Smoking log"
-        subtitle="every break scanned in and out, with edits, flags and deletions kept in the audit trail"
+        subtitle="every break, from check-out to check-in"
         actions={
           (tab === "log" || tab === "totals") && (
             <>
               <OnBreakButton outNow={outNow} />
-              <RefreshStatus updatedAt={updatedAt} failed={refreshFailed} />
+              <RefreshStatus updatedAt={updatedAt} failed={refreshFailed} short={phone} />
               <Button
                 variant="outlined"
+                size={phone ? "small" : "medium"}
                 onClick={refresh}
                 disabled={refreshing || loading}
                 startIcon={
@@ -315,8 +323,8 @@ export default function SmokingLogScreen() {
               >
                 {refreshing ? "Refreshing…" : "Refresh"}
               </Button>
-              <Button variant="outlined" onClick={handleExport} sx={{ minHeight: 40 }}>
-                Export to CSV
+              <Button variant="outlined" size={phone ? "small" : "medium"} onClick={handleExport} sx={{ minHeight: 40 }}>
+                {phone ? "Export" : "Export to CSV"}
               </Button>
             </>
           )
@@ -326,7 +334,9 @@ export default function SmokingLogScreen() {
       <Tabs
         value={tab}
         onChange={(_, next: Tab_) => setTab(next)}
-        sx={{ mb: 2, minHeight: 42, "& .MuiTab-root": { minHeight: 42, fontSize: 13, fontWeight: 700 } }}
+        variant="scrollable"
+        scrollButtons={false}
+        sx={{ mb: 2, minHeight: 42, "& .MuiTab-root": { minHeight: 42, fontSize: 13, fontWeight: 700, minWidth: { xs: 0, sm: 90 }, px: { xs: 1.25, sm: 2 } } }}
       >
         <Tab value="log" label="Log" />
         <Tab value="totals" label="Totals" />
@@ -363,75 +373,89 @@ export default function SmokingLogScreen() {
               slotProps={{ inputLabel: { shrink: true } }}
               sx={{ width: { xs: "calc(50% - 6px)", sm: 160 } }}
             />
-            <TextField
-              select
-              size="small"
-              label="Department"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              sx={{ width: { xs: "calc(50% - 6px)", sm: 190 } }}
-            >
-              <MenuItem value="">All departments</MenuItem>
-              {departments.map((d) => (
-                <MenuItem key={d} value={d}>
-                  {d}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Company"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
-            >
-              <MenuItem value="">All companies</MenuItem>
-              {companies.map((c) => (
-                <MenuItem key={c} value={c}>
-                  {c}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Area"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
-            >
-              <MenuItem value="">All areas</MenuItem>
-              {areas.map((a) => (
-                <MenuItem key={a} value={a}>
-                  {a}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              size="small"
-              label="Search name or email"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
-            />
-            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontWeight: 700 }}>Flagged only</Typography>
-              <Switch
-                checked={flaggedOnly}
-                onChange={(e) => setFlaggedOnly(e.target.checked)}
-                slotProps={{ input: { "aria-label": "Flagged only" } }}
-              />
-            </Stack>
-            {tab === "totals" && (
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontWeight: 700 }}>Group by department</Typography>
-                <Switch
-                  checked={groupByDepartment}
-                  onChange={(e) => setGroupByDepartment(e.target.checked)}
-                  slotProps={{ input: { "aria-label": "Group by department" } }}
+            {phone && (
+              <Button
+                variant={extraFilters ? "contained" : "outlined"}
+                aria-expanded={filtersOpen}
+                onClick={() => setFiltersOpen((open) => !open)}
+                sx={{ minHeight: 40, width: "100%" }}
+              >
+                {filtersOpen ? "Hide filters" : extraFilters ? `More filters (${extraFilters} on)` : "More filters"}
+              </Button>
+            )}
+            {(!phone || filtersOpen) && (
+              <>
+                <TextField
+                  select
+                  size="small"
+                  label="Department"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  sx={{ width: { xs: "calc(50% - 6px)", sm: 190 } }}
+                >
+                  <MenuItem value="">All departments</MenuItem>
+                  {departments.map((d) => (
+                    <MenuItem key={d} value={d}>
+                      {d}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
+                >
+                  <MenuItem value="">All companies</MenuItem>
+                  {companies.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Area"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
+                >
+                  <MenuItem value="">All areas</MenuItem>
+                  {areas.map((a) => (
+                    <MenuItem key={a} value={a}>
+                      {a}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  size="small"
+                  label="Search name or email"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
                 />
-              </Stack>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontWeight: 700 }}>Flagged only</Typography>
+                  <Switch
+                    checked={flaggedOnly}
+                    onChange={(e) => setFlaggedOnly(e.target.checked)}
+                    slotProps={{ input: { "aria-label": "Flagged only" } }}
+                  />
+                </Stack>
+                {tab === "totals" && (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontWeight: 700 }}>Group by department</Typography>
+                    <Switch
+                      checked={groupByDepartment}
+                      onChange={(e) => setGroupByDepartment(e.target.checked)}
+                      slotProps={{ input: { "aria-label": "Group by department" } }}
+                    />
+                  </Stack>
+                )}
+              </>
             )}
           </Stack>
 
@@ -454,9 +478,17 @@ export default function SmokingLogScreen() {
               onEdit={setEditTarget}
               onResolve={setResolveTarget}
               onDelete={setDeleteTarget}
+              resetKey={resetKey}
             />
           ) : (
-            <SmokingTotalsDashboard breaks={filtered} from={range.from} to={range.to} now={now} groupByDepartment={groupByDepartment} />
+            <SmokingTotalsDashboard
+              breaks={filtered}
+              from={range.from}
+              to={range.to}
+              now={now}
+              groupByDepartment={groupByDepartment}
+              resetKey={resetKey}
+            />
           )}
         </>
       )}

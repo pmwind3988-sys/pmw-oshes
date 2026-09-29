@@ -103,8 +103,8 @@ export default function BreakEditDialog({
         <Stack spacing={2} sx={{ pt: 1 }}>
           {problem && <Alert severity="error">{problem}</Alert>}
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            {field("timeIn", "Time in (MYT)", "datetime-local")}
-            {field("timeOut", "Time out (MYT)", "datetime-local")}
+            {field("timeIn", "Checked out (MYT)", "datetime-local")}
+            {field("timeOut", "Checked in (MYT)", "datetime-local")}
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             {field("areaInName", "Area in")}

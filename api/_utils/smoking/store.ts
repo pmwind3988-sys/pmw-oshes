@@ -181,7 +181,7 @@ export function createGraphSmokingStore(getToken: () => Promise<string> = getGra
       const f = item?.fields ?? {};
       const limits = normalizeScanLimits({
         ignoreRepeatSeconds: f.IgnoreRepeatSeconds,
-        minBreakSeconds: f.MinBreakSeconds,
+        maxBreakSeconds: f.MaxBreakSeconds,
         restSeconds: f.RestSeconds,
       });
       limitsCache = { at: Date.now(), limits };

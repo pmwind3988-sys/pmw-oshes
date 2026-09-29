@@ -62,29 +62,29 @@ describe("decideScan", () => {
   it("still just closes a break that is exactly 12 hours old", () => {
     const open = openBreak("2026-09-23T02:00:00Z");
     const decision = decideScan(open, at("2026-09-23T14:00:00Z"));
-    expect(decision).toMatchObject({ kind: "close", durationMinutes: 720, flagReason: "" });
+    expect(decision).toMatchObject({ kind: "close", durationMinutes: 720, flagReason: "Longer than the 1 h maximum" });
   });
 
   it("still just closes a break that is under 12 hours old", () => {
     const open = openBreak("2026-09-23T02:00:00Z");
     const decision = decideScan(open, at("2026-09-23T13:59:00Z"));
-    expect(decision).toMatchObject({ kind: "close", durationMinutes: 719, flagReason: "" });
+    expect(decision).toMatchObject({ kind: "close", durationMinutes: 719, flagReason: "Longer than the 1 h maximum" });
   });
 });
 
 describe("scan limits", () => {
   const limits = (over: Partial<ScanLimits> = {}): ScanLimits => ({ ...DEFAULT_SCAN_LIMITS, ...over });
 
-  it("defaults to today's behaviour: ignore repeats for a minute, no other limits", () => {
-    expect(DEFAULT_SCAN_LIMITS).toEqual({ ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 });
+  it("defaults to ignoring repeats for a minute and flagging breaks over an hour", () => {
+    expect(DEFAULT_SCAN_LIMITS).toEqual({ ignoreRepeatSeconds: 60, maxBreakSeconds: 3600, restSeconds: 0 });
   });
 
   it("reads stored values as whole seconds, falling back or clamping when they make no sense", () => {
-    expect(normalizeScanLimits({ ignoreRepeatSeconds: "30", minBreakSeconds: 300.7, restSeconds: 1800 }))
-      .toEqual({ ignoreRepeatSeconds: 30, minBreakSeconds: 300, restSeconds: 1800 });
-    expect(normalizeScanLimits({ ignoreRepeatSeconds: "nonsense", minBreakSeconds: -5, restSeconds: null }))
+    expect(normalizeScanLimits({ ignoreRepeatSeconds: "30", maxBreakSeconds: 300.7, restSeconds: 1800 }))
+      .toEqual({ ignoreRepeatSeconds: 30, maxBreakSeconds: 300, restSeconds: 1800 });
+    expect(normalizeScanLimits({ ignoreRepeatSeconds: "nonsense", maxBreakSeconds: -5, restSeconds: null }))
       .toEqual(DEFAULT_SCAN_LIMITS);
-    expect(normalizeScanLimits({ ignoreRepeatSeconds: 99_999, minBreakSeconds: 99_999_999, restSeconds: 99_999_999 }))
+    expect(normalizeScanLimits({ ignoreRepeatSeconds: 99_999, maxBreakSeconds: 99_999_999, restSeconds: 99_999_999 }))
       .toEqual(SCAN_LIMIT_MAX);
   });
 
@@ -95,20 +95,27 @@ describe("scan limits", () => {
     expect(decideScan(open, at("2026-09-24T02:42:30Z"), tenSeconds)).toMatchObject({ kind: "close" });
   });
 
-  it("closes a break shorter than the minimum but flags it", () => {
+  it("closes a break longer than the maximum but flags it", () => {
     const open = openBreak("2026-09-24T02:42:00Z");
-    expect(decideScan(open, at("2026-09-24T02:45:00Z"), limits({ minBreakSeconds: 300 }))).toMatchObject({
-      kind: "close", durationMinutes: 3, flagReason: "Shorter than the 5 min minimum",
+    expect(decideScan(open, at("2026-09-24T02:48:00Z"), limits({ maxBreakSeconds: 300 }))).toMatchObject({
+      kind: "close", durationMinutes: 6, flagReason: "Longer than the 5 min maximum",
     });
-    expect(decideScan(open, at("2026-09-24T02:47:00Z"), limits({ minBreakSeconds: 300 }))).toMatchObject({
+    expect(decideScan(open, at("2026-09-24T02:47:00Z"), limits({ maxBreakSeconds: 300 }))).toMatchObject({
+      kind: "close", flagReason: "",
+    });
+  });
+
+  it("flags nothing for length when the maximum is off", () => {
+    const open = openBreak("2026-09-24T02:42:00Z");
+    expect(decideScan(open, at("2026-09-24T05:42:00Z"), limits({ maxBreakSeconds: 0 }))).toMatchObject({
       kind: "close", flagReason: "",
     });
   });
 
   it("keeps a flag the break already carried when it closes", () => {
     const open = { ...openBreak("2026-09-24T02:42:00Z"), flagReason: "Started 10 min after the last break (rest is 30 min)" };
-    expect(decideScan(open, at("2026-09-24T02:45:00Z"), limits({ minBreakSeconds: 300 }))).toMatchObject({
-      flagReason: "Started 10 min after the last break (rest is 30 min); Shorter than the 5 min minimum",
+    expect(decideScan(open, at("2026-09-24T02:50:00Z"), limits({ maxBreakSeconds: 300 }))).toMatchObject({
+      flagReason: "Started 10 min after the last break (rest is 30 min); Longer than the 5 min maximum",
     });
   });
 

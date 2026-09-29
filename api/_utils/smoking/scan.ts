@@ -1,9 +1,13 @@
 import { DEFAULT_SCAN_LIMITS, decideScan, earlyStartFlag, type ScanLimits } from "./scanRules.js";
 import type { SmokingStore } from "./store.js";
 
+/**
+ * What the smoker's phone is told. Flags are for OSHES only, so no outcome says
+ * whether the break was flagged — that stays in the Smoking Log row.
+ */
 export type ScanOutcome =
-  | { result: "in"; timeIn: string; areaName: string; previousMissedScanOut?: true }
-  | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
+  | { result: "in"; timeIn: string; areaName: string }
+  | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number }
   | { result: "already-in"; timeIn: string; areaName: string }
   | { result: "already-out"; timeOut: string; areaName: string }
   | { result: "retired-area" }
@@ -63,7 +67,6 @@ export async function recordScan(
       timeOut: nowIso,
       areaName: area.name,
       durationMinutes: decision.durationMinutes,
-      flagged: decision.flagReason !== "",
     };
   }
 
@@ -75,8 +78,7 @@ export async function recordScan(
       durationMinutes: decision.durationMinutes,
       flagReason: decision.flagReason,
     });
-    const outcome = await openNewBreak(store, profile, area, nowIso);
-    return outcome.result === "in" ? { ...outcome, previousMissedScanOut: true } : outcome;
+    return openNewBreak(store, profile, area, nowIso);
   }
 
   return openNewBreak(store, profile, area, nowIso, earlyStart);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
 import { Callout, DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../Widget";
 import { Ban as BlockIcon, Download as DownloadIcon, ShieldCheck as UnblockIcon, Trash2 as RemoveIcon } from "../ui/Icons";
@@ -10,6 +10,7 @@ import { writeAuditEntry } from "../../utils/portalAudit";
 import { departmentLabel, profilesCsv, signInMethodLabel, type SmokingProfileRow } from "../../utils/smoking/adminData";
 import { deleteProfile, loadProfiles, setProfileBlocked } from "../../utils/smoking/adminStore";
 import PersonActionDialog, { type PersonAction } from "./PersonActionDialog";
+import { CardList, CardRow, Pager, useIsPhone, usePaged } from "./SmokingPaging";
 
 type Profile = SmokingProfileRow;
 
@@ -65,6 +66,13 @@ export default function SmokingPeopleTab() {
   const [busy, setBusy] = useState(false);
 
   const canWrite = access.isAdmin && !access.readOnly;
+  const [search, setSearch] = useState("");
+  const phone = useIsPhone();
+  const needle = search.trim().toLowerCase();
+  const shown = needle
+    ? profiles.filter((p) => [p.fullName, p.email, p.department, p.company, p.staffId].some((v) => v.toLowerCase().includes(needle)))
+    : profiles;
+  const paged = usePaged(shown, needle);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +151,32 @@ export default function SmokingPeopleTab() {
     });
   };
 
+  const actions = (p: Profile) => (
+    <>
+      <Tooltip title={p.blocked ? "Unblock" : "Block"}>
+        <IconButton
+          size="small"
+          onClick={() => setActionTarget({ action: p.blocked ? "unblock" : "block", person: p })}
+          aria-label={`${p.blocked ? "Unblock" : "Block"} ${p.fullName || p.email}`}
+        >
+          {p.blocked ? <UnblockIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={canRemovePerson(p) ? "Remove" : REMOVE_BLOCKED_HINT}>
+        <span>
+          <IconButton
+            size="small"
+            disabled={!canRemovePerson(p)}
+            onClick={() => setActionTarget({ action: "remove", person: p })}
+            aria-label={`Remove ${p.fullName || p.email}`}
+          >
+            <RemoveIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </>
+  );
+
   return (
     <Box>
       <PageHeader
@@ -170,70 +204,79 @@ export default function SmokingPeopleTab() {
           <WidgetEmpty>Nobody has registered yet.</WidgetEmpty>
         </Widget>
       ) : (
-        <DataTable
-          minWidth={canWrite ? 1160 : 1040}
-          columns={[
-            { key: "name", label: "Name" },
-            { key: "email", label: "Email" },
-            { key: "department", label: "Department" },
-            { key: "position", label: "Position" },
-            { key: "company", label: "Company" },
-            { key: "staffId", label: "Staff ID" },
-            { key: "signIn", label: "Signed in with" },
-            { key: "firstSeen", label: "First seen" },
-            { key: "lastSeen", label: "Last signed in" },
-            { key: "status", label: "Status" },
-            ...(canWrite ? [{ key: "actions", label: "", width: 110, align: "right" as const }] : []),
-          ]}
-        >
-          {profiles.map((p) => (
-            <DataRow key={p.id}>
-              <DataCell>{p.fullName}</DataCell>
-              <DataCell muted>{p.email}</DataCell>
-              <DataCell muted>{departmentLabel(p)}</DataCell>
-              <DataCell muted>{p.position}</DataCell>
-              <DataCell muted>{p.company}</DataCell>
-              <DataCell muted>{p.staffId}</DataCell>
-              <DataCell muted>{signInMethodLabel(p.signInMethod)}</DataCell>
-              <DataCell muted nowrap>
-                {formatMalaysiaDateTime(p.firstSeen)}
-              </DataCell>
-              <DataCell muted nowrap>
-                {formatMalaysiaDateTime(p.lastSeen)}
-              </DataCell>
-              <DataCell>
-                <StatusCell p={p} />
-              </DataCell>
-              {canWrite && (
-                <DataCell align="right">
-                  <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
-                    <Tooltip title={p.blocked ? "Unblock" : "Block"}>
-                      <IconButton
-                        size="small"
-                        onClick={() => setActionTarget({ action: p.blocked ? "unblock" : "block", person: p })}
-                        aria-label={`${p.blocked ? "Unblock" : "Block"} ${p.fullName || p.email}`}
-                      >
-                        {p.blocked ? <UnblockIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={canRemovePerson(p) ? "Remove" : REMOVE_BLOCKED_HINT}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={!canRemovePerson(p)}
-                          onClick={() => setActionTarget({ action: "remove", person: p })}
-                          aria-label={`Remove ${p.fullName || p.email}`}
-                        >
-                          <RemoveIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  </Box>
-                </DataCell>
-              )}
-            </DataRow>
-          ))}
-        </DataTable>
+        <>
+          <TextField
+            size="small"
+            label="Search name, email or department"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ mb: 1.5, width: { xs: "100%", sm: 340 } }}
+          />
+          {shown.length === 0 ? (
+            <Widget bare>
+              <WidgetEmpty>Nobody matches that search.</WidgetEmpty>
+            </Widget>
+          ) : phone ? (
+            <CardList>
+              {paged.rows.map((p) => (
+                <CardRow
+                  key={p.id}
+                  title={p.fullName || p.email}
+                  badge={<StatusCell p={p} />}
+                  lines={[
+                    p.email,
+                    [departmentLabel(p), p.company, p.staffId].filter(Boolean).join(" · "),
+                    `Last seen ${formatMalaysiaDateTime(p.lastSeen)}`,
+                  ]}
+                  actions={canWrite ? actions(p) : undefined}
+                />
+              ))}
+            </CardList>
+          ) : (
+            <DataTable
+              minWidth={canWrite ? 900 : 800}
+              columns={[
+                { key: "name", label: "Name" },
+                { key: "department", label: "Department" },
+                { key: "company", label: "Company" },
+                { key: "staffId", label: "Staff ID" },
+                { key: "signIn", label: "Signs in with" },
+                { key: "lastSeen", label: "Last signed in" },
+                { key: "status", label: "Status" },
+                ...(canWrite ? [{ key: "actions", label: "", width: 100, align: "right" as const }] : []),
+              ]}
+            >
+              {/* Position and first-seen are in the CSV: on screen they crowded
+                  names and emails into one-letter-wide columns. */}
+              {paged.rows.map((p) => (
+                <DataRow key={p.id}>
+                  <DataCell>
+                    <Box sx={{ whiteSpace: "nowrap" }}>{p.fullName}</Box>
+                    <Box sx={{ fontSize: 12, color: editorial.muted, overflowWrap: "anywhere" }}>{p.email}</Box>
+                  </DataCell>
+                  <DataCell muted>{departmentLabel(p)}</DataCell>
+                  <DataCell muted>{p.company}</DataCell>
+                  <DataCell muted nowrap>{p.staffId}</DataCell>
+                  <DataCell muted nowrap>{signInMethodLabel(p.signInMethod)}</DataCell>
+                  <DataCell muted nowrap>
+                    {formatMalaysiaDateTime(p.lastSeen)}
+                  </DataCell>
+                  <DataCell>
+                    <StatusCell p={p} />
+                  </DataCell>
+                  {canWrite && (
+                    <DataCell align="right">
+                      <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
+                        {actions(p)}
+                      </Box>
+                    </DataCell>
+                  )}
+                </DataRow>
+              ))}
+            </DataTable>
+          )}
+          <Pager paged={paged} noun="people" />
+        </>
       )}
 
       <PersonActionDialog

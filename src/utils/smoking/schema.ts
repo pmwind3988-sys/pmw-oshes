@@ -21,13 +21,13 @@ export function flagReasonFor(timeIn: Date, timeOut: Date | null, now: Date): st
 /** OSHES's scan limits, in whole seconds — see `ScanLimits` in `api/_utils/smoking/scanRules.ts`. */
 export interface ScanLimits {
   ignoreRepeatSeconds: number;
-  minBreakSeconds: number;
+  maxBreakSeconds: number;
   restSeconds: number;
 }
 
-export const DEFAULT_SCAN_LIMITS: ScanLimits = { ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 };
+export const DEFAULT_SCAN_LIMITS: ScanLimits = { ignoreRepeatSeconds: 60, maxBreakSeconds: 60 * 60, restSeconds: 0 };
 
-export const SCAN_LIMIT_MAX: ScanLimits = { ignoreRepeatSeconds: 10 * 60, minBreakSeconds: 12 * 60 * 60, restSeconds: 24 * 60 * 60 };
+export const SCAN_LIMIT_MAX: ScanLimits = { ignoreRepeatSeconds: 10 * 60, maxBreakSeconds: 12 * 60 * 60, restSeconds: 24 * 60 * 60 };
 
 export function normalizeScanLimits(raw: Partial<Record<keyof ScanLimits, unknown>>): ScanLimits {
   const read = (key: keyof ScanLimits): number => {
@@ -36,7 +36,7 @@ export function normalizeScanLimits(raw: Partial<Record<keyof ScanLimits, unknow
     if (!Number.isFinite(n) || n < 0) return DEFAULT_SCAN_LIMITS[key];
     return Math.min(Math.floor(n), SCAN_LIMIT_MAX[key]);
   };
-  return { ignoreRepeatSeconds: read("ignoreRepeatSeconds"), minBreakSeconds: read("minBreakSeconds"), restSeconds: read("restSeconds") };
+  return { ignoreRepeatSeconds: read("ignoreRepeatSeconds"), maxBreakSeconds: read("maxBreakSeconds"), restSeconds: read("restSeconds") };
 }
 
 /** "45 s", "5 min", "1 min 30 s", "1 h 15 min". */
@@ -60,7 +60,7 @@ export function joinFlags(...flags: string[]): string {
 }
 
 /**
- * The flags a scan raised against OSHES's limits (too short, too soon), which
+ * The flags a scan raised against OSHES's limits (too long, too soon), which
  * only the scan could judge. An admin edit keeps these and re-derives the rest.
  */
 export function scanTimeFlags(flagReason: string): string {
@@ -100,7 +100,7 @@ export const SMOKING_LIST_SCHEMAS: SpListSchema[] = [
     description: "Smoking log: OSHES's scan limits, one row, in seconds",
     columns: [
       { n: "IgnoreRepeatSeconds", k: SP_FIELD_KIND.number },
-      { n: "MinBreakSeconds", k: SP_FIELD_KIND.number },
+      { n: "MaxBreakSeconds", k: SP_FIELD_KIND.number },
       { n: "RestSeconds", k: SP_FIELD_KIND.number },
     ],
   },

@@ -8,7 +8,7 @@ export const LONG_BREAK_MS = 12 * 60 * 60 * 1000;
  *
  * - ignoreRepeatSeconds: a second scan this soon after the last one is a shaky
  *   hand, not a break starting or ending. Nothing is recorded.
- * - minBreakSeconds: a break shorter than this is still recorded, but flagged.
+ * - maxBreakSeconds: a break longer than this is still recorded, but flagged.
  * - restSeconds: a break started this soon after the last one ended is still
  *   recorded, but flagged.
  *
@@ -16,13 +16,13 @@ export const LONG_BREAK_MS = 12 * 60 * 60 * 1000;
  */
 export interface ScanLimits {
   ignoreRepeatSeconds: number;
-  minBreakSeconds: number;
+  maxBreakSeconds: number;
   restSeconds: number;
 }
 
-export const DEFAULT_SCAN_LIMITS: ScanLimits = { ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 };
+export const DEFAULT_SCAN_LIMITS: ScanLimits = { ignoreRepeatSeconds: 60, maxBreakSeconds: 60 * 60, restSeconds: 0 };
 
-export const SCAN_LIMIT_MAX: ScanLimits = { ignoreRepeatSeconds: 10 * 60, minBreakSeconds: 12 * 60 * 60, restSeconds: 24 * 60 * 60 };
+export const SCAN_LIMIT_MAX: ScanLimits = { ignoreRepeatSeconds: 10 * 60, maxBreakSeconds: 12 * 60 * 60, restSeconds: 24 * 60 * 60 };
 
 /** Whatever SharePoint hands back, as usable limits: bad values fall back, big ones are capped. */
 export function normalizeScanLimits(raw: Partial<Record<keyof ScanLimits, unknown>>): ScanLimits {
@@ -32,7 +32,7 @@ export function normalizeScanLimits(raw: Partial<Record<keyof ScanLimits, unknow
     if (!Number.isFinite(n) || n < 0) return DEFAULT_SCAN_LIMITS[key];
     return Math.min(Math.floor(n), SCAN_LIMIT_MAX[key]);
   };
-  return { ignoreRepeatSeconds: read("ignoreRepeatSeconds"), minBreakSeconds: read("minBreakSeconds"), restSeconds: read("restSeconds") };
+  return { ignoreRepeatSeconds: read("ignoreRepeatSeconds"), maxBreakSeconds: read("maxBreakSeconds"), restSeconds: read("restSeconds") };
 }
 
 /** "45 s", "5 min", "1 min 30 s", "1 h 15 min". */
@@ -56,10 +56,14 @@ export function joinFlags(...flags: string[]): string {
   return [...new Set(parts)].join(FLAG_SEPARATOR);
 }
 
-export function shortBreakFlag(timeIn: Date, timeOut: Date, limits: ScanLimits): string {
-  if (!limits.minBreakSeconds) return "";
-  return timeOut.getTime() - timeIn.getTime() < limits.minBreakSeconds * 1000
-    ? `Shorter than the ${formatSpan(limits.minBreakSeconds)} minimum`
+export function longBreakFlag(timeIn: Date, timeOut: Date, limits: ScanLimits): string {
+  if (!limits.maxBreakSeconds) return "";
+  const ms = timeOut.getTime() - timeIn.getTime();
+  // Past 12 hours the break already reads "Lasted over 12 hours"; saying it
+  // also ran past the maximum adds nothing.
+  if (ms > LONG_BREAK_MS) return "";
+  return ms > limits.maxBreakSeconds * 1000
+    ? `Longer than the ${formatSpan(limits.maxBreakSeconds)} maximum`
     : "";
 }
 
@@ -92,7 +96,7 @@ export function decideScan(openBreak: SmokingBreak | null, now: Date, limits: Sc
   const timeIn = new Date(openBreak.timeIn);
   if (now.getTime() - timeIn.getTime() < limits.ignoreRepeatSeconds * 1000) return { kind: "already-in", openBreak };
   const minutes = durationMinutes(timeIn, now);
-  const flagReason = joinFlags(openBreak.flagReason, flagReasonFor(timeIn, now, now), shortBreakFlag(timeIn, now, limits));
+  const flagReason = joinFlags(openBreak.flagReason, flagReasonFor(timeIn, now, now), longBreakFlag(timeIn, now, limits));
   if (now.getTime() - timeIn.getTime() > LONG_BREAK_MS) {
     return { kind: "close-stale-and-open", openBreak, durationMinutes: minutes, flagReason };
   }

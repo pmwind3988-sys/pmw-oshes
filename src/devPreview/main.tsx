@@ -18,8 +18,11 @@ import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
 import FileFormScreen from "../pages/portal/FileFormScreen";
 import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
+import SmokingLogScreen from "../pages/portal/SmokingLogScreen";
+import SmokingScanPage from "../pages/SmokingScanPage";
 import { NOW, fixtureContext } from "./fixtures";
 import { sampleBreaks } from "./smokingFixtures";
+import { installSmokingStub } from "./smokingStub";
 import "../index.css";
 
 /** Monday 00:00 Malaysian time of this week, and the Monday after. */
@@ -28,6 +31,10 @@ const SMOKING_WEEK = (() => {
   const monday = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() - ((shifted.getUTCDay() + 6) % 7)) - 8 * 3_600_000;
   return { from: new Date(monday).toISOString(), to: new Date(monday + 7 * 86_400_000).toISOString() };
 })();
+
+// The smoking screens call SharePoint and /api/smoking themselves; here those
+// calls are answered with fixtures. `?scan=` picks what a poster scan returns.
+installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).get("scan") ?? "out");
 
 const SCREENS = {
   home: <HomeScreen />,
@@ -44,6 +51,7 @@ const SCREENS = {
   file: <FileFormScreen />,
   // The smoking log itself reads SharePoint directly; its Totals dashboard is
   // shown on its own, over a sample week.
+  "smoking-log": <SmokingLogScreen />,
   smoking: <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
 } as const;
 
@@ -121,4 +129,29 @@ function Harness() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Harness />);
+/**
+ * `?page=scan` is the smoker's page, as a poster opens it, outside the portal
+ * shell. `&scan=signin` shows the sign-in, `profile` the first-time profile,
+ * `out` a check-out, `in` a check-in, `flagged` a long one, `already` a double tap.
+ */
+function ScanHarness() {
+  const scan = param("scan", "out");
+  try {
+    if (scan === "signin") localStorage.removeItem("oshes.smokingPass");
+    else localStorage.setItem("oshes.smokingPass", "preview");
+    sessionStorage.removeItem("oshes.smokingLastScan");
+  } catch {
+    // Private window: the page shows the sign-in.
+  }
+  applyAppearance(DEFAULT_APPEARANCE);
+  return (
+    <ThemeProvider theme={buildTheme(DEFAULT_APPEARANCE)}>
+      <CssBaseline />
+      <MemoryRouter initialEntries={[param("home", "") ? "/smoke" : "/smoke?area=AAA111"]}>
+        <SmokingScanPage />
+      </MemoryRouter>
+    </ThemeProvider>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(param("page", "") === "scan" ? <ScanHarness /> : <Harness />);

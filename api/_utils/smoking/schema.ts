@@ -30,7 +30,7 @@ export const LOG_COLUMNS = [
 export const AREA_COLUMNS = ["Code", "Active"] as const;
 
 /** One row: OSHES's scan limits, in whole seconds. See `ScanLimits` in scanRules.ts. */
-export const SETTINGS_COLUMNS = ["IgnoreRepeatSeconds", "MinBreakSeconds", "RestSeconds"] as const;
+export const SETTINGS_COLUMNS = ["IgnoreRepeatSeconds", "MaxBreakSeconds", "RestSeconds"] as const;
 
 export const FLAG_OPEN_LONG = "Open over 12 hours";
 export const FLAG_LASTED_LONG = "Lasted over 12 hours";

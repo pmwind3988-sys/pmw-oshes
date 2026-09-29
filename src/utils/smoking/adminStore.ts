@@ -193,7 +193,7 @@ export function rowToScanLimits(row: Record<string, unknown> | undefined): Store
     id: str(row.Id ?? row.ID),
     limits: normalizeScanLimits({
       ignoreRepeatSeconds: row.IgnoreRepeatSeconds,
-      minBreakSeconds: row.MinBreakSeconds,
+      maxBreakSeconds: row.MaxBreakSeconds,
       restSeconds: row.RestSeconds,
     }),
   };
@@ -204,7 +204,7 @@ export function scanLimitsRow(limits: ScanLimits): Record<string, unknown> {
   return {
     Title: "Scan limits",
     IgnoreRepeatSeconds: clean.ignoreRepeatSeconds,
-    MinBreakSeconds: clean.minBreakSeconds,
+    MaxBreakSeconds: clean.maxBreakSeconds,
     RestSeconds: clean.restSeconds,
   };
 }

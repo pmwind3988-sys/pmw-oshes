@@ -24,9 +24,9 @@ describe("smoking schema parity", () => {
     expect(browser.SCAN_LIMIT_MAX).toEqual(serverRules.SCAN_LIMIT_MAX);
     expect(browser.FLAG_SEPARATOR).toBe(serverRules.FLAG_SEPARATOR);
     for (const raw of [
-      { ignoreRepeatSeconds: "30", minBreakSeconds: 300.7, restSeconds: 1800 },
-      { ignoreRepeatSeconds: "x", minBreakSeconds: -1, restSeconds: null },
-      { ignoreRepeatSeconds: 1e9, minBreakSeconds: 1e9, restSeconds: 1e9 },
+      { ignoreRepeatSeconds: "30", maxBreakSeconds: 300.7, restSeconds: 1800 },
+      { ignoreRepeatSeconds: "x", maxBreakSeconds: -1, restSeconds: null },
+      { ignoreRepeatSeconds: 1e9, maxBreakSeconds: 1e9, restSeconds: 1e9 },
     ]) {
       expect(browser.normalizeScanLimits(raw)).toEqual(serverRules.normalizeScanLimits(raw));
     }

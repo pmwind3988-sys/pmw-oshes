@@ -14,13 +14,13 @@ const LIMITS: Array<{ key: LimitKey; label: string; help: string; zeroMeans: str
   {
     key: "ignoreRepeatSeconds",
     label: "Ignore repeat scans within",
-    help: "A second scan this soon after scanning in or out is treated as a double tap. Nothing is recorded.",
+    help: "A second scan this soon after checking out or in is treated as a double tap. Nothing is recorded.",
     zeroMeans: "Off",
   },
   {
-    key: "minBreakSeconds",
-    label: "Minimum break length",
-    help: "A break shorter than this is still recorded, but flagged for OSHES to check.",
+    key: "maxBreakSeconds",
+    label: "Maximum break length",
+    help: "A break longer than this is still recorded, but flagged for OSHES to check.",
     zeroMeans: "Off",
   },
   {
@@ -36,7 +36,7 @@ const spanLabel = (seconds: number, zeroMeans: string) => (seconds ? formatSpan(
 function toInputs(limits: ScanLimits): Record<LimitKey, SpanInput> {
   return {
     ignoreRepeatSeconds: toSpanInput(limits.ignoreRepeatSeconds),
-    minBreakSeconds: toSpanInput(limits.minBreakSeconds),
+    maxBreakSeconds: toSpanInput(limits.maxBreakSeconds),
     restSeconds: toSpanInput(limits.restSeconds),
   };
 }
@@ -80,7 +80,7 @@ export default function SmokingSettingsTab() {
   const next: ScanLimits | null = valid
     ? {
         ignoreRepeatSeconds: (read.ignoreRepeatSeconds as { seconds: number }).seconds,
-        minBreakSeconds: (read.minBreakSeconds as { seconds: number }).seconds,
+        maxBreakSeconds: (read.maxBreakSeconds as { seconds: number }).seconds,
         restSeconds: (read.restSeconds as { seconds: number }).seconds,
       }
     : null;
@@ -181,6 +181,7 @@ export default function SmokingSettingsTab() {
                     >
                       <MenuItem value="seconds">seconds</MenuItem>
                       <MenuItem value="minutes">minutes</MenuItem>
+                      <MenuItem value="hours">hours</MenuItem>
                     </TextField>
                   </Stack>
                 </Box>

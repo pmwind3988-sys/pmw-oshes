@@ -4,8 +4,8 @@ const PASS_KEY = "oshes.smokingPass";
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
 
 export type ScanOutcome =
-  | { result: "in"; timeIn: string; areaName: string; previousMissedScanOut?: true }
-  | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number; flagged: boolean }
+  | { result: "in"; timeIn: string; areaName: string }
+  | { result: "out"; timeIn: string; timeOut: string; areaName: string; durationMinutes: number }
   | { result: "already-in"; timeIn: string; areaName: string }
   | { result: "already-out"; timeOut: string; areaName: string }
   | { result: "retired-area" }

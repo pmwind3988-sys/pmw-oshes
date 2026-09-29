@@ -1,12 +1,15 @@
-export type SpanUnit = "seconds" | "minutes";
+export type SpanUnit = "seconds" | "minutes" | "hours";
 
 export interface SpanInput {
   value: string;
   unit: SpanUnit;
 }
 
-/** Shows a stored number of seconds in minutes when it divides evenly, so 1800 reads as "30 minutes". */
+const UNIT_SECONDS: Record<SpanUnit, number> = { seconds: 1, minutes: 60, hours: 3600 };
+
+/** Shows a stored number of seconds in the largest unit it divides evenly into, so 3600 reads as 1 hour and 1800 as 30 minutes. */
 export function toSpanInput(seconds: number): SpanInput {
+  if (seconds > 0 && seconds % 3600 === 0) return { value: String(seconds / 3600), unit: "hours" };
   if (seconds > 0 && seconds % 60 === 0) return { value: String(seconds / 60), unit: "minutes" };
   return { value: String(seconds), unit: "seconds" };
 }
@@ -15,9 +18,10 @@ export function toSpanInput(seconds: number): SpanInput {
 export function readSpanInput(input: SpanInput, maxSeconds: number): { seconds: number } | { error: string } {
   const text = input.value.trim();
   if (!/^\d+$/.test(text)) return { error: "Enter a whole number (0 turns it off)." };
-  const seconds = Number(text) * (input.unit === "minutes" ? 60 : 1);
+  const seconds = Number(text) * UNIT_SECONDS[input.unit];
   if (seconds > maxSeconds) {
-    const max = maxSeconds % 60 === 0 ? `${maxSeconds / 60} minutes` : `${maxSeconds} seconds`;
+    const max =
+      maxSeconds % 3600 === 0 ? `${maxSeconds / 3600} hours` : maxSeconds % 60 === 0 ? `${maxSeconds / 60} minutes` : `${maxSeconds} seconds`;
     return { error: `At most ${max}.` };
   }
   return { seconds };

@@ -16,7 +16,7 @@ function deps(overrides: Partial<SmokingDeps> = {}, store: Partial<SmokingStore>
       findArea: vi.fn().mockResolvedValue({ id: "1", code: "AAA111", name: "Block A", active: true }),
       openBreaksFor: vi.fn().mockResolvedValue([]),
       lastClosedBreakFor: vi.fn().mockResolvedValue(null),
-      readLimits: vi.fn().mockResolvedValue({ ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 }),
+      readLimits: vi.fn().mockResolvedValue({ ignoreRepeatSeconds: 60, maxBreakSeconds: 0, restSeconds: 0 }),
       createBreak: vi.fn().mockResolvedValue("100"),
       closeBreak: vi.fn(),
       deleteBreak: vi.fn(),
