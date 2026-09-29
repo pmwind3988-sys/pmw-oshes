@@ -80,7 +80,10 @@ if (isPopupSignInResponse(window)) {
   document.body.textContent = "Signing you in…";
   import("@azure/msal-browser/redirect-bridge")
     .then(({ broadcastResponseToMainFrame }) => broadcastResponseToMainFrame())
-    .catch(() => window.close());
+    .catch(() => {
+      document.body.textContent = "Sign-in finished. You can close this window and try again.";
+      window.close();
+    });
 } else initializeMsal().then(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
