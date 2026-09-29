@@ -258,7 +258,7 @@ export function portalSections(access: PortalAccess, counts: PortalNavCounts): P
         screen: "smoking",
         label: "Smoking log",
         count: null,
-        hint: "Who scanned in and out at the smoking areas, and for how long",
+        hint: "Who checked out for a smoking break, and for how long",
         caption: "Smoking breaks",
       });
     }

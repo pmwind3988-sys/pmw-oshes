@@ -44,8 +44,8 @@ describe("graph smoking store", () => {
   });
 
   it("reads OSHES's limits and does not ask again within a minute", async () => {
-    queryListItems.mockResolvedValue([{ id: "1", fields: { IgnoreRepeatSeconds: 30, MinBreakSeconds: 300, RestSeconds: 1800 } }]);
-    await expect(store.readLimits()).resolves.toEqual({ ignoreRepeatSeconds: 30, minBreakSeconds: 300, restSeconds: 1800 });
+    queryListItems.mockResolvedValue([{ id: "1", fields: { IgnoreRepeatSeconds: 30, MaxBreakSeconds: 300, RestSeconds: 1800 } }]);
+    await expect(store.readLimits()).resolves.toEqual({ ignoreRepeatSeconds: 30, maxBreakSeconds: 300, restSeconds: 1800 });
     await store.readLimits();
     expect(queryListItems).toHaveBeenCalledTimes(1);
     expect(queryListItems.mock.calls[0][1]).toBe("Smoking Settings");
@@ -53,7 +53,7 @@ describe("graph smoking store", () => {
 
   it("uses the usual limits before OSHES has saved any", async () => {
     queryListItems.mockResolvedValue([]);
-    await expect(store.readLimits()).resolves.toEqual({ ignoreRepeatSeconds: 60, minBreakSeconds: 0, restSeconds: 0 });
+    await expect(store.readLimits()).resolves.toEqual({ ignoreRepeatSeconds: 60, maxBreakSeconds: 3600, restSeconds: 0 });
   });
 
   it("writes a flag onto a break only when it has one", async () => {

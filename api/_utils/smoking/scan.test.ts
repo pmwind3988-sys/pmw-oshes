@@ -190,12 +190,12 @@ describe("recordScan with OSHES limits", () => {
     expect(store.lastClosedSince.at(-1)?.toISOString()).toBe("2026-09-24T01:30:00.000Z");
   });
 
-  it("records a break shorter than the minimum, and flags it", async () => {
-    store.limits = { ...DEFAULT_SCAN_LIMITS, minBreakSeconds: 300 };
+  it("records a break longer than the maximum, and flags it", async () => {
+    store.limits = { ...DEFAULT_SCAN_LIMITS, maxBreakSeconds: 300 };
     await scan("AAA111", "2026-09-24T02:00:00Z");
-    const outcome = await scan("AAA111", "2026-09-24T02:03:00Z");
-    expect(outcome).toMatchObject({ result: "out", durationMinutes: 3, flagged: true });
-    expect(store.breaks[0].flagReason).toBe("Shorter than the 5 min minimum");
+    const outcome = await scan("AAA111", "2026-09-24T02:08:00Z");
+    expect(outcome).toMatchObject({ result: "out", durationMinutes: 8, flagged: true });
+    expect(store.breaks[0].flagReason).toBe("Longer than the 5 min maximum");
   });
 
   it("keeps the early-start flag when that break is scanned out", async () => {

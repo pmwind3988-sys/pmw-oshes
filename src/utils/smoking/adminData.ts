@@ -107,10 +107,10 @@ export function computeTotals(breaks: SmokingBreak[], now: Date): PersonTotal[] 
 export function validateEdit(edit: BreakEdit): string {
   if (!edit.fullName.trim()) return "Name is required.";
   if (!edit.department.trim()) return "Department is required.";
-  if (Number.isNaN(Date.parse(edit.timeIn))) return "Time in is not a valid time.";
+  if (Number.isNaN(Date.parse(edit.timeIn))) return "Checked out is not a valid time.";
   if (edit.timeOut) {
-    if (Number.isNaN(Date.parse(edit.timeOut))) return "Time out is not a valid time.";
-    if (Date.parse(edit.timeOut) <= Date.parse(edit.timeIn)) return "Time out must be after time in.";
+    if (Number.isNaN(Date.parse(edit.timeOut))) return "Checked in is not a valid time.";
+    if (Date.parse(edit.timeOut) <= Date.parse(edit.timeIn)) return "Checked in must be after checked out.";
   }
   return "";
 }
@@ -147,8 +147,8 @@ export function describeChange(before: SmokingBreak, after: SmokingBreak): strin
     ["Company", show(before.company), show(after.company)],
     ["Area in", show(before.areaInName), show(after.areaInName)],
     ["Area out", show(before.areaOutName), show(after.areaOutName)],
-    ["Time in", when(before.timeIn), when(after.timeIn)],
-    ["Time out", when(before.timeOut), when(after.timeOut)],
+    ["Checked out", when(before.timeIn), when(after.timeIn)],
+    ["Checked in", when(before.timeOut), when(after.timeOut)],
     ["Duration", before.durationMinutes == null ? "—" : `${before.durationMinutes} min`, after.durationMinutes == null ? "—" : `${after.durationMinutes} min`],
     ["Flag", show(before.flagReason), show(after.flagReason)],
   ];
@@ -162,7 +162,7 @@ export function breakReference(b: SmokingBreak): string {
 export function breaksCsv(breaks: SmokingBreak[], now: Date): string {
   const lines = [csvRow([
     "Name", "Email", "Department", "Position", "Company", "Area in", "Area out",
-    `Time in (${MALAYSIA_TIME_LABEL})`, `Time out (${MALAYSIA_TIME_LABEL})`, "Duration (min)", "Flag", "Resolution note",
+    `Checked out (${MALAYSIA_TIME_LABEL})`, `Checked in (${MALAYSIA_TIME_LABEL})`, "Duration (min)", "Flag", "Resolution note",
   ])];
   for (const b of breaks) {
     lines.push(csvRow([

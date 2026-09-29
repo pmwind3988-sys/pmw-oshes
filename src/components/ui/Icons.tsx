@@ -201,6 +201,7 @@ export const LogOut = make("LogOut", (
 
 export const ChevronDown = make("ChevronDown", <polyline points="6 9 12 15 18 9" />);
 export const ChevronRight = make("ChevronRight", <polyline points="9 18 15 12 9 6" />);
+export const ChevronLeft = make("ChevronLeft", <polyline points="15 18 9 12 15 6" />);
 export const ArrowLeft = make("ArrowLeft", (
   <>
     <path d="M19 12H5" />

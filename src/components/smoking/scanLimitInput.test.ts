@@ -8,6 +8,13 @@ describe("scan limit input", () => {
     expect(toSpanInput(0)).toEqual({ value: "0", unit: "seconds" });
   });
 
+  it("shows whole hours as hours", () => {
+    expect(toSpanInput(3600)).toEqual({ value: "1", unit: "hours" });
+    expect(toSpanInput(5400)).toEqual({ value: "90", unit: "minutes" });
+    expect(readSpanInput({ value: "2", unit: "hours" }, 43_200)).toEqual({ seconds: 7200 });
+    expect(readSpanInput({ value: "13", unit: "hours" }, 43_200)).toEqual({ error: "At most 12 hours." });
+  });
+
   it("reads minutes and seconds into seconds", () => {
     expect(readSpanInput({ value: "30", unit: "minutes" }, 86_400)).toEqual({ seconds: 1800 });
     expect(readSpanInput({ value: " 45 ", unit: "seconds" }, 600)).toEqual({ seconds: 45 });

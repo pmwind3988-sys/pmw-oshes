@@ -8,6 +8,8 @@ import { effectiveFlag } from "../../utils/smoking/adminData";
 import { formatMalaysiaDateTime } from "../../utils/malaysiaTime";
 import type { AuditEntry } from "../../types";
 import type { SmokingBreak } from "../../utils/smoking/schema";
+import { isoToMytInput } from "./BreakEditDialog";
+import { CardList, CardRow, Pager, useIsPhone, usePaged } from "./SmokingPaging";
 
 const PILL_BASE = {
   display: "inline-flex",
@@ -79,6 +81,19 @@ function HistoryButton({ entries }: { entries: AuditEntry[] }) {
   );
 }
 
+/**
+ * "Out 24/09 10:42 · In 10:49" on a card, where the year is noise; the date on
+ * the check-in only shows when it is a different day. The table keeps full stamps.
+ */
+function cardTimes(b: SmokingBreak): string {
+  const out = isoToMytInput(b.timeIn);
+  const dayOf = (myt: string) => `${myt.slice(8, 10)}/${myt.slice(5, 7)}`;
+  const outLabel = `Out ${dayOf(out)} ${out.slice(11, 16)}`;
+  if (!b.timeOut) return `${outLabel} · not back yet`;
+  const back = isoToMytInput(b.timeOut);
+  return `${outLabel} · In ${back.slice(0, 10) === out.slice(0, 10) ? "" : `${dayOf(back)} `}${back.slice(11, 16)}`;
+}
+
 export default function SmokingLogTable({
   breaks,
   now,
@@ -87,6 +102,7 @@ export default function SmokingLogTable({
   onEdit,
   onResolve,
   onDelete,
+  resetKey,
 }: {
   breaks: SmokingBreak[];
   now: Date;
@@ -95,7 +111,12 @@ export default function SmokingLogTable({
   onEdit: (b: SmokingBreak) => void;
   onResolve: (b: SmokingBreak) => void;
   onDelete: (b: SmokingBreak) => void;
+  /** Changes when the filters do, which sends the table back to page 1. */
+  resetKey: string;
 }) {
+  const phone = useIsPhone();
+  const paged = usePaged(breaks, resetKey);
+
   if (breaks.length === 0) {
     return (
       <Widget bare>
@@ -104,66 +125,98 @@ export default function SmokingLogTable({
     );
   }
 
+  const actions = (b: SmokingBreak) => (
+    <>
+      <HistoryButton entries={auditFor(b)} />
+      {canWrite && (
+        <>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={() => onEdit(b)} aria-label={`Edit break for ${b.fullName || b.email}`}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          {effectiveFlag(b, now) && (
+            <Tooltip title="Resolve flag">
+              <IconButton size="small" onClick={() => onResolve(b)} aria-label={`Resolve flag for ${b.fullName || b.email}`}>
+                <ResolveIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="Delete">
+            <IconButton size="small" onClick={() => onDelete(b)} aria-label={`Delete break for ${b.fullName || b.email}`}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
+    </>
+  );
+
+  const duration = (b: SmokingBreak) => (b.durationMinutes == null ? "—" : `${b.durationMinutes} min`);
+  const areaLabel = (b: SmokingBreak) => `${b.areaInName || "—"}${b.areaOutName && b.areaOutName !== b.areaInName ? ` → ${b.areaOutName}` : ""}`;
+
   return (
-    <DataTable
-      minWidth={1080}
-      columns={[
-        { key: "name", label: "Name" },
-        { key: "department", label: "Department" },
-        { key: "position", label: "Position" },
-        { key: "company", label: "Company" },
-        { key: "area", label: "Area" },
-        { key: "in", label: "In" },
-        { key: "out", label: "Out" },
-        { key: "duration", label: "Duration", align: "right" },
-        { key: "flag", label: "Flag" },
-        { key: "actions", label: "", width: canWrite ? 150 : 60, align: "right" },
-      ]}
-    >
-      {breaks.map((b) => (
-        <DataRow key={b.id}>
-          <DataCell>{b.fullName || b.email}</DataCell>
-          <DataCell muted>{b.department}</DataCell>
-          <DataCell muted>{b.position}</DataCell>
-          <DataCell muted>{b.company}</DataCell>
-          <DataCell muted nowrap>
-            {b.areaInName || "—"}
-            {b.areaOutName ? ` → ${b.areaOutName}` : ""}
-          </DataCell>
-          <DataCell muted nowrap>{formatMalaysiaDateTime(b.timeIn)}</DataCell>
-          <DataCell muted nowrap>{b.timeOut ? formatMalaysiaDateTime(b.timeOut) : "—"}</DataCell>
-          <DataCell align="right" muted>{b.durationMinutes == null ? "—" : `${b.durationMinutes} min`}</DataCell>
-          <DataCell>
-            <FlagCell b={b} now={now} />
-          </DataCell>
-          <DataCell align="right">
-            <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
-              <HistoryButton entries={auditFor(b)} />
-              {canWrite && (
-                <>
-                  <Tooltip title="Edit">
-                    <IconButton size="small" onClick={() => onEdit(b)} aria-label={`Edit break for ${b.fullName || b.email}`}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  {effectiveFlag(b, now) && (
-                    <Tooltip title="Resolve flag">
-                      <IconButton size="small" onClick={() => onResolve(b)} aria-label={`Resolve flag for ${b.fullName || b.email}`}>
-                        <ResolveIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  <Tooltip title="Delete">
-                    <IconButton size="small" onClick={() => onDelete(b)} aria-label={`Delete break for ${b.fullName || b.email}`}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </>
-              )}
-            </Box>
-          </DataCell>
-        </DataRow>
-      ))}
-    </DataTable>
+    <>
+      {phone ? (
+        <CardList>
+          {paged.rows.map((b) => {
+            const flagged = !!effectiveFlag(b, now) || !!b.resolvedAt;
+            return (
+              <CardRow
+                key={b.id}
+                title={b.fullName || b.email}
+                badge={
+                  <Typography component="span" sx={{ fontSize: 13, fontWeight: 700, color: b.timeOut ? editorial.ink : editorial.success }}>
+                    {b.timeOut ? duration(b) : "Still out"}
+                  </Typography>
+                }
+                lines={[
+                  cardTimes(b),
+                  [areaLabel(b), b.department].filter(Boolean).join(" · "),
+                  flagged ? <FlagCell b={b} now={now} /> : null,
+                ]}
+                actions={actions(b)}
+              />
+            );
+          })}
+        </CardList>
+      ) : (
+        <DataTable
+          minWidth={1080}
+          columns={[
+            { key: "name", label: "Name" },
+            { key: "department", label: "Department" },
+            { key: "position", label: "Position" },
+            { key: "company", label: "Company" },
+            { key: "area", label: "Area" },
+            { key: "in", label: "Checked out" },
+            { key: "out", label: "Checked in" },
+            { key: "duration", label: "Duration", align: "right" },
+            { key: "flag", label: "Flag" },
+            { key: "actions", label: "", width: canWrite ? 150 : 60, align: "right" },
+          ]}
+        >
+          {paged.rows.map((b) => (
+            <DataRow key={b.id}>
+              <DataCell nowrap>{b.fullName || b.email}</DataCell>
+              <DataCell muted nowrap>{b.department}</DataCell>
+              <DataCell muted nowrap>{b.position}</DataCell>
+              <DataCell muted nowrap>{b.company}</DataCell>
+              <DataCell muted sx={{ minWidth: 150 }}>{areaLabel(b)}</DataCell>
+              <DataCell muted nowrap>{formatMalaysiaDateTime(b.timeIn)}</DataCell>
+              <DataCell muted nowrap>{b.timeOut ? formatMalaysiaDateTime(b.timeOut) : "—"}</DataCell>
+              <DataCell align="right" muted>{duration(b)}</DataCell>
+              <DataCell>
+                <FlagCell b={b} now={now} />
+              </DataCell>
+              <DataCell align="right">
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>{actions(b)}</Box>
+              </DataCell>
+            </DataRow>
+          ))}
+        </DataTable>
+      )}
+      <Pager paged={paged} noun="breaks" />
+    </>
   );
 }

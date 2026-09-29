@@ -119,7 +119,7 @@ describe("applyEdit", () => {
     }, now);
     expect(after).toMatchObject({ durationMinutes: 10, flagReason: "" });
     expect(describeChange(before, after)).toBe(
-      "Time out: 24/09/2026 10:00 AM → 23/09/2026 10:10 AM; Duration: 1440 min → 10 min; Flag: Lasted over 12 hours → —",
+      "Checked in: 24/09/2026 10:00 AM → 23/09/2026 10:10 AM; Duration: 1440 min → 10 min; Flag: Lasted over 12 hours → —",
     );
   });
 
@@ -151,7 +151,7 @@ describe("applyEdit", () => {
 describe("validateEdit", () => {
   const base = { timeIn: "2026-09-24T02:42:00Z", timeOut: "2026-09-24T02:49:00Z", areaInName: "A", areaOutName: "A", fullName: "Ali", department: "QA/QC", position: "Tech", company: "PMW" };
   it("refuses a time out before the time in", () => {
-    expect(validateEdit({ ...base, timeOut: "2026-09-24T02:00:00Z" })).toBe("Time out must be after time in.");
+    expect(validateEdit({ ...base, timeOut: "2026-09-24T02:00:00Z" })).toBe("Checked in must be after checked out.");
   });
   it("accepts a valid edit", () => {
     expect(validateEdit(base)).toBe("");
@@ -165,7 +165,7 @@ describe("export and references", () => {
   it("exports one header and one row per break", () => {
     const csv = breaksCsv([brk({})], now).split("\r\n");
     expect(csv).toHaveLength(2);
-    expect(csv[0]).toContain("Time in (MYT)");
+    expect(csv[0]).toContain("Checked out (MYT)");
     expect(csv[1]).toContain("ali@gmail.com");
   });
   it("makes unambiguous area codes", () => {

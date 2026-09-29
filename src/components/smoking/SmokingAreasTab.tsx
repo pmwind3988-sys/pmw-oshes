@@ -11,6 +11,7 @@ import type { SmokingArea } from "../../utils/smoking/schema";
 import AreaDialog from "./AreaDialog";
 import AreaQrDialog from "./AreaQrDialog";
 import { printSmokingPoster } from "./printSmokingPoster";
+import { CardList, CardRow, Pager, useIsPhone, usePaged } from "./SmokingPaging";
 
 export default function SmokingAreasTab() {
   const { access, spClient, userEmail, appendAudit, toast } = usePortal();
@@ -24,6 +25,8 @@ export default function SmokingAreasTab() {
   const [dialogTarget, setDialogTarget] = useState<SmokingArea | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrTarget, setQrTarget] = useState<SmokingArea | null>(null);
+  const phone = useIsPhone();
+  const paged = usePaged(areas);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,11 +124,44 @@ export default function SmokingAreasTab() {
     );
   };
 
+  const actions = (area: SmokingArea) => (
+    <>
+      <Tooltip title="Show QR">
+        <IconButton size="small" onClick={() => setQrTarget(area)} aria-label={`Show QR for ${area.name}`}>
+          <QrIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Print poster">
+        <IconButton size="small" onClick={() => handlePrint(area)} aria-label={`Print poster for ${area.name}`}>
+          <PrinterIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      {canWrite && (
+        <>
+          <Tooltip title="Rename">
+            <IconButton size="small" onClick={() => openRename(area)} aria-label={`Rename ${area.name}`}>
+              <RenameIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={area.active ? "Retire" : "Reactivate"}>
+            <IconButton
+              size="small"
+              onClick={() => handleToggleActive(area)}
+              aria-label={area.active ? `Retire ${area.name}` : `Reactivate ${area.name}`}
+            >
+              {area.active ? <RetireIcon fontSize="small" /> : <ReactivateIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
+    </>
+  );
+
   return (
     <Box>
       <PageHeader
         title="Areas"
-        subtitle="the smoking areas that scan-in and scan-out QR codes point to"
+        subtitle="the posters people scan to check out and back in"
         actions={
           canWrite && (
             <Button variant="contained" startIcon={<AddIcon fontSize="small" />} onClick={openAdd} sx={{ minHeight: 40 }}>
@@ -149,6 +185,18 @@ export default function SmokingAreasTab() {
         <Widget bare>
           <WidgetEmpty>No smoking areas yet.</WidgetEmpty>
         </Widget>
+      ) : phone ? (
+        <CardList>
+          {paged.rows.map((area) => (
+            <CardRow
+              key={area.id}
+              title={area.name}
+              badge={<Typography component="span" sx={{ fontSize: 12.5, fontWeight: 700, color: area.active ? editorial.success : editorial.muted }}>{area.active ? "Active" : "Retired"}</Typography>}
+              lines={[`Code ${area.code}`]}
+              actions={actions(area)}
+            />
+          ))}
+        </CardList>
       ) : (
         <DataTable
           minWidth={640}
@@ -159,7 +207,7 @@ export default function SmokingAreasTab() {
             { key: "actions", label: "", width: 170, align: "right" },
           ]}
         >
-          {areas.map((area) => (
+          {paged.rows.map((area) => (
             <DataRow key={area.id}>
               <DataCell>{area.name}</DataCell>
               <DataCell muted nowrap>
@@ -167,41 +215,13 @@ export default function SmokingAreasTab() {
               </DataCell>
               <DataCell muted>{area.active ? "Active" : "Retired"}</DataCell>
               <DataCell align="right">
-                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>
-                  <Tooltip title="Show QR">
-                    <IconButton size="small" onClick={() => setQrTarget(area)} aria-label={`Show QR for ${area.name}`}>
-                      <QrIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Print poster">
-                    <IconButton size="small" onClick={() => handlePrint(area)} aria-label={`Print poster for ${area.name}`}>
-                      <PrinterIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  {canWrite && (
-                    <>
-                      <Tooltip title="Rename">
-                        <IconButton size="small" onClick={() => openRename(area)} aria-label={`Rename ${area.name}`}>
-                          <RenameIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={area.active ? "Retire" : "Reactivate"}>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleToggleActive(area)}
-                          aria-label={area.active ? `Retire ${area.name}` : `Reactivate ${area.name}`}
-                        >
-                          {area.active ? <RetireIcon fontSize="small" /> : <ReactivateIcon fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
-                    </>
-                  )}
-                </Box>
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>{actions(area)}</Box>
               </DataCell>
             </DataRow>
           ))}
         </DataTable>
       )}
+      {!loading && areas.length > 0 && <Pager paged={paged} noun="areas" />}
 
       <AreaDialog open={dialogOpen} area={dialogTarget} busy={busy} onCancel={() => setDialogOpen(false)} onSave={handleSave} />
       <AreaQrDialog open={!!qrTarget} area={qrTarget} onClose={() => setQrTarget(null)} />
