@@ -5,7 +5,6 @@ import { radius } from "../../theme/surfaces";
 import { DataCell, DataRow, DataTable, Widget, WidgetEmpty } from "../Widget";
 import { Check as ResolveIcon, History as HistoryIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from "../ui/Icons";
 import { effectiveFlag } from "../../utils/smoking/adminData";
-import { formatMalaysiaDateTime } from "../../utils/malaysiaTime";
 import type { AuditEntry } from "../../types";
 import type { SmokingBreak } from "../../utils/smoking/schema";
 import { isoToMytInput } from "./BreakEditDialog";
@@ -14,14 +13,14 @@ import { CardList, CardRow, Pager, useIsPhone, usePaged } from "./SmokingPaging"
 const PILL_BASE = {
   display: "inline-flex",
   alignItems: "center",
-  whiteSpace: "nowrap",
+  lineHeight: 1.35,
   fontSize: 10,
   fontWeight: 800,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   px: 0.9,
   py: 0.4,
-  borderRadius: "999px",
+  borderRadius: "8px",
   border: "1px solid transparent",
 } as const;
 
@@ -85,9 +84,16 @@ function HistoryButton({ entries }: { entries: AuditEntry[] }) {
  * "Out 24/09 10:42 · In 10:49" on a card, where the year is noise; the date on
  * the check-in only shows when it is a different day. The table keeps full stamps.
  */
+const dayOf = (myt: string) => `${myt.slice(8, 10)}/${myt.slice(5, 7)}`;
+
+/** "29/09 12:11", Malaysian time — the date range above already says the year. */
+const stamp = (iso: string) => {
+  const myt = isoToMytInput(iso);
+  return `${dayOf(myt)} ${myt.slice(11, 16)}`;
+};
+
 function cardTimes(b: SmokingBreak): string {
   const out = isoToMytInput(b.timeIn);
-  const dayOf = (myt: string) => `${myt.slice(8, 10)}/${myt.slice(5, 7)}`;
   const outLabel = `Out ${dayOf(out)} ${out.slice(11, 16)}`;
   if (!b.timeOut) return `${outLabel} · not back yet`;
   const back = isoToMytInput(b.timeOut);
@@ -182,33 +188,36 @@ export default function SmokingLogTable({
         </CardList>
       ) : (
         <DataTable
-          minWidth={1080}
+          minWidth={900}
           columns={[
             { key: "name", label: "Name" },
             { key: "department", label: "Department" },
-            { key: "position", label: "Position" },
             { key: "company", label: "Company" },
             { key: "area", label: "Area" },
             { key: "in", label: "Checked out" },
             { key: "out", label: "Checked in" },
             { key: "duration", label: "Duration", align: "right" },
-            { key: "flag", label: "Flag" },
             { key: "actions", label: "", width: canWrite ? 150 : 60, align: "right" },
           ]}
         >
           {paged.rows.map((b) => (
             <DataRow key={b.id}>
-              <DataCell nowrap>{b.fullName || b.email}</DataCell>
-              <DataCell muted nowrap>{b.department}</DataCell>
-              <DataCell muted nowrap>{b.position}</DataCell>
-              <DataCell muted nowrap>{b.company}</DataCell>
-              <DataCell muted sx={{ minWidth: 150 }}>{areaLabel(b)}</DataCell>
-              <DataCell muted nowrap>{formatMalaysiaDateTime(b.timeIn)}</DataCell>
-              <DataCell muted nowrap>{b.timeOut ? formatMalaysiaDateTime(b.timeOut) : "—"}</DataCell>
-              <DataCell align="right" muted>{duration(b)}</DataCell>
               <DataCell>
-                <FlagCell b={b} now={now} />
+                <Box sx={{ whiteSpace: "nowrap" }}>{b.fullName || b.email}</Box>
+                {/* The flag rides under the name, not in a column of its own: a
+                    long reason there pushed the row's buttons off the screen. */}
+                {(effectiveFlag(b, now) || b.resolvedAt) && (
+                  <Box sx={{ mt: 0.5, maxWidth: 200 }}>
+                    <FlagCell b={b} now={now} />
+                  </Box>
+                )}
               </DataCell>
+              <DataCell muted nowrap>{b.department}</DataCell>
+              <DataCell muted nowrap>{b.company}</DataCell>
+              <DataCell muted sx={{ minWidth: 170 }}>{areaLabel(b)}</DataCell>
+              <DataCell muted nowrap>{stamp(b.timeIn)}</DataCell>
+              <DataCell muted nowrap>{b.timeOut ? stamp(b.timeOut) : "—"}</DataCell>
+              <DataCell align="right" muted>{duration(b)}</DataCell>
               <DataCell align="right">
                 <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>{actions(b)}</Box>
               </DataCell>
