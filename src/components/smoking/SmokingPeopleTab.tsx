@@ -234,33 +234,30 @@ export default function SmokingPeopleTab() {
             </CardList>
           ) : (
             <DataTable
-              minWidth={canWrite ? 1160 : 1040}
+              minWidth={canWrite ? 900 : 800}
               columns={[
                 { key: "name", label: "Name" },
-                { key: "email", label: "Email" },
                 { key: "department", label: "Department" },
-                { key: "position", label: "Position" },
                 { key: "company", label: "Company" },
                 { key: "staffId", label: "Staff ID" },
-                { key: "signIn", label: "Signed in with" },
-                { key: "firstSeen", label: "First seen" },
+                { key: "signIn", label: "Signs in with" },
                 { key: "lastSeen", label: "Last signed in" },
                 { key: "status", label: "Status" },
-                ...(canWrite ? [{ key: "actions", label: "", width: 110, align: "right" as const }] : []),
+                ...(canWrite ? [{ key: "actions", label: "", width: 100, align: "right" as const }] : []),
               ]}
             >
+              {/* Position and first-seen are in the CSV: on screen they crowded
+                  names and emails into one-letter-wide columns. */}
               {paged.rows.map((p) => (
                 <DataRow key={p.id}>
-                  <DataCell>{p.fullName}</DataCell>
-                  <DataCell muted>{p.email}</DataCell>
-                  <DataCell muted>{departmentLabel(p)}</DataCell>
-                  <DataCell muted>{p.position}</DataCell>
-                  <DataCell muted>{p.company}</DataCell>
-                  <DataCell muted>{p.staffId}</DataCell>
-                  <DataCell muted>{signInMethodLabel(p.signInMethod)}</DataCell>
-                  <DataCell muted nowrap>
-                    {formatMalaysiaDateTime(p.firstSeen)}
+                  <DataCell>
+                    <Box sx={{ whiteSpace: "nowrap" }}>{p.fullName}</Box>
+                    <Box sx={{ fontSize: 12, color: editorial.muted, overflowWrap: "anywhere" }}>{p.email}</Box>
                   </DataCell>
+                  <DataCell muted>{departmentLabel(p)}</DataCell>
+                  <DataCell muted>{p.company}</DataCell>
+                  <DataCell muted nowrap>{p.staffId}</DataCell>
+                  <DataCell muted nowrap>{signInMethodLabel(p.signInMethod)}</DataCell>
                   <DataCell muted nowrap>
                     {formatMalaysiaDateTime(p.lastSeen)}
                   </DataCell>
