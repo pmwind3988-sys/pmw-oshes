@@ -6,8 +6,6 @@ export interface OutcomeView {
   /** The time of a recorded scan, shown large under the headline. */
   time?: string;
   detail: string;
-  /** Something OSHES will follow up, shown apart from the result so it is not missed. */
-  note?: string;
   /** What to do next, when there is a next scan to make. */
   hint?: string;
 }
@@ -25,27 +23,22 @@ export function formatDuration(minutes: number): string {
 
 export function describeOutcome(outcome: ScanOutcome): OutcomeView {
   switch (outcome.result) {
-    case "in": {
-      const view: OutcomeView = {
+    // No outcome mentions a flag: those are for OSHES to follow up, not the smoker.
+    case "in":
+      return {
         tone: "in",
         headline: "Checked out",
         time: formatMyt(outcome.timeIn),
         detail: outcome.areaName,
         hint: "Scan a poster again when you're back in.",
       };
-      if (outcome.previousMissedScanOut) view.note = "Your last break had no check-in — OSHES will check it.";
-      return view;
-    }
-    case "out": {
-      const view: OutcomeView = {
+    case "out":
+      return {
         tone: "out",
         headline: "Checked in",
         time: formatMyt(outcome.timeOut),
         detail: `${formatDuration(outcome.durationMinutes)} break · ${outcome.areaName}`,
       };
-      if (outcome.flagged) view.note = "OSHES will check this break — it was flagged.";
-      return view;
-    }
     case "already-in":
       return { tone: "info", headline: `Already checked out at ${formatMyt(outcome.timeIn)}`, detail: "Scan again when you're back in." };
     case "already-out":

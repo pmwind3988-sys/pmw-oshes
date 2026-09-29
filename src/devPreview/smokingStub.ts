@@ -75,9 +75,9 @@ function smokingApi(body: Record<string, unknown>, scan: string, now: Date): Res
       return json({ ok: true });
     case "scan":
       if (scan === "profile") return json({ result: "no-profile" });
-      if (scan === "in") return json({ result: "out", timeIn: minsAgo(9), timeOut: minsAgo(0), areaName: "Block A smoking area", durationMinutes: 9, flagged: false });
+      if (scan === "in") return json({ result: "out", timeIn: minsAgo(9), timeOut: minsAgo(0), areaName: "Block A smoking area", durationMinutes: 9 });
       if (scan === "already") return json({ result: "already-in", timeIn: minsAgo(0), areaName: "Block A smoking area" });
-      if (scan === "flagged") return json({ result: "out", timeIn: minsAgo(75), timeOut: minsAgo(0), areaName: "Block A smoking area", durationMinutes: 75, flagged: true });
+      if (scan === "flagged") return json({ result: "out", timeIn: minsAgo(75), timeOut: minsAgo(0), areaName: "Block A smoking area", durationMinutes: 75 });
       return json({ result: "in", timeIn: minsAgo(0), areaName: "Block A smoking area" });
     default:
       return json({ ok: true });

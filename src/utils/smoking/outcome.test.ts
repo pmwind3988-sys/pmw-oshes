@@ -17,35 +17,17 @@ describe("describeOutcome", () => {
       hint: "Scan a poster again when you're back in.",
     });
   });
-  it("reads checking out after a missed check-in on the previous break", () => {
-    expect(describeOutcome({
-      result: "in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A", previousMissedScanOut: true,
-    })).toEqual({
-      tone: "in",
-      headline: "Checked out",
-      time: "10:42",
-      detail: "Block A",
-      note: "Your last break had no check-in — OSHES will check it.",
-      hint: "Scan a poster again when you're back in.",
-    });
-  });
   it("reads the scan that ends a break as checking in, with the duration", () => {
     expect(describeOutcome({
       result: "out", timeIn: "2026-09-24T02:42:00Z", timeOut: "2026-09-24T02:49:00Z",
-      areaName: "Block B", durationMinutes: 7, flagged: false,
+      areaName: "Block B", durationMinutes: 7,
     })).toEqual({ tone: "out", headline: "Checked in", time: "10:49", detail: "7 min break · Block B" });
   });
-  it("mentions a flagged break without accusing", () => {
+  it("reads a long break like any other: flags are for OSHES, not the smoker", () => {
     expect(describeOutcome({
       result: "out", timeIn: "2026-09-23T02:00:00Z", timeOut: "2026-09-24T02:00:00Z",
-      areaName: "Block A", durationMinutes: 1440, flagged: true,
-    })).toEqual({
-      tone: "out",
-      headline: "Checked in",
-      time: "10:00",
-      detail: "24 h 0 min break · Block A",
-      note: "OSHES will check this break — it was flagged.",
-    });
+      areaName: "Block A", durationMinutes: 1440,
+    })).toEqual({ tone: "out", headline: "Checked in", time: "10:00", detail: "24 h 0 min break · Block A" });
   });
   it("reads a double scan", () => {
     expect(describeOutcome({ result: "already-in", timeIn: "2026-09-24T02:42:00Z", areaName: "Block A" }))

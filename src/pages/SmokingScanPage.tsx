@@ -714,23 +714,6 @@ export default function SmokingScanPage() {
                 <Typography sx={{ fontSize: 17, fontWeight: 600, lineHeight: 1.45, maxWidth: "32ch" }}>{view.detail}</Typography>
               </Stack>
 
-              {view.note && (
-                <Stack
-                  sx={{
-                    flexDirection: "row",
-                    gap: 1.25,
-                    mt: 2,
-                    p: 1.5,
-                    borderRadius: radius.base,
-                    border: `1px solid color-mix(in srgb, ${editorial.warning} 35%, transparent)`,
-                    backgroundColor: editorial.warningWash,
-                  }}
-                >
-                  <AlertCircle size={18} style={{ flex: "none", color: editorial.warning, marginTop: 2 }} />
-                  <Typography sx={{ fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>{view.note}</Typography>
-                </Stack>
-              )}
-
               {view.hint && (
                 <Stack sx={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 1, mt: 2, color: editorial.muted }}>
                   <QrCode size={16} style={{ flex: "none" }} />
