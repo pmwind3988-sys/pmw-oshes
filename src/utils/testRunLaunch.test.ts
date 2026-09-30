@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sampleAnswersFor } from "./testRunLaunch";
+import { SAMPLE_SIGNATURE, sampleAnswersFor, testRunFormUrl } from "./testRunLaunch";
 
 describe("sampleAnswersFor — typed text inputs", () => {
   const survey = (inputType: string) => ({
@@ -42,5 +42,30 @@ describe("sampleAnswersFor — typed text inputs", () => {
   /** A genuinely textual input keeps the recognisably-fake sentence. */
   it("leaves an ordinary text question as a sentence", () => {
     expect(sampleAnswersFor(survey("")).q).toBe("Test answer — q");
+  });
+});
+
+describe("simulated runs", () => {
+  const survey = {
+    pages: [{ elements: [
+      { type: "signaturepad", name: "sig" },
+      { type: "file", name: "attachment" },
+      { type: "text", name: "name" },
+    ] }],
+  };
+
+  it("signs signature pads only when asked to", () => {
+    expect(sampleAnswersFor(survey).sig).toBeUndefined();
+    expect(sampleAnswersFor(survey, { signatures: true }).sig).toBe(SAMPLE_SIGNATURE);
+    expect(SAMPLE_SIGNATURE.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
+  it("never invents a file upload", () => {
+    expect(sampleAnswersFor(survey, { signatures: true }).attachment).toBeUndefined();
+  });
+
+  it("asks the form to simulate only when told to", () => {
+    expect(testRunFormUrl({ slug: "zz-test-run", ticket: "t1" })).toBe("/form/zz-test-run?testTicket=t1");
+    expect(testRunFormUrl({ slug: "zz-test-run", ticket: "t1", simulate: true })).toBe("/form/zz-test-run?testTicket=t1&simulate=1");
   });
 });

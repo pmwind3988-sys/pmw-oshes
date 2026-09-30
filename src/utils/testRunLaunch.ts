@@ -7,7 +7,13 @@
  * hand; it deliberately leaves anything it cannot confidently guess (a
  * signature, a file upload) blank rather than risk submitting garbage.
  *
- * `testRunFormUrl` builds the link a "Start test run" action opens. This app
+ * A *simulated* run (the builder's "Simulate submission") also signs every
+ * signature pad with `SAMPLE_SIGNATURE`, because it submits without the
+ * tester touching the form and a required signature would otherwise stop it.
+ * A file upload is still left blank: there is no honest sample file, so a
+ * form that requires one stops and asks the tester for it.
+ *
+ * `testRunFormUrl` builds the link the dashboard's "Test workflow" opens. This app
  * has exactly one form route — `/form/:formId` (see `src/App.tsx`) — so
  * there is no public/signed-in split to encode here.
  */
@@ -23,6 +29,14 @@ type SurveyElement = {
 };
 
 type SurveyPage = { elements?: SurveyElement[] };
+
+/** A scribbled line, as a PNG data URL — obviously a sample, never a real signature. */
+export const SAMPLE_SIGNATURE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAyCAAAAAA8Oss9AAABH0lEQVR42u2YURLDIAhEuQv3P2M7048mRsRFpJO262cMu76AhkQePzKEIAQhCEEIQhCCEIQgBCHIv4Loa3w7iB4jHnQfEG3GQtBNQM6LgZelKD2sKKgrOIf5noPGKKGkSaoGjKuI6+UeRxsnkVAJKJCquWt/hxqJPa5BKILWf8cylJ+ZmvNqWIW2ikT2hiq0SX3T+YYYJX8VZFA3QOF6pn6YozwhkfDBh2w/95RLHJArILkX1Sg6peoGSwnHKD6p6hWC1HDYCmlVh0RSfUH4bbGjH8JBNjVyV5USVe1A3vP7GtKVLiyYFLVANvfVredG2bZ18UD2fbZpxeOxn7nY7U6BZ4nsB38+aM3XfKfJvygEIQhBCEIQghCEIASZgjwBh+0QvNFBf8IAAAAASUVORK5CYII=";
+
+export interface SampleAnswerOptions {
+  /** Sign every signature pad with `SAMPLE_SIGNATURE` (simulated runs only). */
+  signatures?: boolean;
+}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -76,9 +90,11 @@ function firstChoiceValue(choices: SurveyElement["choices"]): unknown {
   return first;
 }
 
-function sampleValueFor(el: SurveyElement): unknown {
+function sampleValueFor(el: SurveyElement, options: SampleAnswerOptions): unknown {
   const type = el.type;
   const name = el.name || "";
+
+  if (type === "signaturepad") return options.signatures ? SAMPLE_SIGNATURE : undefined;
 
   if (type === "text") {
     const typed = typedInputSample(el.inputType || "");
@@ -109,7 +125,10 @@ function sampleValueFor(el: SurveyElement): unknown {
  * result entirely, so the tester fills it in themselves rather than
  * submitting a guess that looks real but is not.
  */
-export function sampleAnswersFor(surveyJson: Record<string, unknown>): Record<string, unknown> {
+export function sampleAnswersFor(
+  surveyJson: Record<string, unknown>,
+  options: SampleAnswerOptions = {},
+): Record<string, unknown> {
   const answers: Record<string, unknown> = {};
   const pages = (surveyJson as { pages?: SurveyPage[] })?.pages;
   if (!Array.isArray(pages)) return answers;
@@ -118,7 +137,7 @@ export function sampleAnswersFor(surveyJson: Record<string, unknown>): Record<st
     if (!Array.isArray(elements)) return;
     for (const el of elements) {
       if (el.name) {
-        const value = sampleValueFor(el);
+        const value = sampleValueFor(el, options);
         if (value !== undefined) answers[el.name] = value;
       }
       if (Array.isArray(el.elements)) walk(el.elements);
@@ -135,8 +154,11 @@ export function sampleAnswersFor(surveyJson: Record<string, unknown>): Record<st
  * carried in the query string — the server reads the authoritative test
  * address out of that ticket, never out of anything else in the URL.
  */
-export function testRunFormUrl(params: { slug: string; ticket: string }): string {
+export function testRunFormUrl(params: { slug: string; ticket: string; simulate?: boolean }): string {
   const query = new URLSearchParams({ testTicket: params.ticket });
+  // Asks the form to fill itself with sample answers and submit once loaded.
+  // Only honoured alongside a test ticket, so it cannot submit a real request.
+  if (params.simulate) query.set("simulate", "1");
   return `/form/${encodeURIComponent(params.slug)}?${query.toString()}`;
 }
 

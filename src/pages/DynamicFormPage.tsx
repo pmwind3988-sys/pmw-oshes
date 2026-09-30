@@ -505,7 +505,7 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay, testRunReview }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string; testRunReview?: { href: string; label: string } | null }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
     {isTestRun && (
       <div role="status" style={{ maxWidth: 440, margin: "0 auto 20px", padding: "10px 16px", background: t.red, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 700, lineHeight: 1.5 }}>
@@ -526,6 +526,17 @@ const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmai
             without importing a second typeface. */}
         <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums", color: t.textPrimary, userSelect: "all", wordBreak: "break-all" }}>{referenceNo}</div>
         <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your report.</div>
+      </div>
+    )}
+    {isTestRun && testRunReview && (
+      <div style={{ margin: "8px auto 18px" }}>
+        <a
+          href={testRunReview.href}
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: 44, padding: "0 24px", borderRadius: 8, background: t.purple, color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none" }}
+        >
+          {testRunReview.label}
+        </a>
+        <div style={{ fontSize: 12, color: t.textSecond, marginTop: 8 }}>A signed-in step opens only for whoever it is assigned to.</div>
       </div>
     )}
     <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
@@ -559,6 +570,9 @@ export default function DynamicFormPage() {
   const testTicket = searchParams.get("testTicket") || "";
   const testEmailDisplay = searchParams.get("testEmail") || "";
   const isTestRun = testTicket.length > 0;
+  // "Simulate submission": fill with sample answers and submit once. Ignored
+  // without a test ticket, so a real link can never submit itself.
+  const simulateRequested = isTestRun && searchParams.get("simulate") === "1";
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -593,6 +607,10 @@ export default function DynamicFormPage() {
   const [submitError, setSubmitError] = useState("");
   const [pdpaAccepted, setPdpaAccepted] = useState(false);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
+  /** Where a simulated submission has got to; "blocked" hands the form back. */
+  const [simulateStep, setSimulateStep] = useState<"idle" | "armed" | "done" | "blocked">("idle");
+  /** A test run's step-1 link, offered on the success screen. */
+  const [testRunReview, setTestRunReview] = useState<{ href: string; label: string } | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -932,7 +950,9 @@ export default function DynamicFormPage() {
   // through every field; anything the sampler cannot guess (signatures, files)
   // is left for them. The engine reseeds only when the form itself changes, so
   // a fresh object each render is harmless.
-  const testRunSeed = isTestRun && enrichedSurveyJson ? sampleAnswersFor(enrichedSurveyJson) : undefined;
+  const testRunSeed = isTestRun && enrichedSurveyJson
+    ? sampleAnswersFor(enrichedSurveyJson, { signatures: simulateRequested })
+    : undefined;
   const runtime = useNativeForm(nativeForm ?? placeholderForm, testRunSeed);
   const formReady = nativeForm !== null;
 
@@ -960,23 +980,42 @@ export default function DynamicFormPage() {
    * which is what `doSubmitForm` runs off, exactly as the SurveyJS
    * `onCompleting` handler it replaces did.
    */
-  const handleSubmit = useCallback(() => {
-    if (!formReady || submitStatus === "loading") return;
+  const handleSubmit = useCallback((): boolean => {
+    if (!formReady || submitStatus === "loading") return false;
 
     // The form view scrolls to the first failure and focuses it, so a rejected
     // validation needs no message of its own here.
-    if (!runtime.validateAll().ok) return;
+    if (!runtime.validateAll().ok) return false;
 
     if (!pdpaAccepted) {
       setPdpaConsentError("Please read and accept the Privacy Notice before submitting this form.");
       document.querySelector(".dfp-pdpa-consent")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
+      return false;
     }
 
     setPdpaConsentError("");
     lastDataRef.current = runtime.collect();
     setSubmitStatus("loading");
+    return true;
   }, [formReady, submitStatus, runtime, pdpaAccepted]);
+
+  /*
+    "Simulate submission". Two passes, because the ticked consent is state: the
+    first ticks it (the rehearsal's sample data is what is being consented for),
+    the second submits once that has rendered. It runs once — a form that needs
+    a real answer, such as a file upload, is handed back to the tester with the
+    gaps highlighted rather than retried.
+  */
+  useEffect(() => {
+    if (!simulateRequested || simulateStep !== "idle" || !formReady || submitStatus !== null) return;
+    setPdpaAccepted(true);
+    setSimulateStep("armed");
+  }, [simulateRequested, simulateStep, formReady, submitStatus]);
+
+  useEffect(() => {
+    if (simulateStep !== "armed" || !pdpaAccepted) return;
+    setSimulateStep(handleSubmit() ? "done" : "blocked");
+  }, [simulateStep, pdpaAccepted, handleSubmit]);
   const doSubmitForm = useCallback(async () => {
     // Collapse "other" + "{name}-Comment" pairs into the free text the respondent
     // typed, before uploads or column mapping read the answers.
@@ -1414,6 +1453,14 @@ export default function DynamicFormPage() {
             responseItemId: result.Id,
             linkToken: firstLayerLinkToken,
           });
+          // A test run hands the tester the first step's own link. Here it carries
+          // the binding this page just wrote, so a public step opens too.
+          if (isTestRun && firstLayerReviewLink && !firstLayerManualPaper) {
+            setTestRunReview({
+              href: firstLayerReviewLink,
+              label: firstLayer?.type === "evaluation" ? "Open step 1 to evaluate" : "Open step 1 to approve",
+            });
+          }
 
           if (firstLayerManualPaper) {
             // Manual-paper workflow notices are sent with the generated PDF below.
@@ -1618,6 +1665,24 @@ export default function DynamicFormPage() {
         if (!res.ok) { throw new Error(resData.error || `Submit failed: ${res.status}`); }
         if (resData.referenceNo) setSubmittedReference(resData.referenceNo);
 
+        // A test run hands the tester step 1's link. Only a signed-in step: a
+        // public one needs the binding the server wrote, which only its email has.
+        const guestFirstLayer = layerConfigParsed?.layers?.[0];
+        if (isTestRun && resData.id && guestFirstLayer && guestFirstLayer.authMode !== "public") {
+          const href = buildLayerReviewLink({
+            baseUrl: appBaseUrl(),
+            layer: guestFirstLayer,
+            formSlug: (cfg.Slug as string) || (cfg.slug as string) || "",
+            responseItemId: resData.id,
+          });
+          if (href) {
+            setTestRunReview({
+              href,
+              label: guestFirstLayer.type === "evaluation" ? "Open step 1 to evaluate" : "Open step 1 to approve",
+            });
+          }
+        }
+
         // If API returned parent item ID and we have matrixData, try server-side child list write
         // (API creates child items using system credential; we verify via RowIds response field)
         if (resData.id && Object.keys(matrixData).length > 0) {
@@ -1658,6 +1723,7 @@ export default function DynamicFormPage() {
     setSubmitStatus(null);
     setSubmittedReference("");
     setSubmitError("");
+    setTestRunReview(null);
     setPdpaAccepted(false);
     setPdpaConsentError("");
     lastDataRef.current = null;
@@ -1726,6 +1792,16 @@ export default function DynamicFormPage() {
           TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
         </div>
       )}
+      {simulateStep === "blocked" && submitStatus !== "success" && (
+        <div role="alert" style={{ background: t.amberPale, color: t.textPrimary, fontSize: 13, textAlign: "center", padding: "10px 12px", lineHeight: 1.5, borderBottom: `1px solid ${t.border}` }}>
+          <strong>Not submitted yet.</strong> Some questions need a real answer, such as a file upload. Fill the highlighted ones, then press Submit.
+        </div>
+      )}
+      {simulateRequested && simulateStep !== "blocked" && submitStatus === null && (
+        <div role="status" style={{ background: t.purplePale, color: t.textPrimary, fontSize: 13, textAlign: "center", padding: "10px 12px" }}>
+          Filling in sample answers and submitting…
+        </div>
+      )}
       <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
         <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Logo size={{ xs: 26, sm: 28, md: 32 }} />
@@ -1782,7 +1858,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} testRunReview={testRunReview} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (

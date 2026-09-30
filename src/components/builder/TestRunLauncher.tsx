@@ -2,7 +2,10 @@
  * TestRunLauncher.tsx — "Test workflow" for one form.
  *
  * Mints a signed test ticket (`mint-test-ticket` on `/api/submit-form`) and
- * opens the form's one route with that ticket in the query string. Every email
+ * opens the form's one route with that ticket in the query string — "Fill in
+ * myself" — or with `simulate=1` as well — "Simulate submission" — which has
+ * the form fill itself with sample answers and submit once, leaving the tester
+ * only the approval or evaluation to do. Every email
  * the run generates is then redirected server-side to the address entered here;
  * once the ticket is minted nothing about the redirect comes from the browser —
  * the server reads it out of the signed ticket, never out of the URL.
@@ -32,13 +35,14 @@ interface TestRunLauncherProps {
 export default function TestRunLauncher({ open, onClose, form }: TestRunLauncherProps) {
   const { instance, accounts } = useMsal();
   const [email, setEmail] = useState(accounts[0]?.username || "");
-  const [busy, setBusy] = useState(false);
+  /** Which button started the run in flight, so only that one says "Starting…". */
+  const [busy, setBusy] = useState<"" | "fill" | "simulate">("");
   const [error, setError] = useState("");
   const [blockedUrl, setBlockedUrl] = useState("");
 
   const slug = form.Slug || "";
 
-  const startTestRun = async () => {
+  const startTestRun = async (simulate: boolean) => {
     setError("");
     setBlockedUrl("");
     if (!slug) {
@@ -50,7 +54,7 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
       setError("Enter a valid email address to receive the test run.");
       return;
     }
-    setBusy(true);
+    setBusy(simulate ? "simulate" : "fill");
     try {
       const delegatedToken = await acquireAccessTokenSilentOrRedirect(instance, {
         scopes: [testRunSharePointScope()],
@@ -71,7 +75,7 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
         return;
       }
       // `testEmail` in the URL is only for the banner; the server never reads it.
-      const url = `${testRunFormUrl({ slug, ticket: data.ticket })}&testEmail=${encodeURIComponent(testEmail)}`;
+      const url = `${testRunFormUrl({ slug, ticket: data.ticket, simulate })}&testEmail=${encodeURIComponent(testEmail)}`;
       const popup = window.open(url, "_blank", "noopener");
       if (!popup) {
         // The run is minted and the columns exist — only the new tab failed.
@@ -83,24 +87,28 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start a test run.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   };
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: radius.lg } } }}>
+    <Dialog open={open} onClose={busy !== "" ? undefined : onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: radius.lg } } }}>
       <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>Test workflow</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: 13.5, color: editorial.muted, lineHeight: 1.55, mb: 2 }}>
           Rehearse &ldquo;{form.Title}&rdquo;&rsquo;s approval workflow. Every email this run sends goes only to the address
           below — no real approver is contacted — and the run stays out of normal submission lists.
         </Typography>
+        <Typography sx={{ fontSize: 13.5, color: editorial.muted, lineHeight: 1.55, mb: 2 }}>
+          <strong>Simulate submission</strong> fills every question with sample answers and submits for you, so you only
+          do the approval or evaluation. <strong>Fill in myself</strong> opens the form pre-filled for you to check first.
+        </Typography>
         <TextField
           label="Send all test emails to"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          disabled={busy}
+          disabled={busy !== ""}
           size="small"
           fullWidth
         />
@@ -115,9 +123,12 @@ export default function TestRunLauncher({ open, onClose, form }: TestRunLauncher
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-        <Button onClick={onClose} disabled={busy} sx={{ textTransform: "none", fontWeight: 700 }}>Cancel</Button>
-        <Button variant="contained" onClick={() => void startTestRun()} disabled={busy} sx={{ textTransform: "none", fontWeight: 800 }}>
-          {busy ? "Starting…" : "Start test run"}
+        <Button onClick={onClose} disabled={busy !== ""} sx={{ textTransform: "none", fontWeight: 700 }}>Cancel</Button>
+        <Button variant="outlined" onClick={() => void startTestRun(false)} disabled={busy !== ""} sx={{ textTransform: "none", fontWeight: 800 }}>
+          {busy === "fill" ? "Starting…" : "Fill in myself"}
+        </Button>
+        <Button variant="contained" onClick={() => void startTestRun(true)} disabled={busy !== ""} sx={{ textTransform: "none", fontWeight: 800 }}>
+          {busy === "simulate" ? "Starting…" : "Simulate submission"}
         </Button>
       </DialogActions>
     </Dialog>
