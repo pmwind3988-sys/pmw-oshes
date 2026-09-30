@@ -39,6 +39,16 @@ import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerA
 import { formatDisplayDateTime } from "../utils/displayDateTime";
 import { REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { COMPANY } from "../config/company";
+import { approverDisplayName } from "../utils/approverIdentity";
+import { readSignerIdentity, stampLayerSigner, type SignerIdentity } from "../utils/layerSigner";
+import {
+  signOffLabel,
+  signOffName,
+  signOffPosition,
+  signOffVerdictForLayer,
+  signOffVerdictFromStatus,
+} from "../utils/signOff";
+import SignOffBlock from "../components/SignOffBlock";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -272,6 +282,11 @@ function surveyElementsForLayer(layerSequence: LayerConfigItem[], layerNumber: u
   return layer?.type === "evaluation" ? (layer as EvaluationLayerConfig).surveyElements || [] : [];
 }
 
+/** Today, as the sign-off prints a date that has not been recorded yet. */
+function todayLabel(): string {
+  return new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 // ── Component ──
 export default function EvaluationPage() {
   const { token: routeToken, formSlug, responseId, layerNumber } = useParams<{
@@ -301,6 +316,8 @@ export default function EvaluationPage() {
   const [mediaSrcByField, setMediaSrcByField] = useState<Record<string, string | string[]>>({});
   const [logoUrl, setLogoUrl] = useState("");
   const [publicPreviousLayerSummaries, setPublicPreviousLayerSummaries] = useState<PublicPreviousLayerSummary[]>([]);
+  /** The signed-in reviewer's directory name and post, read once their token is in hand. */
+  const [viewerSignOff, setViewerSignOff] = useState<SignerIdentity | null>(null);
 
   /**
    * The evaluation questions this layer asks, as a native document.
@@ -363,6 +380,19 @@ export default function EvaluationPage() {
       .then((accessToken) => { setToken(accessToken); setAuthState("authorized"); })
       .catch(() => { setAuthState("error"); setError("Failed to acquire token."); });
   }, [isPublic, isAuthenticated, inProgress, instance, accounts]);
+
+  // Who is about to sign, so the page can print their post under the line
+  // before they press anything. Signed-in only: a public link has no account
+  // to name. Read from the Approval Directory, the same row the decision will
+  // be stamped from (see utils/layerSigner.ts).
+  useEffect(() => {
+    if (isPublic || !token || !userEmail) return;
+    let cancelled = false;
+    readSignerIdentity(token, userEmail).then((identity) => {
+      if (!cancelled) setViewerSignOff(identity);
+    });
+    return () => { cancelled = true; };
+  }, [isPublic, token, userEmail]);
 
   // ── Load data ──
   useEffect(() => {
@@ -428,6 +458,9 @@ export default function EvaluationPage() {
                 layerNumber: n,
                 status: json.data.fields[`L${n}_Status`] || null,
                 email: json.data.fields[`L${n}_Email`] || null,
+                actedBy: json.data.fields[`L${n}_ActedBy`] || null,
+                actedByName: json.data.fields[`L${n}_ActedByName`] || null,
+                actedByPosition: json.data.fields[`L${n}_ActedByPosition`] || null,
                 signedAt: json.data.fields[`L${n}_SignedAt`] || null,
                 evaluationData: visibleEvaluationData[String(n)],
               });
@@ -575,6 +608,9 @@ export default function EvaluationPage() {
       const isFinal = !nextLayer && displayLayerNumber >= effectiveTotalLayers;
       const nextLayerNumber = nextLayer?.layerNumber ?? displayLayerNumber + 1;
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${respId})`;
+      // The name Azure gave the account, for a signer with no directory row.
+      // An address handed back as the display name is not a name.
+      const signerFallbackName = approverDisplayName(accounts[0]?.name, "");
 
       // Resolved before anything is written: a next layer nobody can open is a
       // broken workflow, and advancing into it strands the submission.
@@ -606,6 +642,8 @@ export default function EvaluationPage() {
           // A rejection closes the layer too — record who turned it down.
           ...(rejectedBy ? { [`L${displayLayerNumber}_Email`]: rejectedBy } : {}),
         });
+        // Rejections are signed too: who, and in which post.
+        await stampLayerSigner(token, itemUrl, displayLayerNumber, userEmail, signerFallbackName);
         await loadPdfAndGenerate(token, listTitle, respId, formTitle, "rejected");
       } else if (action === "confirm" && currentLayer?.type === "evaluation") {
         await submitEvaluationData(token, listTitle, respId, displayLayerNumber, {
@@ -621,6 +659,7 @@ export default function EvaluationPage() {
           // Claims a shared layer for whoever actually reviewed it.
           email: claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail),
         });
+        await stampLayerSigner(token, itemUrl, displayLayerNumber, userEmail, signerFallbackName);
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Completed" : "In Review",
           FormStatus: isFinal ? "Completed" : "In Review",
@@ -638,6 +677,8 @@ export default function EvaluationPage() {
           // Claims a shared layer for whoever actually approved it.
           email: claimLayerEmail(currentLayer ?? undefined, responseData?.[`L${displayLayerNumber}_Email`], userEmail),
         });
+        // Stamped before the PDF below is drawn, so the record names its signer.
+        await stampLayerSigner(token, itemUrl, displayLayerNumber, userEmail, signerFallbackName);
         await spPatch(token, itemUrl, {
           Status: isFinal ? "Approved" : `Approved Layer ${displayLayerNumber}`,
           FormStatus: isFinal ? "Completed" : "In Review",
@@ -783,6 +824,27 @@ export default function EvaluationPage() {
   const isLayerAlreadyComplete = isTerminalLayerStatus(currentLayerStatus) || isTerminalFormStatus(formStatus);
   const currentLayerLabel = currentLayerStatus || (isLayerAlreadyComplete ? "Completed" : "Pending");
   const effectiveLayerNumber = currentLayer?.layerNumber || displayLayerNumber;
+  // Who is signing, the way the foot of a paper form reads: what they are doing,
+  // their name, their post. The directory name wins over Azure's display name,
+  // so the page prints what the record will be stamped with; the post falls
+  // back to the layer title. A public link has no signed-in account to name.
+  const signedInApprover = isPublic ? "" : approverDisplayName(accounts[0]?.name, userEmail);
+  const approverRoleLabel = currentLayer?.title || `Layer ${effectiveLayerNumber}`;
+  const signerName = isPublic ? "" : viewerSignOff?.name || signedInApprover;
+  const signerPosition = signOffPosition(viewerSignOff?.position, approverRoleLabel);
+  const pendingVerdict = signOffVerdictForLayer(currentLayer?.type);
+  // A short description doubles as the caption above the name ("Endorsed By");
+  // a long one is subtitle material and would read as a sentence there.
+  const layerDescription = currentLayer?.description?.trim() || "";
+  const customSignOffLabel = layerDescription.length > 0 && layerDescription.length <= 30 ? layerDescription : undefined;
+  // Once decided, the sign-off already on the record — for a link opened later.
+  const recordedVerdict = signOffVerdictFromStatus(currentLayerStatus);
+  const recordedSignerName = responseData
+    ? signOffName(
+      responseData[`L${effectiveLayerNumber}_ActedByName`],
+      responseData[`L${effectiveLayerNumber}_ActedBy`] || responseData[`L${effectiveLayerNumber}_Email`],
+    )
+    : "";
 
   return (
     <div className="eval-page" style={{ minHeight: "100dvh", padding: "clamp(16px, 3vw, 32px) 16px" }}>
@@ -843,6 +905,25 @@ export default function EvaluationPage() {
               const previousLayerNumber = Number(pr.layerNumber);
               const publicSummary = publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === previousLayerNumber);
               const previousSurveyElements = publicSummary?.surveyElements || surveyElementsForLayer(layerSequence, previousLayerNumber);
+              const previousTitle = publicSummary?.title || valueToText(pr.title) || `Layer ${previousLayerNumber}`;
+              const previousVerdict = signOffVerdictFromStatus(pr.status);
+              const previousSignerName = signOffName(
+                pr.actedByName || evalData?.confirmerName,
+                pr.actedBy || evalData?.confirmerEmail || pr.email,
+              );
+              const previousSignOff = previousVerdict && previousSignerName ? (
+                <div style={{ marginTop: 12 }}>
+                  <SignOffBlock
+                    compact
+                    align="start"
+                    verdict={previousVerdict}
+                    label={signOffLabel(previousVerdict)}
+                    name={previousSignerName}
+                    position={signOffPosition(pr.actedByPosition, previousTitle)}
+                    date={formatDateTime(pr.signedAt || evalData?.confirmedAt)}
+                  />
+                </div>
+              ) : null;
               if (evalData?.status === "confirmed") {
                 return (
                   <EvaluationSummary
@@ -856,16 +937,17 @@ export default function EvaluationPage() {
                       fields: evalData.fields || {},
                       notes: evalData.notes,
                     }}
-                    layerTitle={publicSummary?.title || `Layer ${previousLayerNumber}`}
+                    layerTitle={previousTitle}
                     layerDescription={publicSummary?.description}
                     surveyElements={previousSurveyElements}
+                    footer={previousSignOff}
                   />
                 );
               }
               return (
                 <div key={i} style={{ background: COLORS.purplePale, borderRadius: 8, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
-                  Layer {previousLayerNumber}: <strong>{String(pr.status || "Completed")}</strong>
-                  {pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null}
+                  {previousTitle}: <strong>{String(pr.status || "Completed")}</strong>
+                  {previousSignOff ?? (pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null)}
                 </div>
               );
             })}
@@ -951,7 +1033,19 @@ export default function EvaluationPage() {
                 </Typography>
               </Box>
             </Stack>
-          ) : (
+          ) : null}
+          {isLayerAlreadyComplete && recordedVerdict && recordedSignerName && responseData && (
+            <div style={{ marginTop: 20 }}>
+              <SignOffBlock
+                verdict={recordedVerdict}
+                label={signOffLabel(recordedVerdict, customSignOffLabel)}
+                name={recordedSignerName}
+                position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
+                date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
+              />
+            </div>
+          )}
+          {!isLayerAlreadyComplete && (
             <>
               {isEvaluation && (
                 <div style={{ marginBottom: 16 }}>
@@ -997,6 +1091,22 @@ export default function EvaluationPage() {
                   placeholder="Enter reason if rejecting..."
                   sx={{ mb: 2 }}
                 />
+              )}
+
+              {/* Who is signing, the way the foot of a paper form reads. A
+                  rejection goes on record under the same name and post, as
+                  "Rejected By". */}
+              {signerName && (
+                <div style={{ marginBottom: 20 }}>
+                  <SignOffBlock
+                    verdict={pendingVerdict}
+                    label={signOffLabel(pendingVerdict, customSignOffLabel)}
+                    name={signerName}
+                    position={signerPosition}
+                    date={todayLabel()}
+                    signature={isSignatureRequired ? signatureData : null}
+                  />
+                </div>
               )}
 
               {/* Action buttons */}

@@ -233,10 +233,11 @@ describe("a record printed before its chain has finished", () => {
 
   it("draws a signature block only for the layer that signed one", async () => {
     const text = flatText(await renderPdf(inFlight()));
-    // One detail card, so one "Actioned by". Empty wells under the names of two
+    // One detail card, so one sign-off. Empty wells under the names of two
     // people who have not signed is the thing this replaces: an unfilled well
     // is indistinguishable from a signature whose image failed to load.
-    expect(occurrences(text, "ACTIONED BY")).toBe(1);
+    expect(occurrences(text, "APPROVED BY")).toBe(1);
+    expect(occurrences(text, "ACTIONED BY")).toBe(0);
     expect(text).toContain("ONE@EXAMPLE.COM");
   });
 
@@ -273,7 +274,32 @@ describe("a record printed before its chain has finished", () => {
     const text = flatText(await renderPdf(complete));
     expect(text).not.toContain("INTERIM COPY");
     expect(text).not.toContain("NOT SIGNED");
-    expect(occurrences(text, "ACTIONED BY")).toBe(2);
+    expect(occurrences(text, "APPROVED BY")).toBe(2);
+  });
+
+  it("signs a decided layer with the name and post stamped at signing", async () => {
+    const signed = baseData({
+      layerResults: [
+        {
+          layerNumber: 1,
+          type: "approval",
+          status: "Approved",
+          email: "ahmad.faiz@example.com",
+          signedAt: "2026-08-18T10:02:00",
+          signerName: "Ahmad Faiz bin Rahman",
+          signerPosition: "Head of Department, Safety",
+          layerTitle: "HOD Approval",
+        },
+        { layerNumber: 2, type: "approval", status: "Rejected", email: "two@example.com", signedAt: "2026-08-18T13:44:00", rejection: "Incomplete", layerTitle: "Safety Officer" },
+        { layerNumber: 3, type: "approval", status: "Rejected at Layer 2", email: "three@example.com" },
+      ],
+    });
+    const text = flatText(await renderPdf(signed));
+    expect(text).toContain("APPROVED BY AHMAD FAIZ BIN RAHMAN HEAD OF DEPARTMENT, SAFETY");
+    // No post was stamped, so the layer's own title stands in for it.
+    expect(text).toContain("REJECTED BY TWO@EXAMPLE.COM SAFETY OFFICER");
+    // Rejected only because layer 2 was: nobody at layer 3 signed anything.
+    expect(occurrences(text, "REJECTED BY")).toBe(1);
   });
 
   it("keeps the blank-form mode blank, which is the one place empty fields belong", async () => {
@@ -463,7 +489,7 @@ describe("an evaluation that signed inside its own answers", () => {
     });
     const text = flatText(await renderPdf(data));
     // The card is still there, and still says who acted and when.
-    expect(text).toContain("ACTIONED BY");
+    expect(text).toContain("EVALUATED BY");
     expect(occurrences(text, "MUHAMMAD ASHRAF BIN AZAHARI")).toBe(1);
     expect(text).not.toContain("SIGNATURES & ATTACHMENTS");
     // Only the logo is drawn: no well, no rule, no raster for a layer with no ink.

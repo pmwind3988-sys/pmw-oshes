@@ -13,6 +13,7 @@ import { denyLayerItemAccess } from "./_utils/layerItemAccess.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { resolveLayerRecipients, type LayerNotifyConfig } from "./_utils/layerRecipients.js";
+import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 
 /**
  * What a link issued before bindings existed is told. Deliberately the same
@@ -118,6 +119,52 @@ function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<
   } catch {
     return { surveyJson: null, meta: {} };
   }
+}
+
+/**
+ * Who may act on a layer, as recorded on the submission: `L{n}_Emails` when
+ * the layer names several people, else the single `L{n}_Email`.
+ */
+function layerActorEmails(fields: Record<string, unknown>, layerNumber: number): string[] {
+  const raw = String(fields[`L${layerNumber}_Emails`] || fields[`L${layerNumber}_Email`] || "");
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of raw.split(/[;,\n]/)) {
+    const email = entry.trim();
+    const key = email.toLowerCase();
+    if (!RECIPIENT_EMAIL_RE.test(email) || seen.has(key)) continue;
+    seen.add(key);
+    result.push(email);
+  }
+  return result;
+}
+
+/**
+ * The signer's name and post, from their `Approval Directory` row.
+ *
+ * The directory is what routing already trusts about a person, so the position
+ * printed under a signature is the same one that decided the request reached
+ * them. Absent — no row, an inactive row, no directory at all — both are left
+ * out, and the page prints the name the address spells out and the layer title
+ * in their place.
+ */
+async function readSignerIdentity(graphToken: string, email: string): Promise<{ name: string; position: string }> {
+  const row = email
+    ? await createApprovalDirectoryReader(graphToken).lookupPerson(email).catch(() => null)
+    : null;
+  return {
+    name: row?.name?.trim() || "",
+    position: row?.position?.trim() || "",
+  };
+}
+
+/** The `L{n}_ActedByName` / `L{n}_ActedByPosition` patch for one signer. */
+async function signerStampFor(graphToken: string, layerNumber: number, email: string): Promise<Record<string, string>> {
+  const signer = await readSignerIdentity(graphToken, email);
+  const stamp: Record<string, string> = {};
+  if (signer.name) stamp[`L${layerNumber}_ActedByName`] = signer.name.slice(0, 255);
+  if (signer.position) stamp[`L${layerNumber}_ActedByPosition`] = signer.position.slice(0, 255);
+  return stamp;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -470,11 +517,19 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
         if (n < foundLayerNumber) {
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
+          visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
+          visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
+          visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
           visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         } else if (n === foundLayerNumber) {
-          // Current layer — include status
+          // Current layer — include status, and once it is decided, who signed
+          // it: a link opened after the fact shows the sign-off it already has.
           visibleFields[`L${n}_Status`] = allFields[`L${n}_Status`];
           visibleFields[`L${n}_Email`] = allFields[`L${n}_Email`];
+          visibleFields[`L${n}_ActedBy`] = allFields[`L${n}_ActedBy`];
+          visibleFields[`L${n}_ActedByName`] = allFields[`L${n}_ActedByName`];
+          visibleFields[`L${n}_ActedByPosition`] = allFields[`L${n}_ActedByPosition`];
+          visibleFields[`L${n}_SignedAt`] = allFields[`L${n}_SignedAt`];
         }
         // Future layers (n > foundLayerNumber) — HIDDEN
       }
@@ -646,6 +701,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let notificationNextLayer: Record<string, unknown> | undefined;
     const now = new Date().toISOString();
 
+    // Record who acted, a rejection included, so the record can say who
+    // signed. A public token identifies a layer, not a person, so the actor is
+    // only knowable when the layer had exactly one possible actor: with several
+    // sharing a layer we cannot tell which of them clicked, and guessing would
+    // put a name against a decision they may not have made — leave it blank.
+    // (Signed-in decisions are written from the browser and stamped there; see
+    // src/utils/layerSigner.ts.)
+    const layerActors = layerActorEmails(responseItem.fields, layerNumber);
+    const actedByEmail = layerActors.length === 1 && !responseItem.fields[`L${layerNumber}_ActedBy`]
+      ? layerActors[0]
+      : "";
+
     if (action === "approve" || action === "confirm") {
       updates[`L${layerNumber}_Status`] = action === "approve" ? "Approved" : "Confirmed";
       updates[`L${layerNumber}_SignedAt`] = now;
@@ -708,6 +775,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     // 4. Update the response item
     await updateListItemFields(graphToken, responseListName, responseItem.id, updates);
+
+    if (actedByEmail) {
+      // Patched on their own, after the decision, and allowed to fail: a form
+      // whose response list predates these columns must still record the
+      // decision, and one unknown column fails a whole Graph patch.
+      await updateListItemFields(graphToken, responseListName, responseItem.id, {
+        [`L${layerNumber}_ActedBy`]: actedByEmail,
+      }).catch((error) => {
+        logWarn("api:evaluate", "Could not record who acted on the layer", {
+          formTitle,
+          layerNumber,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+      // The name and post the decision is signed with, stamped now rather than
+      // looked up whenever the record is read: a promotion next year must not
+      // rewrite who signed this. A form published before these columns simply
+      // prints the layer title as the position.
+      const signerStamp = await signerStampFor(graphToken, layerNumber, actedByEmail);
+      if (Object.keys(signerStamp).length > 0) {
+        await updateListItemFields(graphToken, responseListName, responseItem.id, signerStamp).catch((error) => {
+          logWarn("api:evaluate", "Could not record the signer's name and position", {
+            formTitle,
+            layerNumber,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    }
 
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);

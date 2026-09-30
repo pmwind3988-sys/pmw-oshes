@@ -61,6 +61,10 @@ function workflowColumns(layerCount: number): GraphColumnSpec[] {
       { name: `L${n}_NotifyEmails`, displayName: `L${n}_NotifyEmails`, type: "note" },
       // Which of the allowed addresses completed the layer.
       { name: `L${n}_ActedBy`, displayName: `L${n}_ActedBy`, type: "text" },
+      // The name and post the decision was signed with, stamped at signing so
+      // a later promotion does not rewrite the record. See src/utils/signOff.ts.
+      { name: `L${n}_ActedByName`, displayName: `L${n}_ActedByName`, type: "text" },
+      { name: `L${n}_ActedByPosition`, displayName: `L${n}_ActedByPosition`, type: "text" },
       { name: `L${n}_SignedAt`, displayName: `L${n}_SignedAt`, type: "dateTime" },
       { name: `L${n}_Rejection`, displayName: `L${n}_Rejection`, type: "note" },
       { name: `L${n}_Signature`, displayName: `L${n}_Signature`, type: "note" },

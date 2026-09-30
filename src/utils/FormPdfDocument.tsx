@@ -10,6 +10,7 @@ import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSigna
 import { isChoiceField, readTicks, shouldListChoices } from "./pdfChoiceMatching";
 import { chainProgress, isAwaitingLayer } from "./pdfLayerProgress";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
+import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "./signOff";
 import { absoluteAttachmentUrl, attachmentName, attachmentUrls, collectRecordAttachments, isFileQuestionType } from "./fileAttachments";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -61,6 +62,17 @@ export interface PdfLayerResult {
   /** For evaluation layers: confirmer name/email */
   confirmerEmail?: string;
   confirmerName?: string;
+  /** Name and post stamped at signing (`L{n}_ActedByName` / `L{n}_ActedByPosition`). */
+  signerName?: string;
+  signerPosition?: string;
+  /** The layer's configured title, printed as the post when none was stamped. */
+  layerTitle?: string;
+  /**
+   * `L{n}_Status` as written, when `status` is a display label. Tells a layer
+   * its reviewer rejected from one rejected by an earlier layer's cascade
+   * ("Rejected at Layer 2"), which nobody at this layer signed.
+   */
+  rawStatus?: string;
 }
 
 // ── Colors ────────────────────────────────────────────────────────────────
@@ -191,6 +203,8 @@ const S = StyleSheet.create({
   sigLabel: { fontSize: 6.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 },
   sigName: { fontSize: 8, fontWeight: "bold", color: C.text, marginTop: 1 },
   sigDetail: { fontSize: 6.5, color: C.muted, marginTop: 1.5, lineHeight: 1.3 },
+  // The post under the signer's name in a sign-off ("Head of Department").
+  sigPosition: { fontSize: 7, color: C.muted, marginTop: 1 },
   // A fixed-height well with a rule under it. The ink sits on the rule when
   // there is ink; when there is not, the rule is a place to sign in pen, which
   // is the one thing an empty white rectangle failed to be.
@@ -910,6 +924,14 @@ function LayerDetailCard({
   const person = (layer.confirmerName || "").trim();
   const email = (layer.confirmerEmail || layer.email || "").trim();
   const actionedBy = person || email || "—";
+  // A layer somebody personally decided closes the way a paper form does:
+  // "Approved By / name / post / date". One closed on paper, still pending, or
+  // rejected only by an earlier layer's cascade records no decision of its own
+  // and keeps the plain "Actioned by" line. Wording lives in utils/signOff.ts.
+  const verdict = includeEmptyEvaluationFields ? null : signOffVerdictFromStatus(layer.rawStatus ?? layer.status);
+  const signerName = verdict ? signOffName(layer.signerName || layer.confirmerName, layer.email || layer.confirmerEmail) : "";
+  // No "Layer N" fallback for the post: the card's own heading already says it.
+  const signerPosition = verdict ? signOffPosition(layer.signerPosition, layer.layerTitle) : "";
   const visuals = includeEmptyEvaluationFields || !showSignature ? [] : layerVisuals(layer, evaluationFields);
   const visualByFieldKey = new Map(
     visuals.filter((visual) => visual.fieldKey).map((visual) => [visual.fieldKey as string, visual] as const),
@@ -929,21 +951,34 @@ function LayerDetailCard({
     <View style={S.layerCard} wrap={false}>
       <View style={S.layerCardHead}>
         <Text style={[S.layerCardTitle, { color: primary }]}>
-          Layer {layer.layerNumber} · {layer.type === "evaluation" ? "Evaluation" : "Approval"}
+          Layer {layer.layerNumber} · {layer.layerTitle || (layer.type === "evaluation" ? "Evaluation" : "Approval")}
         </Text>
         <Text style={[S.layerCardStatus, { color: badge.text }]}>{badge.label}</Text>
       </View>
 
       <View style={S.layerCardBody}>
-        <View style={S.layerCardFacts}>
-          <Text style={S.sigLabel}>Actioned by</Text>
-          <Text style={S.sigName}>{actionedBy}</Text>
-          <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}</Text>
-          {/* The routing address, kept as a reference mark rather than as the
-              name on the decision. */}
-          {person && email ? <Text style={S.sigDetail}>{email}</Text> : null}
-          {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
-        </View>
+        {verdict ? (
+          <View style={S.layerCardFacts}>
+            <Text style={[S.sigLabel, verdict === "rejected" ? { color: C.redText } : {}]}>{signOffLabel(verdict)}</Text>
+            <Text style={S.sigName}>{signerName || actionedBy}</Text>
+            {signerPosition ? <Text style={S.sigPosition}>{signerPosition}</Text> : null}
+            <Text style={S.sigDetail}>Date: {fmtDate(layer.signedAt)}</Text>
+            {/* The routing address, kept as a reference mark rather than as the
+                name on the decision. */}
+            {signerName && email && signerName !== email ? <Text style={S.sigDetail}>{email}</Text> : null}
+            {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
+          </View>
+        ) : (
+          <View style={S.layerCardFacts}>
+            <Text style={S.sigLabel}>Actioned by</Text>
+            <Text style={S.sigName}>{actionedBy}</Text>
+            <Text style={S.sigDetail}>{fmtDate(layer.signedAt)}</Text>
+            {/* The routing address, kept as a reference mark rather than as the
+                name on the decision. */}
+            {person && email ? <Text style={S.sigDetail}>{email}</Text> : null}
+            {layer.rejection ? <Text style={S.sigDetail}>Reason: {layer.rejection}</Text> : null}
+          </View>
+        )}
         {drawEmptyWell
           ? <SignatureWell caption={person || "Signature"} {...(email ? { reference: email } : {})} />
           : null}

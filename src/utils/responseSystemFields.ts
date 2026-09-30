@@ -59,7 +59,7 @@ const SYSTEM_FIELD_NAMES = [
   "OData__ColorTag",
 ] as const;
 
-const LAYER_COLUMN_RE = /^L\d+_(Status|Email|ActedBy|SignedAt|Rejection|Signature)$/;
+const LAYER_COLUMN_RE = /^L\d+_(Status|Email|ActedBy|ActedByName|ActedByPosition|SignedAt|Rejection|Signature)$/;
 
 /** SharePoint escapes what it cannot put in an internal name: `Submitted_x0020_By`. */
 function decodeSharePointKey(key: string): string {

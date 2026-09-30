@@ -92,6 +92,14 @@ export interface ApprovalLayer {
   signedAt: string | null;
   rejectionReason: string | null;
   signature: string | null;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 // ── Enhanced Layer System Types (Phase 0+) ──────────────────────────────────
@@ -303,6 +311,14 @@ export interface ApprovalLayerResult {
   rejectionReason: string | null;
   signature: string | null;
   confirmedVia: ConfirmationType;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 export interface EvaluationLayerResult {
@@ -321,6 +337,18 @@ export interface EvaluationLayerResult {
    * leaves that column empty. Both are the same signature on the same layer.
    */
   signatureUrl?: string | null;
+  /** `L{n}_SignedAt`, for rows whose EvaluationData carries no `confirmedAt`. */
+  signedAt?: string | null;
+  /** The name EvaluationData recorded, for rows predating `L{n}_ActedByName`. */
+  confirmerName?: string | null;
+  /** Who signed, and in which post — stamped at signing. See utils/signOff.ts. */
+  actedBy?: string | null;
+  actedByName?: string | null;
+  actedByPosition?: string | null;
+  /** The layer's configured title, shown as the post when none was stamped. */
+  layerTitle?: string | null;
+  /** `L{n}_Status` as written, before normalising — tells a signed rejection from a cascaded one. */
+  rawStatus?: string | null;
 }
 
 export interface ListMetaEntry {

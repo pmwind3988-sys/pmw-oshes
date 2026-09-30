@@ -36,6 +36,8 @@
 | Export pictures | `exportImageData.ts` | `collectExportImageData(token, rows)` — walks answers, matrix rows, signatures and evaluation answers, fetches each source once, returns `source → base64` for `ResponseCsvOptions.imageData`. Capped, and says what it could not carry |
 | Image → base64 | `sharepointImageData.ts` | `imageSourceToDataUrl()`, `hydrateImageValue()`, `imageSourceFromString()`, the byte sniffers. Shared by the PDF and the CSV so one signature cannot render two ways |
 | Export clock | `malaysiaTime.ts` | `formatMalaysiaDateTime()`, `malaysiaDateStamp()` — fixed UTC+8, same reasoning as `referenceNumber.ts`. Wall-clock text is never shifted; only stored instants convert |
+| Layer sign-off wording | `signOff.ts` | `signOffVerdictFromStatus()`, `signOffLabel()`, `signOffName()`, `signOffPosition()` — "Approved By / Evaluated By / Rejected By", name, post. Shared by the review page, My Submissions and the PDF. UI block: `components/SignOffBlock.tsx`. See "Who signed a layer" below |
+| Signed-in signer stamp | `layerSigner.ts` | `readSignerIdentity()` / `stampLayerSigner()` — writes `L{n}_ActedBy`, `L{n}_ActedByName`, `L{n}_ActedByPosition` for decisions made from the signed-in review page (public links are stamped by `api/evaluate.ts`) |
 | Layer sequence | `layerSequence.ts` | `layerSequenceFromConfig()` — which layers a submission went through, manual branches resolved. Shared by the PDF and the CSV so they cannot disagree |
 | Question name / stored key | `responseKeys.ts` | `createResponseKeyResolver()` (name to key) and `createQuestionNameResolver()` (key back to name) — the one place that knows a SharePoint column's internal name stops at 32 characters, so `workPerformerNameInternalExternal` is stored as `workPerformerNameInternalExterna`. Used by `formSubmissionLayout.ts`, `ReadOnlySubmissionPreview.tsx` and `answerClassification.ts` |
 | Answer vs. plumbing | `responseSystemFields.ts` | `responseAnswerFields()`, `isResponseSystemField()` — the one list of workflow/SharePoint columns. Layer columns match by pattern, so a fourth layer is not mistaken for a question |
@@ -83,6 +85,33 @@ has to be something the data supports:
   status on the right. A filed permit is looked up by its number, not by whose name is on it.
   Positions are asserted in `FormPdfDocument.test.tsx` via `placedText()`, which runs the PDF's
   own transform stack, because "on the left" is a claim about the page and not about the JSX.
+
+## Who signed a layer
+Every personally decided layer closes like a paper form: "Approved By / Evaluated By /
+Rejected By", then the signer's name, their post, and the date — on the review page
+(`/eval/...`, including its Previous Layers list and a link opened after the fact), in
+My Submissions (`DetailModal`) and in the PDF's layer cards.
+
+- **Response columns** (text, all optional — provisioned in `layerColumnSpecs` here and
+  `workflowColumns` in `api/_utils/provisioning.ts`):
+  - `L{n}_ActedBy` — which address decided, rejections included. The PDF prefers it over
+    `L{n}_Email`.
+  - `L{n}_ActedByName` / `L{n}_ActedByPosition` — the name and post the decision is signed
+    with, read from the signer's `Approval Directory` row **at the moment of signing**, so a
+    later promotion does not rewrite the record.
+- **Two writers.** Signed-in decisions are written from the browser, so `EvaluationPage`
+  stamps them through `layerSigner.ts` (name falls back to the Azure display name). Public
+  links go through `api/evaluate.ts`, which stamps only when the layer had exactly one
+  possible actor — a public token identifies a layer, not a person.
+- **Patched separately and allowed to fail.** SharePoint refuses a whole patch that names one
+  missing column; a response list created before these columns keeps recording decisions and
+  prints the layer title as the position until the columns are added.
+- **Only a personal decision is signed.** The verdict reads the status *as written*
+  (`rawStatus` on the dashboard types, `PdfLayerResult.rawStatus` in the portal PDF):
+  `Approved` / `Confirmed` / `Rejected` only. "Rejected at Layer 2" (a cascade), "Manual …"
+  and pending layers get no sign-off.
+- The drawn signature and its rule appear only when a signature was captured. In the PDF the
+  ink keeps its existing place in the card's "Signatures & attachments" strip.
 
 ## SP Column Type Mapping
 `FormBuilderEngine.ts` `getSpColumnKind()` and `formBuilderSP.ts` `ensureColumns()` map SurveyJS types to SharePoint `FieldTypeKind`:

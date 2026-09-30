@@ -47,6 +47,8 @@ export function recordLayerResults(record: PortalRecord): PdfLayerResult[] {
           : PDF_LAYER_NOT_REACHED,
       email: step.email || layer?.email || "",
     };
+    const layerTitle = layer?.layerTitle || config?.title;
+    if (layerTitle) result.layerTitle = layerTitle;
 
     // Nothing below this line belongs on a layer nobody has acted on: a date, a
     // reason or a name against an unsigned step is a claim the record cannot
@@ -64,6 +66,11 @@ export function recordLayerResults(record: PortalRecord): PdfLayerResult[] {
     // evaluation as a layer that had signed nothing.
     const ink = layer?.signature || (enhanced?.type === "evaluation" ? enhanced.signatureUrl : null);
     if (ink) result.signature = ink;
+    // Who signed, and in which post, as stamped at signing; and the status as
+    // written, so a cascaded rejection is not printed as somebody's decision.
+    if (layer?.actedByName) result.signerName = layer.actedByName;
+    if (layer?.actedByPosition) result.signerPosition = layer.actedByPosition;
+    if (layer?.rawStatus) result.rawStatus = layer.rawStatus;
 
     if (step.type === "evaluation") {
       const fields = enhanced?.type === "evaluation" ? enhanced.fields : undefined;

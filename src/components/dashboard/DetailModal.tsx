@@ -23,6 +23,8 @@ import { useMsal } from "@azure/msal-react";
 import type { Submission, ApprovalLayer, ApprovalLayerResult, EvaluationLayerResult, EvaluationLayerConfig } from "../../types";
 import StatusBadge from "./StatusBadge";
 import EvaluationSummary from "../builder/EvaluationSummary";
+import SignOffBlock from "../SignOffBlock";
+import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../../utils/signOff";
 import ReferenceTag from "../ReferenceTag";
 import { getActiveLayers } from "../builder/approvalDashboardLayerProgress";
 import DOMPurify from "dompurify";
@@ -1083,8 +1085,46 @@ function LayerProgression({
   );
 }
 
+/**
+ * The "Approved By / name / position" block for a decided layer, or null when
+ * the layer records no personal decision — still pending, closed on paper, or
+ * rejected only because an earlier layer was.
+ */
+function layerSignOff(
+  layer: {
+    rawStatus?: string | null;
+    actedBy?: string | null;
+    actedByName?: string | null;
+    actedByPosition?: string | null;
+    layerTitle?: string | null;
+    email: string | null;
+    signedAt?: string | null;
+    signature?: string | null;
+    confirmerName?: string | null;
+  },
+  layerNumber: number,
+): ReactNode {
+  const verdict = signOffVerdictFromStatus(layer.rawStatus);
+  if (!verdict) return null;
+  const name = signOffName(layer.actedByName || layer.confirmerName, layer.actedBy || layer.email);
+  if (!name) return null;
+  return (
+    <SignOffBlock
+      compact
+      align="start"
+      verdict={verdict}
+      label={signOffLabel(verdict)}
+      name={name}
+      position={signOffPosition(layer.actedByPosition, layer.layerTitle || `Layer ${layerNumber}`)}
+      date={layer.signedAt ? formatDateValue(layer.signedAt) ?? layer.signedAt : "—"}
+      signature={signatureValueToSrc(layer.signature) || null}
+    />
+  );
+}
+
 function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index: number }) {
   if (!layer) return null;
+  const signOff = layerSignOff(layer, index + 1);
 
   const isSigned = layer.status === "approved" || layer.status === "signed" || layer.status === "confirmed";
   const isRejected = layer.status === "rejected";
@@ -1141,7 +1181,7 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body1" sx={{ fontWeight: 800, color: editorial.ink }}>
-            Layer {index + 1}
+            {layer.layerTitle || `Layer ${index + 1}`}
           </Typography>
           <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
             {layer.confirmedVia === "checkbox" ? "Checkbox confirmation" : "Signature approval"}
@@ -1169,7 +1209,8 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
           </Box>
         )}
 
-        {layer.signedAt && (
+        {/* The sign-off prints the date itself; saying it twice is noise. */}
+        {layer.signedAt && !signOff && (
           <Typography variant="caption" sx={{ color: editorial.muted, fontWeight: 700 }}>
             Completed {formatDateValue(layer.signedAt) ?? layer.signedAt}
           </Typography>
@@ -1181,7 +1222,11 @@ function ApprovalCard({ layer, index }: { layer: ApprovalCardLayer | null; index
           </Typography>
         )}
 
-        {signatureSrc && (
+        {/* The sign-off carries the drawn signature itself, like the foot of a
+            paper form; the bare image is only for a layer with no sign-off. */}
+        {signOff && <Box sx={{ pt: 0.5 }}>{signOff}</Box>}
+
+        {!signOff && signatureSrc && (
           <Box>
             <FieldLabel>Signature</FieldLabel>
             <Box
@@ -1476,13 +1521,22 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                         // and declaration order, so the card lists every question
                         // the evaluator was asked — not only the ones they filled.
                         const config = evaluationLayerConfig(item, layer.layerNumber);
+                        const evaluationSignOff = layerSignOff(
+                          {
+                            ...layer,
+                            signedAt: layer.signedAt || layer.confirmedAt,
+                            signature: layer.signatureUrl,
+                          },
+                          layer.layerNumber,
+                        );
                         return (
                           <EvaluationSummary
                             key={i}
                             result={layer}
-                            layerTitle={config?.title || `Layer ${layer.layerNumber}`}
+                            layerTitle={config?.title || layer.layerTitle || `Layer ${layer.layerNumber}`}
                             layerDescription={config?.description}
                             surveyElements={config?.surveyElements}
+                            footer={evaluationSignOff}
                           />
                         );
                       }
@@ -1497,6 +1551,11 @@ export default function DetailModal({ item, isAdmin, onClose }: DetailModalProps
                             rejectionReason: layer.rejectionReason,
                             signature: layer.signature,
                             confirmedVia: layer.confirmedVia,
+                            actedBy: layer.actedBy,
+                            actedByName: layer.actedByName,
+                            actedByPosition: layer.actedByPosition,
+                            layerTitle: layer.layerTitle,
+                            rawStatus: layer.rawStatus,
                           }}
                           index={layer.layerNumber - 1}
                         />

@@ -1128,6 +1128,12 @@ function layerColumnSpecs(layerCount: number): SpColumnSpec[] {
     specs.push(
       { n: `L${n}_Status`, k: 2 },
       { n: `L${n}_Email`, k: 2 },
+      // Which address decided the layer, and the name and post it was signed
+      // with — stamped at signing so a later promotion does not rewrite the
+      // record. See src/utils/signOff.ts.
+      { n: `L${n}_ActedBy`, k: 2 },
+      { n: `L${n}_ActedByName`, k: 2 },
+      { n: `L${n}_ActedByPosition`, k: 2 },
       { n: `L${n}_SignedAt`, k: 4 },
       { n: `L${n}_Rejection`, k: 3, ml: true },
       { n: `L${n}_Signature`, k: 3, ml: true },
@@ -1929,7 +1935,11 @@ export async function getLayerResponseData(
         layerNumber: n,
         status: statusVal,
         email: emailVal,
+        actedBy: item[`L${n}_ActedBy`] ?? null,
+        actedByName: item[`L${n}_ActedByName`] ?? null,
+        actedByPosition: item[`L${n}_ActedByPosition`] ?? null,
         signedAt: signedAtVal,
+        title: layerConfig.find((l: LayerConfigItem) => l.layerNumber === n)?.title || "",
         evaluationData: evaluationData[n],
       });
     }

@@ -8,7 +8,7 @@
  * that are really images (signature pads, uploads) render as images rather than
  * as the data URL behind them.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { EvaluationLayerResult } from "../../types";
 import { editorial, editorialShadow } from "../../theme/editorial";
 import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, isDisplayDateLike } from "../../utils/displayDateTime";
@@ -25,6 +25,8 @@ interface EvaluationSummaryProps {
   layerTitle?: string;
   layerDescription?: string;
   surveyElements?: Record<string, unknown>[];
+  /** Drawn at the foot of the card — the "Evaluated By" sign-off, where there is one. */
+  footer?: ReactNode;
 }
 
 const MEDIA_TYPES = new Set(["signaturepad", "imageupload", "file"]);
@@ -291,7 +293,7 @@ const RESPONSIVE_CSS = `
   }
 `;
 
-export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements }: EvaluationSummaryProps) {
+export default function EvaluationSummary({ result, layerTitle, layerDescription, surveyElements, footer }: EvaluationSummaryProps) {
   if (!result || result.status !== "confirmed") {
     return (
       <div style={cardStyle}>
@@ -363,6 +365,8 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
           <div style={{ color: editorial.ink, overflowWrap: "anywhere" }}>{result.notes}</div>
         </div>
       )}
+
+      {footer && <div style={{ marginTop: 16 }}>{footer}</div>}
     </div>
   );
 }

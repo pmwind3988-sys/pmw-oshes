@@ -37,6 +37,17 @@ function evaluationElementsByLayer(layerConfig: unknown, selectedBranch: unknown
   return result;
 }
 
+/** Each layer's configured title, keyed by layer number, on the branch this submission took. */
+function layerTitlesByLayer(layerConfig: unknown, selectedBranch: unknown): Map<number, string> {
+  const result = new Map<number, string>();
+  for (const layer of layerSequenceFromConfig(layerConfig, selectedBranch)) {
+    const layerNumber = layerNumberFromValue(layer.layerNumber);
+    if (layerNumber === null || typeof layer.title !== "string" || !layer.title.trim()) continue;
+    result.set(layerNumber, layer.title.trim());
+  }
+  return result;
+}
+
 /** The ink an evaluation layer stored inside its own JSON entry. */
 function evaluationSignatureUrl(entry: Record<string, unknown> | undefined): string {
   const url = entry?.signatureUrl;
@@ -55,6 +66,7 @@ export function buildPdfLayerResults(
 ): PdfLayerResult[] {
   const results: PdfLayerResult[] = [];
   const evalElementsByLayer = evaluationElementsByLayer(layerConfig, rawResponse.SelectedBranch);
+  const titlesByLayer = layerTitlesByLayer(layerConfig, rawResponse.SelectedBranch);
 
   // Parse EvaluationData JSON if present
   let evalData: Record<number, Record<string, unknown>> = {};
@@ -86,6 +98,9 @@ export function buildPdfLayerResults(
       signature: (rawResponse[`L${n}_Signature`] as string)
         || evaluationSignatureUrl(evalData[n])
         || undefined,
+      signerName: (rawResponse[`L${n}_ActedByName`] as string) || undefined,
+      signerPosition: (rawResponse[`L${n}_ActedByPosition`] as string) || undefined,
+      layerTitle: titlesByLayer.get(n),
     };
 
     // For evaluation layers, extract evaluation fields
