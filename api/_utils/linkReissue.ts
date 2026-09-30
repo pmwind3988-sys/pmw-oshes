@@ -23,6 +23,7 @@ import { ensureWorkflowColumns } from "./provisioning.js";
 import { parseValidEmailList } from "./layerRecipients.js";
 import { logWarn } from "./logger.js";
 import { REFERENCE_NO_FIELD } from "./referenceNumber.js";
+import { redirectTestMessage, testRunDispatchFor } from "./testRun.js";
 import {
   LINK_REISSUE_LOG_FIELD,
   isReissueAllowed,
@@ -104,6 +105,18 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
   const plan = planLinkReissue(params.fields, params.layerNumber, params.now);
   if (!plan) return;
 
+  // A rehearsal's replacement link goes to the test address like every other
+  // mail it generates. A test row with no usable address gets nothing at all —
+  // falling back to the real reviewer is the one thing a test run must not do.
+  const dispatch = testRunDispatchFor(params.fields);
+  if (dispatch.kind === "blocked") {
+    logWarn("api:evaluate:reissue", "Test run has no usable redirect address; not reissuing its review link", {
+      layerNumber: params.layerNumber,
+      responseItemId: params.responseItemId,
+    });
+    return;
+  }
+
   try {
     // A list provisioned before bindings existed has nowhere to put one, and
     // this is the moment an old link is being repaired — so the columns are
@@ -121,7 +134,7 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
     );
 
     const layerType = params.layer?.type === "evaluation" ? "evaluation" : "approval";
-    await sendGraphEmail(params.graphToken, buildWorkflowActionEmail({
+    const message = buildWorkflowActionEmail({
       formTitle: params.formTitle,
       submittedBy: String(params.fields.SubmittedBy || "Public respondent"),
       responseItemId: params.responseItemId,
@@ -144,7 +157,11 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
       // replacement link is.
       authMode: "public",
       referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
-    }));
+    });
+    await sendGraphEmail(
+      params.graphToken,
+      dispatch.kind === "redirect" ? redirectTestMessage(message, dispatch.redirect) : message,
+    );
   } catch (err) {
     logWarn("api:evaluate:reissue", "Could not replace an unbound review link", {
       layerNumber: params.layerNumber,

@@ -3,7 +3,11 @@ import {
   getGraphToken,
   getSharePointToken,
   queryMasterFormByTitle,
+  queryMasterFormBySlug,
   queryWebFormVersion,
+  queryListItemById,
+  queryAllListItems,
+  resolveResponseListName,
   createListItem,
   updateListItemFields,
   getListColumns,
@@ -17,7 +21,32 @@ import {
 } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import { resolveDepartmentApproverFromList } from "./_utils/departmentApproverLookup.js";
-import { ensureFieldsHoldLongTextViaSPRest, patchHyperlinkViaSPRest, SP_TEXT_COLUMN_MAX } from "./_utils/sharepointRest.js";
+import {
+  ensureFieldsHoldLongTextViaSPRest,
+  ensureNoteFieldViaSPRest,
+  ensureTextFieldViaSPRest,
+  patchHyperlinkViaSPRest,
+  SP_TEXT_COLUMN_MAX,
+} from "./_utils/sharepointRest.js";
+import { resolveFormBuilder } from "./_utils/formBuilderAccess.js";
+import {
+  handleDeleteTestRuns,
+  handleMintTestTicket,
+  handleRecordTestRunStep,
+  handleStampTestRun,
+  recordTestRunStep,
+  recordTestRunSteps,
+  type ActionResult,
+  type TestRunStepDeps,
+} from "./_utils/testRunActions.js";
+import {
+  TEST_EMAIL_FIELD,
+  TEST_FLAG_FIELD,
+  testRunFieldsFor,
+  verifyTestTicket,
+  type TestRunRedirect,
+} from "./_utils/testRun.js";
+import { TEST_RUN_LOG_FIELD, type TestRunStep } from "./_utils/testRunTrail.js";
 import { allocateReferenceNumber } from "./_utils/referenceCounter.js";
 import {
   catalogueCodeFromLayerConfig,
@@ -942,6 +971,11 @@ function isCoreSubmissionField(fieldName: string): boolean {
   return (
     fieldName === "SubmittedAt" ||
     fieldName === "SubmittedBy" ||
+    // A test run's flag is written with the row, never patched in after it: a
+    // row that existed even briefly without it would read as production, and a
+    // later layer's mail would go to a real approver.
+    fieldName === TEST_FLAG_FIELD ||
+    fieldName === TEST_EMAIL_FIELD ||
     fieldName === "FormVersion" ||
     fieldName === "PublishKey" ||
     fieldName === "FormID" ||
@@ -1369,6 +1403,58 @@ function isOwnSharePointHost(value: string, site = siteUrl()): boolean {
   }
 }
 
+/**
+ * The response list a slug's form writes to, looked up on the server — the one
+ * way every test-run action finds its list. A caller-supplied list title is
+ * never trusted: these actions run on an app-only token that reaches every
+ * list on the site.
+ */
+async function responseListForSlug(token: string, slug: string): Promise<string | null> {
+  const form = await queryMasterFormBySlug(token, slug);
+  const title = form?.fields?.Title;
+  if (typeof title !== "string" || !title.trim()) return null;
+  return resolveResponseListName(token, title.trim());
+}
+
+/** `IsTest`/`TestEmail` as single-line text, the checklist as multi-line (it outgrows 255 chars). */
+async function ensureTestRunColumns(delegatedToken: string, listTitle: string): Promise<void> {
+  await ensureTextFieldViaSPRest(delegatedToken, listTitle, TEST_FLAG_FIELD, TEST_FLAG_FIELD);
+  await ensureTextFieldViaSPRest(delegatedToken, listTitle, TEST_EMAIL_FIELD, TEST_EMAIL_FIELD);
+  await ensureNoteFieldViaSPRest(delegatedToken, listTitle, TEST_RUN_LOG_FIELD, TEST_RUN_LOG_FIELD);
+}
+
+const TEST_RUN_ACTIONS = new Set(["mint-test-ticket", "stamp-test-run", "delete-test-runs", "record-test-run-step"]);
+
+async function handleTestRunAction(action: string, body: Record<string, unknown>): Promise<ActionResult> {
+  const token = await getGraphToken();
+  const resolveListTitleForSlug = (slug: string) => responseListForSlug(token, slug);
+  const stepDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
+
+  if (action === "mint-test-ticket") {
+    return handleMintTestTicket(body, {
+      resolveOwner: (delegatedToken) => resolveFormBuilder(delegatedToken),
+      resolveListTitleForSlug,
+      ensureColumns: ensureTestRunColumns,
+    });
+  }
+  if (action === "stamp-test-run") {
+    return handleStampTestRun(token, body, { ...stepDeps, resolveListTitleForSlug });
+  }
+  if (action === "delete-test-runs") {
+    return handleDeleteTestRuns(body, {
+      resolveOwner: (delegatedToken) => resolveFormBuilder(delegatedToken),
+      resolveListTitleForSlug,
+      listRows: (listTitle) => queryAllListItems(token, listTitle),
+      deleteRow: (listTitle, id) => deleteListItem(token, listTitle, id),
+    });
+  }
+  return handleRecordTestRunStep(token, body, {
+    ...stepDeps,
+    resolveOwner: (delegatedToken) => resolveFormBuilder(delegatedToken),
+    resolveListTitleForSlug,
+  });
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   setCorsHeaders(res);
 
@@ -1390,6 +1476,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
   }
 
+  // Test runs ride on this route as actions so the deployment does not gain a
+  // serverless function. See _utils/testRunActions.ts.
+  if (typeof action === "string" && TEST_RUN_ACTIONS.has(action)) {
+    try {
+      const result = await handleTestRunAction(action, req.body as Record<string, unknown>);
+      return res.status(result.status).json(result.payload);
+    } catch (error) {
+      logError("api:submit-form", "Test run action failed", error, { action });
+      return res.status(500).json({ error: "The test run request could not be completed. Please try again." });
+    }
+  }
+
   const {
     listTitle,
     body: formBody,
@@ -1400,7 +1498,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     pdpaNoticeVersion,
     pdpaConsentedAt,
     retentionUntil,
+    testTicket: rawTestTicket,
   } = req.body as {
+    testTicket?: unknown;
     listTitle?: string;
     body?: Record<string, unknown>;
     matrixData?: Record<string, { rows: Record<string, unknown>[]; columns: ApiMatrixColumn[] }>;
@@ -1439,6 +1539,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(403).json({ error: "Form is not public" });
     }
 
+    // A test run is switched on only by a ticket this server signed for this
+    // form's own slug. Anything wrong with it and the submission is ordinary
+    // production traffic — never a silent redirect of real mail.
+    const testTicket = verifyTestTicket(rawTestTicket, valueToText(formConfig.Slug));
+    const testRedirect: TestRunRedirect | undefined = testTicket ? { testEmail: testTicket.testEmail } : undefined;
+    const trailDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
+
     // The client sends the profile it actually rendered, so the server validates the
     // submission against that same published schema rather than whatever is current.
     const targetPublishKey = typeof publishKey === "string" && publishKey.trim()
@@ -1474,6 +1581,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     submissionBody.PDPAConsentAt = consentedAt;
     submissionBody.RetentionUntil = retentionDate;
 
+    // Written with the row rather than patched in afterwards — see
+    // isCoreSubmissionField.
+    if (testTicket) Object.assign(submissionBody, testRunFieldsFor(testTicket));
+
     const parsedLayerConfig = parseLayerConfig(formConfig.LayerConfig);
     await applyLayerConfigWorkflow(token, submissionBody, parsedLayerConfig);
 
@@ -1493,6 +1604,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     let resolveColumnKey = await getColumnKeyResolver(token, listTitle);
+
+    // The flag columns are provisioned when the ticket is minted. If they are
+    // gone, the row could not carry its flag, later layers would read it as
+    // production and mail real approvers — so the rehearsal stops here, before
+    // anything is written or sent.
+    if (testTicket && (!resolveColumnKey(TEST_FLAG_FIELD) || !resolveColumnKey(TEST_EMAIL_FIELD))) {
+      logWarn("api:submit-form", "Test run refused: the response list has no test-run columns", { listTitle });
+      return res.status(409).json({
+        error: "This form's response list is not prepared for test runs. Start the test run again from the dashboard.",
+      });
+    }
 
     // ── Reference number ──────────────────────────────────────────────────
     // Unlike the HR deployment, nothing here republishes a form, so a form
@@ -1519,6 +1641,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           formTitle: listTitle,
           config: referenceConfig,
           catalogueCode: catalogueCodeFromLayerConfig(formConfig.LayerConfig),
+          isTest: Boolean(testTicket),
         });
         submissionBody[REFERENCE_NO_FIELD] = referenceNo;
       } else {
@@ -1564,6 +1687,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
     const result = await createResponseItem(token, listTitle, writableBody);
     const parentId = result.id;
+
+    if (testTicket) {
+      // Everything here is already known, so it is one read and one write.
+      const postCreateSteps: Omit<TestRunStep, "at">[] = [
+        { step: "ticket", label: "Test ticket validated", status: "pass", detail: `Issued by ${testTicket.issuedBy}`, order: 1 },
+        { step: "answers", label: "Answers accepted", status: "pass", order: 2 },
+        referenceConfig.enabled
+          ? { step: "reference", label: "Reference number allocated", status: referenceNo ? "pass" : "warn", detail: referenceNo || "No ReferenceNo column", order: 3 }
+          : { step: "reference", label: "Reference number allocated", status: "skip", detail: "This form does not use reference numbers", order: 3 },
+        { step: "row", label: "Response row created", status: "pass", detail: `Item ${parentId}`, order: 4 },
+      ];
+      for (const layer of parsedLayerConfig?.layers ?? []) {
+        const n = layer.layerNumber;
+        const routed = valueToText(submissionBody[`L${n}_Email`]);
+        postCreateSteps.push({
+          step: `layer-${n}-routing`,
+          label: `Layer ${n} routed`,
+          status: routed ? "pass" : "warn",
+          detail: routed ? `Would go to ${routed}` : "No assignee resolved at submission",
+          order: 10 * n,
+        });
+      }
+      await recordTestRunSteps(token, listTitle, String(parentId), postCreateSteps, trailDeps);
+    }
 
     const childItemIds: Record<string, number[]> = {};
     const childItemRefs: ApiCreatedListItemRef[] = [];
@@ -1699,6 +1846,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               listTitle,
               responseItemId: parentId,
               layer: firstLayer.layerNumber,
+              testRun: testRedirect,
             },
             firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
             {
@@ -1711,6 +1859,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               submittedAt,
             },
           );
+          if (testTicket) {
+            await recordTestRunStep(token, listTitle, String(parentId), {
+              step: `layer-${firstLayer.layerNumber}-email`,
+              label: `Layer ${firstLayer.layerNumber} email sent`,
+              status: "pass",
+              detail: `to ${testTicket.testEmail}`,
+              order: 10 * firstLayer.layerNumber + 1,
+            }, trailDeps);
+          }
         } catch (emailError) {
           logWarn("api:submit-form", "Initial workflow email delivery failed", {
             listTitle,
@@ -1718,6 +1875,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             layer: firstLayer.layerNumber,
             errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
           });
+          if (testTicket) {
+            await recordTestRunStep(token, listTitle, String(parentId), {
+              step: `layer-${firstLayer.layerNumber}-email`,
+              label: `Layer ${firstLayer.layerNumber} email sent`,
+              status: "fail",
+              detail: errorMessage(emailError),
+              order: 10 * firstLayer.layerNumber + 1,
+            }, trailDeps);
+          }
         }
       }
     }

@@ -1,6 +1,6 @@
 import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
-import { getGraphToken } from "./_utils/graphClient.js";
-import { logError } from "./_utils/logger.js";
+import { getGraphToken, queryListItemById } from "./_utils/graphClient.js";
+import { logError, logWarn } from "./_utils/logger.js";
 import {
   deliverWorkflowEmail,
   resolveOshesFormSender,
@@ -8,6 +8,8 @@ import {
   type WorkflowEmailAttachment,
   type WorkflowEmailContext,
 } from "./_utils/workflowEmail.js";
+import { sendEmailTestRunDispatch } from "./_utils/sendEmailTestRun.js";
+import { redirectTestMessage } from "./_utils/testRun.js";
 
 /**
  * Accepts either a raw base64 string or a data: URI, because the browser's
@@ -35,6 +37,10 @@ function normalizeAttachment(entry: unknown): WorkflowEmailAttachment | null {
   return { name, contentType, contentBytes };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
@@ -57,7 +63,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow, sendToConfiguredSender, attachments } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, row, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
   const configuredSender = resolveOshesFormSender();
 
   // A manual-paper workflow has no online reviewer to address, so it is sent to the
@@ -90,17 +96,59 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       body,
       ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
     };
-    if (
-      workflow &&
-      typeof workflow === "object" &&
-      typeof (workflow as Record<string, unknown>).listTitle === "string" &&
-      (typeof (workflow as Record<string, unknown>).responseItemId === "string" ||
-        typeof (workflow as Record<string, unknown>).responseItemId === "number") &&
-      typeof (workflow as Record<string, unknown>).layer === "number"
-    ) {
-      await deliverWorkflowEmail(token, message, workflow as unknown as WorkflowEmailContext);
+    // The context is rebuilt field by field rather than cast from the request:
+    // `WorkflowEmailContext.testRun` must only ever be set by this server.
+    const workflowFields = isRecord(workflow) ? workflow : null;
+    const context: Omit<WorkflowEmailContext, "testRun"> | null =
+      workflowFields &&
+      typeof workflowFields.listTitle === "string" &&
+      (typeof workflowFields.responseItemId === "string" || typeof workflowFields.responseItemId === "number") &&
+      typeof workflowFields.layer === "number"
+        ? {
+          listTitle: workflowFields.listTitle,
+          responseItemId: workflowFields.responseItemId,
+          layer: workflowFields.layer,
+        }
+        : null;
+
+    // Whether this mail belongs to a test run is read off the response row the
+    // caller names — never taken from the request — so a decision made from an
+    // emailed link days after the ticket expired is still redirected. `row`
+    // names a row for mail that is not a layer notice (the submitter's final
+    // approved / not approved notice), so it is checked without being logged
+    // against a layer. See _utils/sendEmailTestRun.ts.
+    const rowFields = isRecord(row) ? row : null;
+    const rowRef = context
+      ?? (rowFields
+        && typeof rowFields.listTitle === "string"
+        && (typeof rowFields.responseItemId === "string" || typeof rowFields.responseItemId === "number")
+        ? { listTitle: rowFields.listTitle, responseItemId: rowFields.responseItemId }
+        : null);
+    let storedFields: Record<string, unknown> | null = null;
+    if (rowRef && /^\d+$/.test(String(rowRef.responseItemId))) {
+      try {
+        storedFields = (await queryListItemById(token, rowRef.listTitle, String(rowRef.responseItemId)))?.fields ?? null;
+      } catch (lookupError) {
+        logWarn("api:send-email", "Could not read the workflow row to check for a test run; relying on any forwarded ticket", {
+          listTitle: rowRef.listTitle,
+          errorMessage: lookupError instanceof Error ? lookupError.message : String(lookupError),
+        });
+      }
+    }
+
+    const dispatch = sendEmailTestRunDispatch(storedFields, testTicket, slug);
+    if (dispatch.kind === "blocked") {
+      logWarn("api:send-email", "Test run has no usable redirect address; refusing to send rather than mailing a real person", {
+        listTitle: rowRef?.listTitle,
+      });
+      return res.status(200).json({ ok: true, skipped: "test-run-redirect-unusable" });
+    }
+    const testRun = dispatch.kind === "redirect" ? dispatch.redirect : undefined;
+
+    if (context) {
+      await deliverWorkflowEmail(token, message, { ...context, testRun });
     } else {
-      await sendGraphEmail(token, message);
+      await sendGraphEmail(token, testRun ? redirectTestMessage(message, testRun) : message);
     }
 
     return res.status(200).json({ ok: true });

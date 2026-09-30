@@ -3,6 +3,7 @@ import {
   queryListItemById,
   updateListItemFields,
 } from "./graphClient.js";
+import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
 
@@ -68,6 +69,13 @@ export interface WorkflowEmailContext {
   listTitle: string;
   responseItemId: string | number;
   layer: number;
+  /**
+   * Set only on a test run, and only by server code that derived it from a
+   * verified ticket or the stored row — never from a request body. Carried here
+   * because `deliverWorkflowEmail` is the one place every workflow email passes
+   * through, so a caller cannot forget to apply it.
+   */
+  testRun?: TestRunRedirect;
 }
 
 export type WorkflowLayerAuthMode = "365" | "public";
@@ -390,10 +398,11 @@ export async function deliverWorkflowEmail(
   message: WorkflowEmailMessage,
   context: WorkflowEmailContext,
 ): Promise<WorkflowEmailEntry> {
-  const recipient = typeof message.to === "string" ? message.to : message.to.join(", ");
+  const outgoing = context.testRun ? redirectTestMessage(message, context.testRun) : message;
+  const recipient = typeof outgoing.to === "string" ? outgoing.to : outgoing.to.join(", ");
   const attemptedAt = new Date().toISOString();
   try {
-    await sendGraphEmail(token, message);
+    await sendGraphEmail(token, outgoing);
     return await persistWorkflowEmailAttempt(token, context, {
       layer: context.layer,
       recipient,

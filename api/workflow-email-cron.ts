@@ -15,6 +15,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { testRunDispatchFor } from "./_utils/testRun.js";
 
 function scheduledRecipients(recipient: string): string | string[] {
   const parsed = parseValidEmailList(recipient);
@@ -74,6 +75,30 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           const currentLayer = Number(item.fields.CurrentLayer || item.fields.CurrentApprovalLayer || 0);
           if (currentLayer && currentLayer !== entry.layer) continue;
 
+          // Scheduled mail can fall due weeks after the ticket that started a
+          // test run expired, so the redirect comes off the stored row. A test
+          // row whose address is gone or corrupt is refused rather than falling
+          // back to `entry.recipient`, which would mail a real approver from a
+          // rehearsal. Marked "failed" rather than left "scheduled" so it is not
+          // picked up again on every run.
+          const dispatch = testRunDispatchFor(item.fields);
+          if (dispatch.kind === "blocked") {
+            failed++;
+            logWarn("api:workflow-email-cron", "Test run has no usable redirect address; refusing to deliver rather than mailing a real approver", {
+              formTitle,
+              itemId: item.id,
+              layer: entry.layer,
+            });
+            const refused = setWorkflowEmailSchedule(
+              parseWorkflowEmailSchedule(item.fields.WorkflowEmailSchedule),
+              { ...entry, status: "failed", updatedAt: new Date().toISOString() },
+            );
+            await updateListItemFields(token, formTitle, item.id, {
+              WorkflowEmailSchedule: JSON.stringify(refused),
+            });
+            continue;
+          }
+
           const schedule = setWorkflowEmailSchedule(
             parseWorkflowEmailSchedule(item.fields.WorkflowEmailSchedule),
             { ...entry, status: "sending", updatedAt: new Date().toISOString() },
@@ -100,7 +125,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
                 submittedAt: entry.submittedAt,
               }),
-              { listTitle: formTitle, responseItemId: item.id, layer: entry.layer },
+              {
+                listTitle: formTitle,
+                responseItemId: item.id,
+                layer: entry.layer,
+                testRun: dispatch.kind === "redirect" ? dispatch.redirect : undefined,
+              },
             );
             sent++;
           } catch (error) {

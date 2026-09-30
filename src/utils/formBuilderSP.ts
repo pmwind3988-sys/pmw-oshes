@@ -1376,12 +1376,28 @@ interface EmailParams {
     responseItemId: number;
     layer: number;
   };
+  /**
+   * The response row a mail that is not a layer notice is about (the
+   * submitter's approved / not approved notice). The server reads it back to
+   * decide whether the mail belongs to a test run; nothing is logged against a
+   * layer for it.
+   */
+  row?: {
+    listTitle: string;
+    responseItemId: number;
+  };
+  /**
+   * Present only while a test run is in progress. Forwarded so the server can
+   * verify the signed ticket itself — the browser never decides the redirect,
+   * and the server prefers what the stored row says over this.
+   */
+  testRun?: { ticket: string; slug: string };
 }
 
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body, workflow }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, workflow, row, testRun }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -1392,7 +1408,14 @@ export async function sendSpEmail(_token: string, { to, subject, body, workflow 
       'Content-Type': 'application/json',
       ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
     },
-    body: JSON.stringify({ to, subject, body, workflow }),
+    body: JSON.stringify({
+      to,
+      subject,
+      body,
+      workflow,
+      row,
+      ...(testRun ? { testTicket: testRun.ticket, slug: testRun.slug } : {}),
+    }),
   });
 
   if (!response.ok) {
@@ -1421,6 +1444,8 @@ interface ApprovalNotificationParams {
   responseListTitle?: string;
   throwOnEmailError?: boolean;
   nextEmailSchedule?: EvaluationEmailSchedule;
+  /** Present only while a test run is in progress; forwarded to every mail below. */
+  testRun?: { ticket: string; slug: string };
 }
 
 // ── Styled email HTML template ────────────────────────────────────────────
@@ -1643,7 +1668,10 @@ export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
 ): Promise<void> {
-  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, nextLayerAuthMode, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule } = params;
+  const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextLayerType = 'approval', nextLayerNumber, nextLayerAuthMode, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, testRun } = params;
+  // Every mail below names its response row, so the server can tell from the
+  // row itself whether it belongs to a test run and redirect it (or refuse it).
+  const row = { listTitle: responseListTitle, responseItemId };
   const nextActionNoun = nextLayerType === 'evaluation' ? 'evaluation review' : 'approval';
   const nextActionVerb = nextLayerType === 'evaluation' ? 'review' : 'approve';
   const displayNextLayerNumber = nextLayerNumber ?? layer + 1;
@@ -1738,6 +1766,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
+          testRun,
           to: targetEmails,
           subject: `Action required: ${formTitle} needs your ${nextActionNoun}${refSuffix}`,
           workflow: {
@@ -1785,6 +1814,7 @@ export async function triggerApprovalNotification(
           return;
         }
         await sendSpEmail(token, {
+          testRun,
           to: nextApproverEmails,
           subject: `Action required: ${formTitle} is ready for your ${nextActionNoun}${refSuffix}`,
           workflow: {
@@ -1824,6 +1854,8 @@ export async function triggerApprovalNotification(
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
         // Final approval - notify submitter
         await sendSpEmail(token, {
+          testRun,
+          row,
           to: submittedBy,
           subject: `Status update: ${formTitle} approved${refSuffix}`,
           body: emailBody({
@@ -1849,6 +1881,8 @@ export async function triggerApprovalNotification(
     } else if (action === 'reject' && isEmailAddress(submittedBy)) {
       // Notify submitter of rejection
       await sendSpEmail(token, {
+        testRun,
+        row,
         to: submittedBy,
         subject: `Status update: ${formTitle} not approved${refSuffix}`,
         body: emailBody({

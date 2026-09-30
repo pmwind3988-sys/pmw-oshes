@@ -17,6 +17,7 @@ import { getGraphToken, queryMasterFormByTitle } from "./_utils/graphClient.js";
 import { logError } from "./_utils/logger.js";
 import { allocateReferenceNumber, ReferenceAllocationError } from "./_utils/referenceCounter.js";
 import { catalogueCodeFromLayerConfig, parseReferenceNumberConfig } from "./_utils/referenceNumber.js";
+import { verifyTestTicket } from "./_utils/testRun.js";
 
 interface ApiRequest {
   body: Record<string, unknown>;
@@ -51,10 +52,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const config = parseReferenceNumberConfig(formConfig.ReferenceConfig);
     if (!config.enabled) return res.status(200).json({ enabled: false });
 
+    // A signed-in test run draws from the form's TEST- series. Only a ticket
+    // verified against this form's own slug can do that, and all it can do is
+    // move a number OUT of the live sequence — never into it.
+    const isTest = verifyTestTicket(req.body?.testTicket, String(formConfig.Slug ?? "")) !== null;
     const referenceNo = await allocateReferenceNumber({
       formTitle: listTitle,
       config,
       catalogueCode: catalogueCodeFromLayerConfig(formConfig.LayerConfig),
+      isTest,
     });
     return res.status(200).json({ enabled: true, referenceNo });
   } catch (err) {

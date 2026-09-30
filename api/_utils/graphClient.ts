@@ -371,6 +371,42 @@ export async function queryListItems(
   }));
 }
 
+/**
+ * Every item in a list, following `@odata.nextLink` — for the rare caller that
+ * must see the whole list (clearing a form's test runs), where stopping at the
+ * first page would silently leave rows behind.
+ */
+export async function queryAllListItems(
+  token: string,
+  listDisplayName: string,
+  options?: { pageSize?: number; maxItems?: number },
+): Promise<GraphListItem[]> {
+  const siteId = await getSiteId(token);
+  const listId = await getListId(token, listDisplayName);
+  const pageSize = Math.min(Math.max(options?.pageSize ?? 999, 1), 999);
+  const maxItems = options?.maxItems ?? 20000;
+
+  const items: GraphListItem[] = [];
+  let url: string | null =
+    `${GRAPH_BASE}/sites/${siteId}/lists/${listId}/items?$select=id&$expand=fields&$top=${pageSize}`;
+  while (url && items.length < maxItems) {
+    const res: Response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Graph GET ${res.status}: ${text}`);
+    }
+    const data = (await res.json()) as {
+      value?: Array<{ id: string; fields?: Record<string, unknown> }>;
+      "@odata.nextLink"?: string;
+    };
+    for (const item of data.value || []) items.push({ id: item.id, fields: item.fields || {} });
+    url = data["@odata.nextLink"] ?? null;
+  }
+  return items;
+}
+
 export async function queryListItemByFields(
   token: string,
   listDisplayName: string,

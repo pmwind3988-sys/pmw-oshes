@@ -295,6 +295,43 @@ export async function ensureTextFieldViaSPRest(
   }
 }
 
+/**
+ * Ensures a multi-line plain-text column exists, widening a single-line one of
+ * the same name if that is what the list already has. Needs a DELEGATED token:
+ * the app-only principal cannot create columns on this tenant.
+ */
+export async function ensureNoteFieldViaSPRest(
+  token: string,
+  listName: string,
+  internalName: string,
+  title: string,
+): Promise<void> {
+  const existing = await getListFieldsViaSPRest(token, listName);
+  const match = existing.find((field) => field.internalName === internalName || field.title === title);
+  if (match) {
+    if (match.fieldTypeKind === 2) await ensureFieldsHoldLongTextViaSPRest(token, listName, [match.internalName]);
+    return;
+  }
+
+  const digest = await getSpDigest(token);
+  const res = await fetch(`${requireSpSiteUrl()}${spListEndpoint(listName)}/fields`, {
+    method: "POST",
+    headers: createHeaders(token, digest),
+    body: JSON.stringify({
+      __metadata: { type: "SP.Field" },
+      FieldTypeKind: 3,
+      Title: title,
+      StaticName: internalName,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes("duplicate") || lowerText.includes("already exists")) return;
+    throw new Error(`SP REST create note field ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
 export async function resolveLookupItemIdViaSPRest(
   token: string,
   lookupList: string,

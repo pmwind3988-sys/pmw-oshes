@@ -14,6 +14,9 @@ import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { resolveLayerRecipients, type LayerNotifyConfig } from "./_utils/layerRecipients.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
+import { testRunDispatchFor } from "./_utils/testRun.js";
+import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
+import type { TestRunStep } from "./_utils/testRunTrail.js";
 
 /**
  * What a link issued before bindings existed is told. Deliberately the same
@@ -685,6 +688,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(409).json({ error: "This evaluation link is no longer active for the current workflow layer." });
     }
 
+    // A ticket signed at submit time expires in hours; a run can sit at a later
+    // layer for weeks. Whether this is a rehearsal is therefore recovered off
+    // the stored row, never off the request.
+    const testDispatch = testRunDispatchFor(responseItem.fields);
+    const isTestRun = testDispatch.kind !== "production";
+    const trailDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
+
     const selectedBranch = typeof responseItem.fields.SelectedBranch === "string" ? responseItem.fields.SelectedBranch.trim().toLowerCase() : "";
     const activeLayers = (() => {
       if (selectedBranch && layerConfigParsed?.manualBranches?.length) {
@@ -806,6 +816,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    if (isTestRun) {
+      const decisionSteps: Omit<TestRunStep, "at">[] = [{
+        step: `layer-${layerNumber}-decision`,
+        label: `Layer ${layerNumber} decision recorded`,
+        status: "pass",
+        detail: `${action} by ${actedByEmail || String(responseItem.fields[`L${layerNumber}_ActedBy`] || "") || "the public link holder"}`,
+        order: 10 * layerNumber + 2,
+      }];
+      if (!notificationNextLayer) {
+        decisionSteps.push({
+          step: "final-status",
+          label: "Final status set",
+          status: "pass",
+          detail: String(updates.FormStatus || ""),
+          order: 1000,
+        });
+      }
+      await recordTestRunSteps(graphToken, responseListName, String(responseItem.id), decisionSteps, trailDeps);
+    }
+
     if (notificationNextLayer) {
       const nextLayerNumber = Number(notificationNextLayer.layerNumber);
       // A shared next layer has no holder yet — its L{n}_Email is blank until
@@ -814,7 +844,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         notificationNextLayer,
         String(responseItem.fields[`L${nextLayerNumber}_Email`] || ""),
       );
-      if (recipients.length > 0) {
+      if (testDispatch.kind === "blocked") {
+        // A test row with no usable redirect address. Falling back to the real
+        // assignee would mail a real approver from a rehearsal, so nothing goes.
+        logWarn("api:evaluate", "Test run has no usable redirect address; refusing to send the next layer's email", {
+          formTitle,
+          responseItemId: safeResponseItemId,
+          layer: nextLayerNumber,
+        });
+        await recordTestRunSteps(graphToken, responseListName, String(responseItem.id), [{
+          step: `layer-${nextLayerNumber}-email`,
+          label: `Layer ${nextLayerNumber} email sent`,
+          status: "fail",
+          detail: "Not sent: this test run has no usable test address",
+          order: 10 * nextLayerNumber + 1,
+        }], trailDeps);
+      } else if (recipients.length > 0) {
         const appBaseUrl = getApplicationBaseUrl();
         const formSlug = String(formConfig.Slug || "").trim();
         const publicToken = String(notificationNextLayer.publicToken || "").trim();
@@ -850,6 +895,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               listTitle: responseListName,
               responseItemId: responseItem.id,
               layer: nextLayerNumber,
+              testRun: testDispatch.kind === "redirect" ? testDispatch.redirect : undefined,
             },
             notificationNextLayer.type === "evaluation"
               ? notificationNextLayer.emailSchedule as WorkflowEmailScheduleConfig | undefined
@@ -864,6 +910,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               submittedAt,
             },
           );
+          if (testDispatch.kind === "redirect") {
+            await recordTestRunSteps(graphToken, responseListName, String(responseItem.id), [{
+              step: `layer-${nextLayerNumber}-email`,
+              label: `Layer ${nextLayerNumber} email sent`,
+              status: "pass",
+              detail: `to ${testDispatch.redirect.testEmail}`,
+              order: 10 * nextLayerNumber + 1,
+            }], trailDeps);
+          }
         } catch (emailError) {
           logWarn("api:evaluate", "Next workflow email delivery failed", {
             formTitle,
@@ -871,6 +926,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             layer: nextLayerNumber,
             errorMessage: emailError instanceof Error ? emailError.message : String(emailError),
           });
+          if (testDispatch.kind === "redirect") {
+            await recordTestRunSteps(graphToken, responseListName, String(responseItem.id), [{
+              step: `layer-${nextLayerNumber}-email`,
+              label: `Layer ${nextLayerNumber} email sent`,
+              status: "fail",
+              detail: emailError instanceof Error ? emailError.message.slice(0, 250) : String(emailError).slice(0, 250),
+              order: 10 * nextLayerNumber + 1,
+            }], trailDeps);
+          }
         }
       }
     }
