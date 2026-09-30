@@ -1,4 +1,4 @@
-import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, Stack, Tooltip, Typography } from "@mui/material";
 import { Clock as AccessTimeIcon, ArrowRight as ArrowForwardIcon, XCircle as CancelIcon, CheckCircle as CheckCircleIcon, FileText as DescriptionIcon, Pencil as EditIcon } from "../ui/Icons";
 import type { Submission, DiscoveredList, ListMetaEntry } from "../../types";
 import { editorial } from "../../theme/editorial";
@@ -12,6 +12,14 @@ interface ListSummaryCardsProps {
   isAdmin: boolean;
   canUseFormBuilder: boolean;
   onEditForm: (listTitle: string) => void;
+  /**
+   * Form builders may rehearse a form's workflow. Separate from
+   * `canUseFormBuilder`, which also requires the external builder link to be
+   * configured — a test run happens here, not in the builder.
+   */
+  canRunTestRuns?: boolean;
+  onTestWorkflow?: (listTitle: string) => void;
+  onShowTestRuns?: (listTitle: string) => void;
 }
 
 /**
@@ -30,6 +38,9 @@ export default function ListSummaryCards({
   isAdmin,
   canUseFormBuilder,
   onEditForm,
+  canRunTestRuns = false,
+  onTestWorkflow,
+  onShowTestRuns,
 }: ListSummaryCardsProps) {
   return (
     <WidgetGrid min={260}>
@@ -184,6 +195,26 @@ export default function ListSummaryCards({
               </Box>
             ) : (
               <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 2 }}>No submissions</Typography>
+            )}
+
+            {canRunTestRuns && onTestWorkflow && onShowTestRuns && (
+              <Stack direction="row" spacing={1} sx={{ mt: 2, pt: 1.5, borderTop: `1px dashed ${editorial.border}` }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => onTestWorkflow(list.title)}
+                  sx={{ textTransform: "none", fontWeight: 700, fontSize: 12, borderRadius: radius.sm }}
+                >
+                  Test workflow
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => onShowTestRuns(list.title)}
+                  sx={{ textTransform: "none", fontWeight: 700, fontSize: 12, borderRadius: radius.sm }}
+                >
+                  Test runs
+                </Button>
+              </Stack>
             )}
 
             {!isAdmin && !canUseFormBuilder && count > 0 && (

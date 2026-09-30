@@ -35,6 +35,7 @@ import {
 } from "../../utils/workflowEmailSchedule";
 import { setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
+import { readTestRowIds } from "../../utils/testColumnProbeCache";
 import WorkflowAssignmentEditor from "./WorkflowAssignmentEditor";
 import type { PdfFormData } from "../../utils/FormPdfDocument";
 import type { WorkflowAssignmentSaveInput } from "./WorkflowAssignmentEditor";
@@ -44,11 +45,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   Link,
   Stack,
@@ -110,6 +114,8 @@ interface PendingItem {
   WorkflowAssignmentData?: string;
   SelectedBranch?: string;
   totalLayers?: number;
+  /** A test-run rehearsal. Read in its own optional query — see attachTestFlags. */
+  isTest?: boolean;
 }
 
 function getPendingItemKey(item: Pick<PendingItem, "Title" | "Id">): string {
@@ -518,6 +524,8 @@ export default function ApprovalDashboard() {
   const [submitterFilter, setSubmitterFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  /** Rehearsals stay out of the queue unless asked for, so nobody acts on one by mistake. */
+  const [showTestRuns, setShowTestRuns] = useState(false);
   const [viewMode, setViewMode] = useState<"approvals" | "evaluations">("approvals");
   const [listPage, setListPage] = useState(1);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -564,7 +572,7 @@ export default function ApprovalDashboard() {
   } | null>(null);
 
   const baseFilteredItems = useMemo(() => {
-    let items = pendingItems;
+    let items = showTestRuns ? pendingItems : pendingItems.filter((i) => !i.isTest);
 
     if (titleFilter.trim()) {
       const q = titleFilter.trim().toLowerCase();
@@ -593,7 +601,7 @@ export default function ApprovalDashboard() {
       if (bTime !== aTime) return bTime - aTime;
       return b.Id - a.Id;
     });
-  }, [pendingItems, titleFilter, submitterFilter, dateFrom, dateTo]);
+  }, [pendingItems, titleFilter, submitterFilter, dateFrom, dateTo, showTestRuns]);
 
   const categoryItems = useMemo(() => {
     return baseFilteredItems.filter(i =>
@@ -766,6 +774,23 @@ export default function ApprovalDashboard() {
                 }
               };
 
+              // IsTest is provisioned lazily — only once someone has started a test
+              // run of this form — so it is never named in a tier's required
+              // $select (that would 400 every tier on a form never rehearsed). It
+              // is read on its own and merged in, on every tier, so a rehearsal is
+              // hidden on an old list too rather than failing open.
+              const attachTestFlags = async (itemsToUpdate: PendingItem[]): Promise<void> => {
+                const testIds = await readTestRowIds(listName, async () => {
+                  const data = await spGet(token,
+                    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=Created desc&$top=100`
+                  ) as { value?: { Id: number; IsTest?: unknown }[] };
+                  return data.value ?? [];
+                });
+                for (const current of itemsToUpdate) {
+                  if (testIds.has(current.Id)) current.isTest = true;
+                }
+              };
+
               // Tier 1: core columns only (no CurrentLayer/SelectedBranch — may not exist on older lists)
               const tier1 = await (async () => {
                 try {
@@ -808,6 +833,7 @@ export default function ApprovalDashboard() {
                 } catch { /* column may not exist */ }
                 await attachWorkflowEmailLogs(tier1.value || []);
                 await attachWorkflowEmailSchedules(tier1.value || []);
+                await attachTestFlags(tier1.value || []);
                 // SelectedBranch (only if the form has manual branches)
                 if (hasBranches) {
                   try {
@@ -839,6 +865,7 @@ export default function ApprovalDashboard() {
               if (tier2) {
                 await attachWorkflowEmailLogs(tier2.value || []);
                 await attachWorkflowEmailSchedules(tier2.value || []);
+                await attachTestFlags(tier2.value || []);
                 return tier2;
               }
 
@@ -856,6 +883,7 @@ export default function ApprovalDashboard() {
                 })) as PendingItem[];
                 await attachWorkflowEmailLogs(tier3Items);
                 await attachWorkflowEmailSchedules(tier3Items);
+                await attachTestFlags(tier3Items);
                 return { value: tier3Items };
               }
 
@@ -872,6 +900,7 @@ export default function ApprovalDashboard() {
                 })) as PendingItem[];
               await attachWorkflowEmailLogs(basicItems);
               await attachWorkflowEmailSchedules(basicItems);
+              await attachTestFlags(basicItems);
               return { value: basicItems };
             })();
 
@@ -2214,6 +2243,11 @@ export default function ApprovalDashboard() {
             onChange={(e) => setDateTo(e.target.value)}
             sx={{ flex: "0 0 auto" }}
           />
+          <FormControlLabel
+            sx={{ flex: "0 0 auto", m: 0, "& .MuiFormControlLabel-label": { fontSize: 13, fontWeight: 700, color: editorial.muted } }}
+            control={<Checkbox size="small" checked={showTestRuns} onChange={(e) => setShowTestRuns(e.target.checked)} />}
+            label="Show test runs"
+          />
           {hasFilters && (
             <Button
               variant="text"
@@ -2401,7 +2435,12 @@ export default function ApprovalDashboard() {
                     >
                       <Stack direction="row" spacing={1.5} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography sx={{ fontSize: 14.5, fontWeight: 800, lineHeight: 1.3 }}>{item.Title}</Typography>
+                          <Typography sx={{ fontSize: 14.5, fontWeight: 800, lineHeight: 1.3 }}>
+                            {item.Title}
+                            {item.isTest && (
+                              <Chip size="small" label="TEST RUN" sx={{ ml: 1, height: 20, fontSize: 10.5, fontWeight: 800, color: editorial.error, backgroundColor: editorial.errorWash }} />
+                            )}
+                          </Typography>
                           <Typography sx={{ fontSize: 12.5, color: editorial.muted, mt: 0.25 }}>
                             By {item.SubmittedBy} · {formatDateTime(item.SubmittedAt)}
                           </Typography>

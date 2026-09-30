@@ -6,6 +6,10 @@ export interface DashboardContextValue {
   userEmail: string;
   isAdmin: boolean;
   canUseFormBuilder: boolean;
+  /** A form builder (see `resolveFormBuilderAccess`) — may start and review test runs. */
+  canRunTestRuns: boolean;
+  /** Master Form title → published slug, which a test run is bound to. */
+  formSlugs: Record<string, string>;
   submissions: Submission[];
   visibleLists: DiscoveredList[];
   listMetaMap: Record<string, ListMetaEntry>;

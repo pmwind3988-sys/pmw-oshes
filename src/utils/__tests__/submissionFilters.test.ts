@@ -197,6 +197,30 @@ describe("submissionMatchesFilters", () => {
   });
 });
 
+describe("test runs", () => {
+  it("hides a test run from an ordinary listing", () => {
+    expect(submissionMatchesFilters(makeSubmission({ isTest: true }), EMPTY_SUBMISSION_FILTERS)).toBe(false);
+  });
+
+  it("shows real submissions as it always did", () => {
+    expect(submissionMatchesFilters(makeSubmission({ isTest: false }), EMPTY_SUBMISSION_FILTERS)).toBe(true);
+  });
+
+  it("treats a submission from before the column existed as real", () => {
+    expect(submissionMatchesFilters(makeSubmission(), EMPTY_SUBMISSION_FILTERS)).toBe(true);
+  });
+
+  it("shows test runs alongside real ones once asked for", () => {
+    const filters = { ...EMPTY_SUBMISSION_FILTERS, includeTestRuns: true };
+    expect(submissionMatchesFilters(makeSubmission({ isTest: true }), filters)).toBe(true);
+    expect(submissionMatchesFilters(makeSubmission({ isTest: false }), filters)).toBe(true);
+  });
+
+  it("counts showing test runs as an active filter", () => {
+    expect(countActiveFilters({ ...EMPTY_SUBMISSION_FILTERS, includeTestRuns: true })).toBe(1);
+  });
+});
+
 describe("fieldFilterMatches", () => {
   it("matches text with contains, exact and negated operators", () => {
     const field = (op: FieldFilter["op"], value: string) => condition("q", "text", { op, value });

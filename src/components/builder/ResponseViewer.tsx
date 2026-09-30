@@ -12,7 +12,8 @@ import { useNativeForm } from "../../native/useNativeForm";
 import "../../native/native-form.css";
 
 import DOMPurify from "dompurify";
-import { Alert, Box, Button, Link, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, Chip, FormControlLabel, Link, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { readTestRowIds } from "../../utils/testColumnProbeCache";
 import { Ban as BlockIcon, Download as DownloadIcon, Lock as LockIcon } from "../ui/Icons";
 import { spGet, getFormConfigByTitle, readMatrixChildItems } from "../../utils/formBuilderSP";
 import type { MatrixColumnDef } from "../../utils/formBuilderSP";
@@ -56,6 +57,8 @@ interface SubmissionItem {
   FormVersion: string;
   RawJSON: string;
   PdfUrl?: string;
+  /** A test-run rehearsal, read in its own optional query. */
+  isTest?: boolean;
 }
 
 interface FormConfig {
@@ -84,6 +87,8 @@ export default function ResponseViewer() {
   const [attachmentsNotice, setAttachmentsNotice] = useState("");
   const [surveyJson, setSurveyJson] = useState<unknown>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  /** Rehearsals are hidden unless asked for, like everywhere else. */
+  const [showTestRuns, setShowTestRuns] = useState(false);
   const [matrixTables, setMatrixTables] = useState<Record<string, MatrixTableEntry>>({});
   const [matrixLoading, setMatrixLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -136,7 +141,20 @@ export default function ResponseViewer() {
           `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,Title,SubmittedBy,SubmittedAt,Status,CurrentApprovalLayer,CurrentLayer,FormStatus,FormVersion,RawJSON,PdfUrl&$orderby=SubmittedAt desc&$top=100`
         ) as { value?: SubmissionItem[] };
 
-        setSubmissions(items.value || []);
+        const loadedItems = items.value || [];
+        // IsTest exists only once this form has been rehearsed, so it is read on
+        // its own: naming it above would 400 the whole load on every other form.
+        const testIds = await readTestRowIds(listName, async () => {
+          const data = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items?$select=Id,IsTest&$orderby=SubmittedAt desc&$top=100`
+          ) as { value?: { Id: number; IsTest?: unknown }[] };
+          return data.value ?? [];
+        });
+        for (const item of loadedItems) {
+          if (testIds.has(item.Id)) item.isTest = true;
+        }
+        setSubmissions(loadedItems);
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -281,10 +299,11 @@ export default function ResponseViewer() {
   };
 
   // Filter submissions
+  const visibleSubmissions = showTestRuns ? submissions : submissions.filter((s) => !s.isTest);
   const filteredSubmissions =
     statusFilter === "all"
-      ? submissions
-      : submissions.filter((s) => s.Status.toLowerCase().includes(statusFilter.toLowerCase()));
+      ? visibleSubmissions
+      : visibleSubmissions.filter((s) => s.Status.toLowerCase().includes(statusFilter.toLowerCase()));
 
   // The published document this response was answered against.
   const previewForm = useMemo(() => {
@@ -373,6 +392,11 @@ export default function ResponseViewer() {
               <MenuItem value="Approved">Approved</MenuItem>
               <MenuItem value="Rejected">Rejected</MenuItem>
             </TextField>
+            <FormControlLabel
+              sx={{ m: 0, "& .MuiFormControlLabel-label": { fontSize: 13, fontWeight: 700, color: editorial.muted } }}
+              control={<Checkbox size="small" checked={showTestRuns} onChange={(e) => setShowTestRuns(e.target.checked)} />}
+              label="Show test runs"
+            />
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
@@ -435,6 +459,9 @@ export default function ResponseViewer() {
                     <Stack direction="row" spacing={1.5} sx={{ justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                       <Typography sx={{ fontSize: 12, color: editorial.softMuted, fontVariantNumeric: "tabular-nums" }}>
                         #{item.Id}
+                        {item.isTest && (
+                          <Chip size="small" label="TEST RUN" sx={{ ml: 1, height: 20, fontSize: 10.5, fontWeight: 800, color: editorial.error, backgroundColor: editorial.errorWash }} />
+                        )}
                       </Typography>
                       <WorkspaceTag tone={getStatusTone(item.Status)}>{item.Status}</WorkspaceTag>
                     </Stack>

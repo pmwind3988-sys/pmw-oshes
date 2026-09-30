@@ -74,6 +74,8 @@ export interface Submission {
   workflowEmailScheduleRaw?: string | null;
   /** Raw EvaluationData note column — per-layer notes and evaluation answers. */
   evaluationDataRaw?: string | null;
+  /** A test-run rehearsal (`IsTest` on the row) rather than a real submission. Absent means real. */
+  isTest?: boolean;
   /** Stored PDF in the Form PDFs library — the copy a regeneration replaces. */
   pdfUrl?: string;
 }

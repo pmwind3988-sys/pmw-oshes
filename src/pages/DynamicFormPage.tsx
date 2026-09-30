@@ -15,7 +15,8 @@ import "../native/native-form.css";
 import { fileQuestions, uniqueUploadFileName, uploadStamp } from "../utils/fileAttachments";
 import { uploadPublicAttachments } from "../utils/publicFileUpload";
 import { answerColumnName, isReservedColumnName } from "../utils/reservedColumns";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind, unsavableAnswerReason, ensureColumns, SP_FIELD_KIND } from "../utils/formBuilderSP";
+import { sampleAnswersFor } from "../utils/testRunLaunch";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spDelete, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, ensureReferenceNoColumn, toAbsoluteSharePointUrl, getSharePointColumnResolvers, ensureColumnsHoldLongText, SP_TEXT_COLUMN_MAX, coerceForColumnKind, unsavableAnswerReason, ensureColumns, SP_FIELD_KIND } from "../utils/formBuilderSP";
 import { SharePointHttpError, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import type { MatrixColumnDef } from "../utils/formBuilderSP";
 import type { DocumentControlHeader, LayerConfig, LayerConfigItem } from "../types";
@@ -74,7 +75,11 @@ const OPTIONAL_SIGNED_IN_SUBMISSION_COLUMNS = new Set(["FormStatus", "CurrentLay
  * record is filed, searched and chased under, so a submission saved without one
  * is worse than a submission the respondent is asked to retry.
  */
-async function claimReferenceNumber(listTitle: string): Promise<string> {
+/**
+ * @param testTicket A test run's ticket: the server verifies it and, if it is
+ *   genuine, draws the number from the form's TEST- series instead.
+ */
+async function claimReferenceNumber(listTitle: string, testTicket = ""): Promise<string> {
   const res = await fetch("/api/next-reference", {
     method: "POST",
     headers: {
@@ -82,7 +87,7 @@ async function claimReferenceNumber(listTitle: string): Promise<string> {
       "X-Requested-With": "XMLHttpRequest",
       ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
     },
-    body: JSON.stringify({ listTitle }),
+    body: JSON.stringify({ listTitle, ...(testTicket ? { testTicket } : {}) }),
   });
   const data = await res.json().catch(() => ({})) as { enabled?: boolean; referenceNo?: string; error?: string };
   if (!res.ok) {
@@ -500,8 +505,13 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-const SuccessScreen = ({ formTitle, referenceNo, onReset, t }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT }) => (
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string }) => (
   <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
+    {isTestRun && (
+      <div role="status" style={{ maxWidth: 440, margin: "0 auto 20px", padding: "10px 16px", background: t.red, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 700, lineHeight: 1.5 }}>
+        TEST RUN — this was a rehearsal, not a real submission. Every email it sends goes only to {testEmailDisplay || "the nominated test address"}.
+      </div>
+    )}
     <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
     <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
     <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
@@ -543,6 +553,12 @@ export default function DynamicFormPage() {
   const explicitPrefill = useMemo(() => decodePrefilledQrPayload(searchParams.get(PREFILLED_QR_PARAM)), [searchParams]);
   /** Where the QR poster is nailed up, handed over by the public report picker. */
   const posterLocation = searchParams.get("location") ?? "";
+  // A test run in progress. The ticket is what the server verifies before it
+  // redirects any email this submission generates. `testEmail` is display-only:
+  // the server never reads it, it takes the address out of the signed ticket.
+  const testTicket = searchParams.get("testTicket") || "";
+  const testEmailDisplay = searchParams.get("testEmail") || "";
+  const isTestRun = testTicket.length > 0;
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
@@ -912,7 +928,12 @@ export default function DynamicFormPage() {
   // A hook cannot be called conditionally, so a form that has not loaded yet
   // runs an empty document rather than skipping the runtime entirely.
   const placeholderForm = useMemo(() => parseForm(null), []);
-  const runtime = useNativeForm(nativeForm ?? placeholderForm);
+  // A test run prefills recognisably fake answers so the tester need not type
+  // through every field; anything the sampler cannot guess (signatures, files)
+  // is left for them. The engine reseeds only when the form itself changes, so
+  // a fresh object each render is harmless.
+  const testRunSeed = isTestRun && enrichedSurveyJson ? sampleAnswersFor(enrichedSurveyJson) : undefined;
+  const runtime = useNativeForm(nativeForm ?? placeholderForm, testRunSeed);
   const formReady = nativeForm !== null;
 
   const formVersion = String(formData?.formConfig?.CurrentVersion || "1.0");
@@ -1179,7 +1200,7 @@ export default function DynamicFormPage() {
         // keeping one allocator regardless of how the row gets created.
         if (parseReferenceNumberConfig(cfg.ReferenceConfig).enabled) {
           await ensureReferenceNoColumn(token, cfg.Title as string);
-          const referenceNo = await claimReferenceNumber(cfg.Title as string);
+          const referenceNo = await claimReferenceNumber(cfg.Title as string, testTicket);
           if (referenceNo) {
             body[REFERENCE_NO_FIELD] = referenceNo;
             setSubmittedReference(referenceNo);
@@ -1260,6 +1281,35 @@ export default function DynamicFormPage() {
             ) as { Id?: number };
           } else {
             throw submitErr;
+          }
+        }
+
+        // A signed-in submission writes its row itself, so it never passes the
+        // server step that flags a test run at create time. Everything after this
+        // — the approvals workspace, the review page, the cron — decides whether
+        // mail is real by reading IsTest off the row, so the server flags it now,
+        // after verifying the ticket itself. Not swallowed: an unflagged row would
+        // mail a real approver the moment layer 1 is approved. On failure the row
+        // is removed and the submission stops before anyone is notified.
+        if (isTestRun && result?.Id) {
+          const stampRes = await fetch("/api/submit-form", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Requested-With": "XMLHttpRequest",
+              ...(API_KEY ? { "X-Api-Key": API_KEY } : {}),
+            },
+            body: JSON.stringify({
+              action: "stamp-test-run",
+              itemId: String(result.Id),
+              slug: (cfg.Slug as string) || (cfg.slug as string) || "",
+              testTicket,
+            }),
+          });
+          if (!stampRes.ok) {
+            const stampData = await stampRes.json().catch(() => ({})) as { error?: string };
+            await spDelete(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(cfg.Title as string)}')/items(${result.Id})`).catch(() => {});
+            throw new Error(stampData.error || "Could not mark this submission as a test run — stopped before any approver could be notified.");
           }
         }
 
@@ -1380,6 +1430,7 @@ export default function DynamicFormPage() {
               ...(firstLayer?.authMode ? { nextLayerAuthMode: firstLayer.authMode } : {}),
               ...(firstLayer?.type === "evaluation" ? { nextEmailSchedule: firstLayer.emailSchedule } : {}),
               ...(firstLayerReviewLink ? { reviewLink: firstLayerReviewLink } : {}),
+              ...(isTestRun ? { testRun: { ticket: testTicket, slug: formSlug } } : {}),
             });
           }
         }
@@ -1478,6 +1529,10 @@ export default function DynamicFormPage() {
                     sendToConfiguredSender: true,
                     subject: `Manual workflow PDF ready: ${cfg.Title as string}`,
                     body: `A submission matched a manual paper workflow rule.<br/><br/>Form: ${cfg.Title as string}<br/>Submission ID: ${result.Id}<br/>The manual evaluation/approval PDF is attached.<br/><a href="${pdfLink}">Open generated PDF record</a>`,
+                    // Lets the server tell a rehearsal's notice from a real one:
+                    // it reads the row, and verifies the ticket itself.
+                    row: { listTitle: cfg.Title as string, responseItemId: result.Id },
+                    ...(isTestRun ? { testTicket, slug: (cfg.Slug as string) || (cfg.slug as string) || "" } : {}),
                     attachments: manualPdfAttachment ? [manualPdfAttachment] : undefined,
                   }),
                 });
@@ -1556,6 +1611,7 @@ export default function DynamicFormPage() {
             pdpaNoticeVersion: PDPA_NOTICE_VERSION,
             pdpaConsentedAt: body.PDPAConsentAt,
             retentionUntil: body.RetentionUntil,
+            ...(isTestRun ? { testTicket } : {}),
           }),
         });
         const resData = await res.json().catch(() => ({})) as { id?: string; referenceNo?: string; error?: string };
@@ -1570,7 +1626,7 @@ export default function DynamicFormPage() {
         }
       }
       // Success — function returns normally; errors propagate to caller (useEffect)
-  }, [formData, userEmail, accounts]);
+  }, [formData, userEmail, accounts, isTestRun, testTicket]);
 
   // Run submission logic when handleSubmit raises the loading state
   useEffect(() => {
@@ -1665,6 +1721,11 @@ export default function DynamicFormPage() {
     <div style={{ minHeight: "100dvh", background: t.bg }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
+      {isTestRun && (
+        <div role="status" style={{ background: t.red, color: "#fff", fontSize: 13, fontWeight: 700, textAlign: "center", padding: "10px 12px", lineHeight: 1.4 }}>
+          TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
+        </div>
+      )}
       <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
         <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <Logo size={{ xs: 26, sm: 28, md: 32 }} />
@@ -1721,7 +1782,7 @@ export default function DynamicFormPage() {
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
-          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} />
+          <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} />
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (

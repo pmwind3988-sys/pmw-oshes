@@ -16,8 +16,13 @@
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results. Used by `DetailModal` and `EvaluationPage` |
 | Read-only submission preview | `ReadOnlySubmissionPreview.tsx` | Used by `EvaluationPage` so a reviewer sees what was submitted |
 | Layer progress derivation | `approvalDashboardLayerProgress.ts` | Pure — has unit tests |
+| Test run launcher | `TestRunLauncher.tsx` | "Test workflow" on each dashboard form card, for form builders (`canRunTestRuns`, i.e. `resolveFormBuilderAccess`). Mints a signed ticket (`mint-test-ticket` on `/api/submit-form`) and opens `/form/{slug}?testTicket=…`. Not an authoring tool: it only rehearses an already-published form. |
+| Test run panel | `TestRunPanel.tsx` | "Test runs" on the same card. Lists `IsTest` rows with each run's checklist (`TestRunLog` merged with the row via `testRunProgress.ts`), renders the PDF in the browser (`record-test-run-step`), deletes through `delete-test-runs`, which re-checks `IsTest` server-side. |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |
 | Shared page chrome | `WorkspaceLayout.tsx` | `WorkspacePage`, `WorkspaceHeader`, `WorkspaceNotice`, `WorkspacePanelHeader`, `WorkspacePill`, `WorkspaceTag` |
+
+## Test runs in the listings
+- A test run is hidden from `ApprovalDashboard`, `ResponseViewer`, the dashboard (cards, stats, table, export) and the portal unless "Show test runs" is ticked; the portal never shows them. `IsTest` is read in its own optional query (`readTestRowIds` in `src/utils/testColumnProbeCache.ts`) on every tier — never inside a required `$select`, which would 400 every form that was never rehearsed.
 
 ## Conventions
 - **State**: Local `useState` only — no context or external store

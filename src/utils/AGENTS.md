@@ -43,6 +43,11 @@
 | Answer vs. plumbing | `responseSystemFields.ts` | `responseAnswerFields()`, `isResponseSystemField()` — the one list of workflow/SharePoint columns. Layer columns match by pattern, so a fourth layer is not mistaken for a question |
 | Job apply PDF | `JobApplyPdfDocument.tsx` | React-PDF document for job application PDF |
 
+## Test runs (browser side)
+- `testRun.ts` (`isTestRow`), `testRunTrail.ts` (byte-for-byte twin of `api/_utils/testRunTrail.ts` — keep in step), `testRunProgress.ts` (checklist + verdict derived from the row as well as the trail), `testRunLaunch.ts` (`sampleAnswersFor`, `testRunFormUrl`, `testRunSharePointScope`), `testColumnProbeCache.ts` (`readTestRowIds`, the optional `IsTest` read).
+- The browser never asserts test-ness. It forwards the ticket (`testTicket`) to `submit-form`, `next-reference` and `send-email`; `sendSpEmail`/`triggerApprovalNotification` also name the response row (`workflow` or `row`) so `send-email` can read `IsTest` off the row itself. See `api/AGENTS.md` → Gotchas.
+- `submissionFilters.ts` hides `isTest` rows unless `includeTestRuns`; `App.tsx` passes the portal real submissions only.
+
 ## Dual SharePoint Client Pattern
 ```
 Dashboard path:

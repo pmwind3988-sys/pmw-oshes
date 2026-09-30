@@ -48,6 +48,7 @@ import LazyRoute from "./components/LazyRoute";
 import { DashboardProvider } from "./contexts/DashboardContext";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
 import { builderUrl } from "./config/oshes";
+import { isTestRow } from "./utils/testRun";
 
 
 
@@ -590,7 +591,11 @@ function mapSubmission(
       key === "RetentionUntil" ||
       // Surfaced as the record's own identifier, not as one answer among many.
       key === REFERENCE_NO_FIELD ||
-      key === "AuthorId";
+      key === "AuthorId" ||
+      // A test run's bookkeeping, never an answer.
+      key === "IsTest" ||
+      key === "TestEmail" ||
+      key === "TestRunLog";
 
     if (isDashboardInternalField && !DETAIL_PASSTHROUGH_FIELDS.has(key)) {
       continue;
@@ -631,6 +636,7 @@ function mapSubmission(
     workflowAssignmentRaw: raw.WorkflowAssignmentData ? String(raw.WorkflowAssignmentData) : null,
     workflowEmailScheduleRaw: raw.WorkflowEmailSchedule ? String(raw.WorkflowEmailSchedule) : null,
     evaluationDataRaw: raw.EvaluationData ? String(raw.EvaluationData) : null,
+    isTest: isTestRow(raw),
   };
 }
 
@@ -1217,6 +1223,11 @@ export default function App() {
   // Filter + sort. Both live in submissionFilters so the dashboard, the approval
   // workspace and the response viewer narrow a list the same way.
   const filteredSubmissions = submissions.filter((item) => submissionMatchesFilters(item, filters));
+  // Test runs are rehearsals: kept out of every count, card and export unless
+  // an admin ticks "Show test runs", and out of the portal — where approvers
+  // work their real queue — entirely.
+  const realSubmissions = submissions.filter((item) => !item.isTest);
+  const dashboardSubmissions = filters.includeTestRuns ? submissions : realSubmissions;
   const sortedSubmissions = sortSubmissions(filteredSubmissions, sortBy);
 
   const listMetaMap = { ...loadedConfig?.listMetaMap };
@@ -1343,7 +1354,7 @@ export default function App() {
           userEmail={userEmail}
           isAdmin={isAdmin}
           isAuditor={isAuditor}
-          submissions={submissions}
+          submissions={realSubmissions}
           visibleLists={visibleLists}
           loadedConfig={loadedConfig}
           spClient={portalSpClient}
@@ -1378,7 +1389,11 @@ export default function App() {
         // unconfigured VITE_BUILDER_URL means there is nowhere to send anyone.
         // Folding that in keeps every builder affordance from rendering dead.
         canUseFormBuilder={canUseFormBuilder && builderUrl() !== null}
-        submissions={submissions}
+        // A test run happens here, not in the external builder, so it needs
+        // only the form-builder grant — the server checks the same grant.
+        canRunTestRuns={canUseFormBuilder}
+        formSlugs={loadedConfig?.formSlugMap ?? {}}
+        submissions={dashboardSubmissions}
         visibleLists={visibleLists}
         listMetaMap={listMetaMap}
         missingConfigs={missingConfigs}

@@ -15,6 +15,8 @@ import EmptyState from "../components/dashboard/EmptyState";
 import ConfigWarningBanner from "../components/dashboard/ConfigWarningBanner";
 import { PageHeader, SectionLabel } from "../components/Widget";
 import DetailModal from "../components/dashboard/DetailModal";
+import TestRunLauncher from "../components/builder/TestRunLauncher";
+import TestRunPanel from "../components/builder/TestRunPanel";
 import {
   collectFieldCatalog,
   collectFormTypes,
@@ -36,6 +38,8 @@ export default function AdminHomePage() {
     userEmail,
     isAdmin,
     canUseFormBuilder,
+    canRunTestRuns,
+    formSlugs,
     submissions,
     visibleLists,
     listMetaMap,
@@ -64,6 +68,8 @@ export default function AdminHomePage() {
   const [exporting, setExporting] = useState(false);
   // Kept on screen after the file is written, so a partial export is not silent.
   const [exportWarnings, setExportWarnings] = useState<string[]>([]);
+  /** Which form's test-run dialog is open, if any. */
+  const [testRunTarget, setTestRunTarget] = useState<{ kind: "launch" | "panel"; title: string } | null>(null);
   const workspaceLabel = isAdmin ? "Admin workspace" : "Employee workspace";
   const canHardDeleteSubmission = isAdmin || canUseFormBuilder;
   const canExportSubmissions = isAdmin || canUseFormBuilder;
@@ -299,6 +305,9 @@ export default function AdminHomePage() {
               isAdmin={isAdmin}
               canUseFormBuilder={canUseFormBuilder}
               onEditForm={onEditForm}
+              canRunTestRuns={canRunTestRuns}
+              onTestWorkflow={(title) => setTestRunTarget({ kind: "launch", title })}
+              onShowTestRuns={(title) => setTestRunTarget({ kind: "panel", title })}
             />
           </Box>
         )}
@@ -566,6 +575,21 @@ export default function AdminHomePage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {testRunTarget?.kind === "launch" && (
+        <TestRunLauncher
+          open
+          onClose={() => setTestRunTarget(null)}
+          form={{ Title: testRunTarget.title, Slug: formSlugs[testRunTarget.title] }}
+        />
+      )}
+      {testRunTarget?.kind === "panel" && (
+        <TestRunPanel
+          open
+          onClose={() => setTestRunTarget(null)}
+          form={{ Title: testRunTarget.title, Slug: formSlugs[testRunTarget.title] }}
+        />
+      )}
     </Box>
   );
 }

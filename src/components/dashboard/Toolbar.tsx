@@ -15,9 +15,11 @@ import { useState } from "react";
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   Collapse,
   FormControl,
+  FormControlLabel,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -166,6 +168,9 @@ export default function Toolbar({
       label: `Submitter: ${filters.submitter}`,
       onDelete: () => patch({ submitter: "" }),
     });
+  }
+  if (filters.includeTestRuns) {
+    chips.push({ key: "test-runs", label: "Showing test runs", onDelete: () => patch({ includeTestRuns: false }) });
   }
   if (filters.dateFrom || filters.dateTo) {
     chips.push({
@@ -375,6 +380,22 @@ export default function Toolbar({
                 </>
               )}
             </Box>
+
+            {/* Outside the form → profile → version chain: a rehearsal belongs to
+                no particular form and stays hidden until asked for. */}
+            {isAdmin && (
+              <FormControlLabel
+                sx={{ mt: 1.5, "& .MuiFormControlLabel-label": { fontSize: "0.85rem", fontWeight: 700, color: editorial.muted } }}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={filters.includeTestRuns}
+                    onChange={(e) => patch({ includeTestRuns: e.target.checked })}
+                  />
+                }
+                label="Show test runs"
+              />
+            )}
 
             <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px dashed ${editorial.border}` }}>
               <Typography sx={SECTION_LABEL_SX}>

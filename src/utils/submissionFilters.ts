@@ -75,6 +75,12 @@ export interface SubmissionFilterState {
   formVersion: string;
   /** Level 4. Conditions on the questions in scope, AND-ed together. */
   fieldFilters: FieldFilter[];
+  /**
+   * Universal, and outside the hierarchy: whether test-run rehearsals are shown
+   * alongside real submissions. Off by default, because someone opening the
+   * dashboard to act on real work must not be offered a rehearsal.
+   */
+  includeTestRuns: boolean;
 }
 
 export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
@@ -87,6 +93,7 @@ export const EMPTY_SUBMISSION_FILTERS: SubmissionFilterState = {
   publishProfile: "",
   formVersion: "",
   fieldFilters: [],
+  includeTestRuns: false,
 };
 
 /**
@@ -105,6 +112,8 @@ export interface FilterableRecord {
   submitterTexts: (string | null | undefined)[];
   /** The submitted answers, keyed by question name. */
   data: Record<string, unknown>;
+  /** A test-run rehearsal — see `isTestRow` in `./testRun`. Absent means a real submission. */
+  isTest?: boolean;
 }
 
 let fieldFilterSeq = 0;
@@ -346,6 +355,9 @@ function endOfDay(value: string): Date | null {
 }
 
 export function recordMatchesFilters(record: FilterableRecord, filters: SubmissionFilterState): boolean {
+  // A test run is hidden whichever form it belongs to, until asked for.
+  if (record.isTest && !filters.includeTestRuns) return false;
+
   if (filters.search) {
     // Reference numbers are the ID people actually quote, so they are matched
     // with separators stripped too — someone searching "0408260001" or pasting
@@ -413,6 +425,7 @@ export function toFilterableRecord(item: Submission): FilterableRecord {
       item.createdByEmail ?? "",
     ],
     data: item.submissionData,
+    isTest: item.isTest === true,
   };
 }
 
@@ -583,6 +596,8 @@ export function countActiveFilters(filters: SubmissionFilterState): number {
   if (filters.dateTo !== EMPTY_SUBMISSION_FILTERS.dateTo) count += 1;
   if (filters.publishProfile !== EMPTY_SUBMISSION_FILTERS.publishProfile) count += 1;
   if (filters.formVersion !== EMPTY_SUBMISSION_FILTERS.formVersion) count += 1;
+  // Counted so the toolbar is honest that rehearsals are on screen.
+  if (filters.includeTestRuns) count += 1;
   return count;
 }
 
