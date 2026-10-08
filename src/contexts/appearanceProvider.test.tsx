@@ -49,10 +49,10 @@ describe("AppearanceProvider", () => {
 
     expect(markup).toContain('data-contrast="Ink on Paper"');
     expect(markup).toContain('data-color="PMW Blue"');
-    expect(markup).toContain('data-font="Inter"');
-    // The default must resolve to the palette the app shipped with, or every
-    // untouched screen has quietly changed colour.
-    expect(markup).toContain('data-ink="#101010"');
+    expect(markup).toContain('data-font="Figtree"');
+    // The default must resolve to the soft UI palette, so every screen inherits
+    // the same ground, ink and panel.
+    expect(markup).toContain('data-ink="#161B24"');
     expect(markup).toContain('data-panel="#FFFFFF"');
     expect(markup).toContain('data-background="theme"');
   });

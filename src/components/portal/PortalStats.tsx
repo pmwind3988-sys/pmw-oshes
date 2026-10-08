@@ -1,7 +1,12 @@
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import { editorial, editorialHairline, seriesColour } from "../../theme/editorial";
-import { gridline, liftSx, radius } from "../../theme/surfaces";
+import { gridline, radius } from "../../theme/surfaces";
 import type { DayPoint, StatBucket } from "../../utils/portalStats";
+
+/** Soft-UI tile corner: between the 24 and 28 the spec asks for. */
+const TILE_RADIUS = "24px";
+/** The highlighted day in the intake chart. Not a theme token: amber marks "today" in every theme. */
+const TODAY_COLOUR = "#E2A23B";
 
 /**
  * The dashboard's statistics, as things you can press.
@@ -82,10 +87,14 @@ export interface StatTileProps {
  * One number, its name, and the list behind it. Renders as a button when it has
  * somewhere to go and as a plain box when it does not, so nothing invites a
  * press that does nothing.
+ *
+ * A filled tile with no outline and no coloured rail. Only the danger tone takes
+ * a red container; everything else sits on the soft fill, and the active filter
+ * is marked by a blue wash with a ring rather than a border.
  */
 export function StatTile({ value, label, hint, tone = "ink", onClick, active = false }: StatTileProps) {
   const zero = value === 0 || value === "0";
-  const accent = toneColour(tone);
+  const alert = tone === "alert";
   const interactive = Boolean(onClick);
 
   return (
@@ -95,47 +104,42 @@ export function StatTile({ value, label, hint, tone = "ink", onClick, active = f
       onClick={onClick}
       aria-pressed={interactive ? active : undefined}
       sx={{
-        position: "relative",
         display: "block",
         width: "100%",
         textAlign: "left",
         font: "inherit",
         color: "inherit",
-        p: { xs: 1.5, sm: 1.75 },
-        pl: { xs: 1.75, sm: 2 },
-        borderRadius: radius.lg,
-        border: editorialHairline,
-        borderColor: active ? accent : editorial.border,
-        backgroundColor: active ? editorial.blueWash : editorial.panel,
+        border: "none",
+        p: { xs: 1.75, sm: 2 },
+        borderRadius: TILE_RADIUS,
+        backgroundColor: active ? editorial.blueWash : alert ? editorial.errorWash : editorial.paper,
+        boxShadow: active ? `inset 0 0 0 2px ${editorial.pmwBlue}` : "none",
         cursor: interactive ? "pointer" : "default",
-        overflow: "hidden",
-        "&::before": {
-          content: '""',
-          position: "absolute",
-          insetBlock: 0,
-          insetInlineStart: 0,
-          width: 3,
-          backgroundColor: zero ? editorial.border : accent,
-        },
-        ...(interactive && { ...liftSx, "&:hover": { ...liftSx["&:hover"], borderColor: accent } }),
+        transition: "box-shadow 0.16s ease, background-color 0.16s ease, transform 0.12s ease",
+        ...(interactive && {
+          "&:hover": { boxShadow: "0 1px 3px rgba(22, 27, 36, 0.08)" },
+          "&:active": { transform: "scale(0.98)" },
+          "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
+          "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:active": { transform: "none" } },
+        }),
       }}
     >
       <Typography
         sx={{
-          fontSize: { xs: 26, sm: 30 },
-          fontWeight: 700,
+          fontSize: { xs: 32, sm: 34 },
+          fontWeight: 800,
           lineHeight: 1.05,
           fontVariantNumeric: "tabular-nums",
-          color: zero ? editorial.softMuted : tone === "alert" ? editorial.error : editorial.ink,
+          color: zero ? editorial.softMuted : alert ? editorial.error : editorial.ink,
         }}
       >
         {value}
       </Typography>
-      <Typography sx={{ fontSize: 12, fontWeight: 700, mt: 0.4 }} noWrap>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 0.5, color: editorial.ink }} noWrap>
         {label}
       </Typography>
       {hint && (
-        <Typography sx={{ fontSize: 11, color: editorial.muted, mt: 0.15 }} noWrap>
+        <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.2 }} noWrap>
           {hint}
         </Typography>
       )}
@@ -386,16 +390,18 @@ export function IntakeChart({
                         // A zero day keeps a visible 2px floor so the axis reads
                         // as a continuous fortnight rather than a gap in the data.
                         height: day.count === 0 ? 2 : `${Math.max((day.count / top) * 100, 3)}%`,
-                        borderRadius: `${radius.sm} ${radius.sm} 0 0`,
-                        // One hue for the fortnight, with today picked out in the
-                        // second series colour rather than by opacity: a bar that
-                        // is merely darker reads as "more", which today is not.
+                        // Fully rounded bars. A flat-topped bar reads as a
+                        // cut-off column; a rounded one reads as a quantity.
+                        borderRadius: radius.full,
+                        // One hue for the fortnight, with today picked out in amber
+                        // rather than by opacity: a bar that is merely darker reads
+                        // as "more", which today is not.
                         backgroundColor:
                           day.count === 0
                             ? editorial.border
                             : day.isToday
-                              ? seriesColour(1)
-                              : seriesColour(0),
+                              ? TODAY_COLOUR
+                              : editorial.pmwBlue,
                         transition: "height 0.2s ease, filter 0.16s ease",
                       }}
                     />
@@ -486,8 +492,9 @@ export function BarRows({
         ))}
 
         <Stack spacing={1.5} sx={{ position: "relative" }}>
-          {rows.map((row, index) => {
-            const accent = markColour(row.tone, index);
+          {rows.map((row) => {
+            // Primary blue unless the row means something (overdue, approved).
+            const accent = row.tone ? toneColour(row.tone) : editorial.pmwBlue;
             const pressable = Boolean(onPick);
             return (
               <Box
@@ -530,7 +537,7 @@ export function BarRows({
                     </Typography>
                   </Stack>
                 </Stack>
-                <Box sx={{ height: 10, borderRadius: radius.full, overflow: "hidden" }}>
+                <Box sx={{ height: 10, borderRadius: radius.full, overflow: "hidden", backgroundColor: editorial.neutralWash }}>
                   <Box
                     className="bar-row-fill"
                     sx={{
@@ -703,6 +710,8 @@ export function DonutGauge<Id extends string = string>({
       >
         {segments.map((segment, index) => {
           const pressable = Boolean(onPick) && segment.count > 0;
+          // Each legend entry is a tonal pill: a swatch, the count, the name.
+          // Pressable ones take the blue wash on hover, the same as a button.
           return (
             <Box
               key={segment.id}
@@ -711,37 +720,42 @@ export function DonutGauge<Id extends string = string>({
               onClick={pressable ? () => onPick?.(segment) : undefined}
               aria-label={pressable ? `Show ${segment.count} ${segment.label}` : undefined}
               sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.75,
+                flexWrap: "wrap",
                 border: "none",
-                background: "none",
-                p: 0,
                 font: "inherit",
                 color: "inherit",
                 textAlign: "left",
+                minHeight: 36,
+                px: 1.5,
+                py: 0.5,
+                borderRadius: radius.full,
+                backgroundColor: editorial.neutralWash,
                 cursor: pressable ? "pointer" : "default",
+                transition: "background-color 0.16s ease",
+                "&:hover": pressable ? { backgroundColor: editorial.blueWash } : undefined,
                 "&:hover .gauge-legend-label": pressable ? { color: editorial.pmwBlueDark } : undefined,
               }}
             >
-              <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                <Box
-                  sx={{
-                    width: 9,
-                    height: 9,
-                    flex: "none",
-                    borderRadius: "2px",
-                    backgroundColor: markColour(segment.tone, index),
-                  }}
-                />
-                <Typography sx={{ fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
-                  {segment.count}
-                </Typography>
-                <Typography className="gauge-legend-label" sx={{ fontSize: 12.5, fontWeight: 600 }}>
-                  {segment.label}
-                </Typography>
-              </Stack>
+              <Box
+                sx={{
+                  width: 9,
+                  height: 9,
+                  flex: "none",
+                  borderRadius: radius.full,
+                  backgroundColor: markColour(segment.tone, index),
+                }}
+              />
+              <Typography sx={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                {segment.count}
+              </Typography>
+              <Typography className="gauge-legend-label" sx={{ fontSize: 13, fontWeight: 700 }}>
+                {segment.label}
+              </Typography>
               {segment.hint && (
-                <Typography sx={{ fontSize: 10.5, color: editorial.softMuted, ml: "17px" }}>
-                  {segment.hint}
-                </Typography>
+                <Typography sx={{ fontSize: 12, color: editorial.muted }}>{segment.hint}</Typography>
               )}
             </Box>
           );

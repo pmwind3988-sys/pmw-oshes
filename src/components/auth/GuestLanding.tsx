@@ -1,17 +1,6 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
-import { LogIn as LoginIcon } from "../ui/Icons";
-import { fadeInUp } from "../../theme";
-import Logo from "../../components/Logo";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { Box, Stack, Typography } from "@mui/material";
+import { ArrowLeft as ArrowLeftIcon, LogIn as LoginIcon, User as UserIcon } from "../ui/Icons";
+import { authCardSx, authPageSx, authPill, authSoft, AUTH_FONT } from "./LoadingScreen";
 
 interface GuestLandingProps {
   onLogin: () => void;
@@ -19,259 +8,70 @@ interface GuestLandingProps {
 }
 
 export default function GuestLanding({ onLogin, onForgetChoice }: GuestLandingProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   return (
-    <Box
-      sx={{
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 48%, #F7F5EF 100%)",
-        position: "relative",
-        overflow: "hidden",
-        padding: isMobile ? 2 : 4,
-      }}
-    >
-      {/* Decorative background blobs */}
-      <Box
-        sx={{
-          position: "absolute",
-          display: "none",
-          top: "-15%",
-          right: "-10%",
-          width: isMobile ? "300px" : "500px",
-          height: isMobile ? "300px" : "500px",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(0,120,212,0.05) 0%, rgba(0,120,212,0) 70%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          display: "none",
-          bottom: "-20%",
-          left: "-15%",
-          width: isMobile ? "350px" : "600px",
-          height: isMobile ? "350px" : "600px",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(98,100,167,0.04) 0%, rgba(98,100,167,0) 70%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
-      <Box
-        sx={{
-          position: "absolute",
-          display: "none",
-          top: "40%",
-          left: "60%",
-          width: isMobile ? "200px" : "350px",
-          height: isMobile ? "200px" : "350px",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(0,120,212,0.03) 0%, rgba(0,120,212,0) 70%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
+    <Box sx={authPageSx}>
+      <Stack component="section" spacing={3} sx={{ ...authCardSx, maxWidth: 480, alignItems: "center" }}>
+        <Box sx={{ alignSelf: "stretch", display: "flex", justifyContent: "flex-start" }}>
+          <Box
+            component="button"
+            type="button"
+            onClick={onForgetChoice}
+            sx={{ ...authPill.ghost, minHeight: 40, px: 2, fontSize: 14, border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 1 }}
+          >
+            <ArrowLeftIcon size={16} />
+            Back to choice
+          </Box>
+        </Box>
 
-      {/* Subtle geometric accent lines */}
-      <svg
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-        viewBox="0 0 1440 900"
-        preserveAspectRatio="xMidYMid slice"
-        fill="none"
-      >
-        <path
-          d="M0 120 Q360 80 720 140 T1440 100"
-          stroke="rgba(0,120,212,0.04)"
-          strokeWidth="1.5"
-        />
-        <path
-          d="M0 780 Q360 820 720 760 T1440 800"
-          stroke="rgba(98,100,167,0.04)"
-          strokeWidth="1.5"
-        />
-        <circle
-          cx="1200"
-          cy="150"
-          r="80"
-          stroke="rgba(0,120,212,0.03)"
-          strokeWidth="1"
-        />
-        <circle
-          cx="200"
-          cy="700"
-          r="60"
-          stroke="rgba(98,100,167,0.03)"
-          strokeWidth="1"
-        />
-      </svg>
-
-      <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1 }}>
-        <Card
+        <Box
           sx={{
-            width: "100%",
-            maxWidth: isMobile ? "100%" : 560,
-            mx: "auto",
-            borderRadius: "18px",
-            boxShadow: editorialShadow,
-            border: `1px solid ${editorial.ink}`,
-            backgroundColor: "rgba(255, 255, 255, 0.88)",
-            backdropFilter: "blur(10px)",
-            transition: "box-shadow 0.2s ease, border-color 0.2s ease",
-            "&:hover": {
-              boxShadow: "0 18px 42px rgba(16, 16, 16, 0.14)",
-            },
-            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+            width: 112,
+            height: 112,
+            borderRadius: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: authSoft.primaryContainer,
+            color: authSoft.onPrimaryContainer,
+            flexShrink: 0,
           }}
         >
-          {/* Top accent bar */}
-          <Box
-            sx={{
-              height: 4,
-              background: editorial.yellow,
-              borderBottom: `1px solid ${editorial.ink}`,
-              borderRadius: "18px 18px 0 0",
-            }}
-          />
+          <UserIcon size={48} />
+        </Box>
 
-          <CardContent
-            sx={{
-              padding: isMobile ? 3.5 : 5,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
+        <Stack spacing={1.25} sx={{ alignItems: "center" }}>
+          <Typography
+            component="h1"
+            sx={{ fontFamily: AUTH_FONT, fontSize: { xs: 28, sm: 34 }, fontWeight: 800, lineHeight: 1.15, letterSpacing: "-0.01em" }}
           >
-            {/* Back to choice link */}
-            <Button
-              variant="text"
-              onClick={onForgetChoice}
-              sx={{
-                alignSelf: "flex-start",
-                mb: 3,
-                color: editorial.muted,
-                fontSize: "0.85rem",
-                fontWeight: 500,
-                textTransform: "none",
-                "&:hover": {
-                  color: editorial.ink,
-                  backgroundColor: editorial.blueWash,
-                },
-              }}
-            >
-              ← Back to choice
-            </Button>
+            PMW OSHES Forms
+          </Typography>
+          <Typography sx={{ fontSize: 16, lineHeight: 1.55, color: authSoft.muted, maxWidth: 400, textWrap: "pretty" }}>
+            Sign in with your Microsoft 365 account to access submission history, approval status, and full portal features.
+          </Typography>
+        </Stack>
 
-            {/* Logo with colored background */}
-            <Box
-              sx={{
-                position: "relative",
-                mb: 3,
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  width: 120,
-                  height: 120,
-                  borderRadius: "50%",
-                  background: editorial.blueWash,
-                  border: `1px solid ${editorial.border}`,
-                  zIndex: -1,
-                },
-              }}
-            >
-              <Logo size={{ xs: 64, sm: 72 }} />
-            </Box>
+        <Box
+          component="button"
+          type="button"
+          onClick={onLogin}
+          sx={{ ...authPill.filled, width: "100%", border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1 }}
+        >
+          <LoginIcon size={18} />
+          Sign in with Microsoft 365
+        </Box>
 
-            <Typography
-              variant="h2"
-              component="h2"
-              align="center"
-              sx={{
-                fontFamily: "Georgia, 'Times New Roman', Times, serif",
-                fontWeight: 400,
-                color: editorial.ink,
-                letterSpacing: 0,
-                fontSize: isMobile ? "2.5rem" : "3.6rem",
-                lineHeight: 1,
-                mb: 2,
-              }}
-            >
-              PMW OSHES Forms
-            </Typography>
-
-            <Typography
-              variant="body1"
-              align="center"
-              sx={{
-                color: editorial.ink,
-                lineHeight: 1.6,
-                maxWidth: 480,
-                mb: 4,
-              }}
-            >
-              Sign in with your Microsoft 365 account to access submission history, approval status, and full portal features.
-            </Typography>
-
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<LoginIcon />}
-              onClick={onLogin}
-              sx={{
-                // See the matching CTA in ChoiceScreen: the inverse pair, so a
-                // dark theme inverts it rather than hiding it.
-                backgroundColor: editorial.inverseSurface,
-                color: editorial.inverseInk,
-                borderRadius: 0,
-                py: 1.75,
-                px: 4,
-                fontSize: "1rem",
-                fontWeight: 800,
-                boxShadow: "none",
-                transition: "background-color 0.2s ease, box-shadow 0.2s ease",
-                "&:hover": {
-                  backgroundColor: "color-mix(in srgb, var(--pmw-inverse-surface, #000000) 82%, var(--pmw-inverse-ink, #ffffff))",
-                  boxShadow: "none",
-                },
-              }}
-            >
-              Sign in with Microsoft 365
-            </Button>
-
-            <Typography
-              variant="caption"
-              align="center"
-              sx={{ mt: 3, color: editorial.muted, fontSize: "0.75rem", lineHeight: 1.6, maxWidth: 360 }}
-            >
-              Public form submissions may contain personal data.{" "}
-              <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 800, textDecoration: "underline" }}>
-                Privacy Notice
-              </Box>
-            </Typography>
-          </CardContent>
-        </Card>
-      </Container>
+        <Typography sx={{ fontSize: 13, lineHeight: 1.6, color: authSoft.muted, maxWidth: 360 }}>
+          Public form submissions may contain personal data.{" "}
+          <Box
+            component="a"
+            href="/privacy"
+            sx={{ color: authSoft.primary, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+          >
+            Privacy notice
+          </Box>
+        </Typography>
+      </Stack>
     </Box>
   );
 }

@@ -1,18 +1,6 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Stack,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
-import { LogOut as LogoutIcon, RefreshCw as RefreshIcon, Users as SwitchAccountIcon } from "../ui/Icons";
-import { Lock as LockOutlinedIcon } from "../ui/Icons";
-import { fadeInUp } from "../../theme";
-import Logo from "../../components/Logo";
+import { Box, Stack, Typography } from "@mui/material";
+import { LogOut as LogoutIcon, Lock as LockIcon, RefreshCw as RefreshIcon, Users as SwitchAccountIcon } from "../ui/Icons";
+import { authCardSx, authPageSx, authPill, authSoft, AUTH_FONT } from "./LoadingScreen";
 
 interface RestrictedAccessScreenProps {
   userEmail: string;
@@ -27,187 +15,71 @@ export default function RestrictedAccessScreen({
   onSwitch,
   onSignOut,
 }: RestrictedAccessScreenProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
   return (
-    <Box
-      sx={{
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#F8F9FC",
-        position: "relative",
-        overflow: "hidden",
-        py: 4,
-        px: isMobile ? 2 : 4,
-      }}
-    >
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(135deg, rgba(0,120,212,0.08) 0%, rgba(255,255,255,0) 42%), linear-gradient(315deg, rgba(98,100,167,0.08) 0%, rgba(255,255,255,0) 44%)",
-          pointerEvents: "none",
-        }}
-      />
-
-      <Container maxWidth="sm" sx={{ position: "relative", zIndex: 1 }}>
-        <Card
-          elevation={0}
+    <Box sx={authPageSx}>
+      <Stack spacing={3} sx={{ ...authCardSx, maxWidth: 480, alignItems: "center" }}>
+        <Box
           sx={{
-            borderRadius: "8px",
-            border: "1px solid rgba(17, 24, 39, 0.1)",
-            boxShadow: "0 18px 60px rgba(15, 23, 42, 0.1)",
-            backgroundColor: "rgba(255, 255, 255, 0.94)",
-            backdropFilter: "blur(12px)",
-            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+            width: 112,
+            height: 112,
+            borderRadius: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: authSoft.lilacContainer,
+            color: authSoft.onLilacContainer,
+            flexShrink: 0,
           }}
         >
-          <Box sx={{ height: 4, background: "linear-gradient(90deg, #0078D4, #6264A7)" }} />
+          <LockIcon size={48} />
+        </Box>
 
-          <CardContent sx={{ p: isMobile ? 3.5 : 5 }}>
-            <Stack spacing={3} sx={{ alignItems: "center" }}>
-              <Logo size={{ xs: 60, sm: 72 }} />
+        <Stack spacing={1.25} sx={{ alignItems: "center" }}>
+          <Typography component="h1" sx={{ fontFamily: AUTH_FONT, fontSize: { xs: 26, sm: 30 }, fontWeight: 800, lineHeight: 1.2 }}>
+            Access restricted
+          </Typography>
+          <Typography sx={{ fontSize: 16, lineHeight: 1.55, color: authSoft.muted, maxWidth: 400, textWrap: "pretty" }}>
+            Ask an administrator to add this exact account as a SharePoint site member, then try again.
+          </Typography>
+        </Stack>
 
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: "50%",
-                  backgroundColor: "rgba(0, 120, 212, 0.08)",
-                  color: "#0078D4",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid rgba(0, 120, 212, 0.14)",
-                }}
-              >
-                <LockOutlinedIcon sx={{ fontSize: 32 }} />
-              </Box>
+        {userEmail && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderRadius: 999,
+              backgroundColor: authSoft.ground,
+              color: authSoft.ink,
+              fontWeight: 700,
+              fontSize: 15,
+              overflowWrap: "anywhere",
+              maxWidth: "100%",
+            }}
+          >
+            {userEmail}
+          </Box>
+        )}
 
-              <Stack spacing={1.5} sx={{ alignItems: "center" }}>
-                <Typography
-                  variant="h2"
-                  sx={{
-                    fontWeight: 700,
-                    color: "#111827",
-                    letterSpacing: 0,
-                    textAlign: "center",
-                    fontSize: isMobile ? "1.8rem" : "2.3rem",
-                  }}
-                >
-                  Access Restricted
-                </Typography>
+        <Typography sx={{ fontSize: 13, lineHeight: 1.5, color: authSoft.muted, maxWidth: 400 }}>
+          This Microsoft 365 account can sign in, but it does not have access to the configured OSHES SharePoint site.
+        </Typography>
 
-                <Typography
-                  variant="body1"
-                  sx={{
-                    color: "#4B5563",
-                    lineHeight: 1.65,
-                    textAlign: "center",
-                    maxWidth: 460,
-                  }}
-                >
-                  This Microsoft 365 account can sign in, but it does not have access to the configured OSHES SharePoint site.
-                </Typography>
-
-                {userEmail && (
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#111827",
-                      fontWeight: 600,
-                      overflowWrap: "anywhere",
-                      textAlign: "center",
-                    }}
-                  >
-                    {userEmail}
-                  </Typography>
-                )}
-
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: "#6B7280",
-                    lineHeight: 1.6,
-                    textAlign: "center",
-                    maxWidth: 460,
-                  }}
-                >
-                  Ask an administrator to add this exact account as a SharePoint site member, then try again.
-                </Typography>
-              </Stack>
-
-              <Stack spacing={1.25} sx={{ width: "100%" }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  size="large"
-                  startIcon={<RefreshIcon />}
-                  onClick={onRetry}
-                  sx={{
-                    backgroundColor: "#0078D4",
-                    borderRadius: "8px",
-                    py: 1.5,
-                    fontWeight: 600,
-                    boxShadow: "0 2px 8px rgba(0, 120, 212, 0.2)",
-                    "&:hover": {
-                      backgroundColor: "#0068C4",
-                      boxShadow: "0 6px 20px rgba(0, 120, 212, 0.3)",
-                    },
-                  }}
-                >
-                  Try again
-                </Button>
-
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  size="large"
-                  startIcon={<SwitchAccountIcon />}
-                  onClick={onSwitch}
-                  sx={{
-                    borderRadius: "8px",
-                    py: 1.5,
-                    fontWeight: 600,
-                    borderColor: "rgba(0, 120, 212, 0.3)",
-                    color: "#0078D4",
-                    borderWidth: "1.5px",
-                    "&:hover": {
-                      borderColor: "#0078D4",
-                      backgroundColor: "rgba(0, 120, 212, 0.04)",
-                    },
-                  }}
-                >
-                  Switch account
-                </Button>
-
-                <Button
-                  variant="text"
-                  fullWidth
-                  size="large"
-                  startIcon={<LogoutIcon />}
-                  onClick={onSignOut}
-                  sx={{
-                    borderRadius: "8px",
-                    py: 1.25,
-                    color: "#6B7280",
-                    fontWeight: 600,
-                    "&:hover": {
-                      backgroundColor: "rgba(17, 24, 39, 0.04)",
-                    },
-                  }}
-                >
-                  Sign out
-                </Button>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Container>
+        <Stack spacing={1.25} sx={{ width: "100%", alignItems: "center" }}>
+          <Box component="button" type="button" onClick={onRetry} sx={{ ...authPill.filled, width: "100%", border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+            <RefreshIcon size={18} />
+            Try again
+          </Box>
+          <Box component="button" type="button" onClick={onSwitch} sx={{ ...authPill.ghost, width: "100%", border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+            <SwitchAccountIcon size={18} />
+            Switch account
+          </Box>
+          <Box component="button" type="button" onClick={onSignOut} sx={{ ...authPill.ghost, width: "100%", border: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+            <LogoutIcon size={18} />
+            Sign out
+          </Box>
+        </Stack>
+      </Stack>
     </Box>
   );
 }

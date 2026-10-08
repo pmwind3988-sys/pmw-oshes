@@ -19,6 +19,7 @@ import {
   sniffRiffWebp,
 } from "./sharepointImageData";
 import { isRecord } from "./pdfImageSources";
+import { DEFAULT_PDF_STYLE, pdfDocumentFor, preparePdfStyle, type PdfStyle } from "./pdfStyle";
 import { fileAnswerKeys } from "./fileAttachments";
 import { layerNumberFromValue, layerSequenceFromConfig } from "./layerSequence";
 
@@ -226,7 +227,7 @@ export async function generateAndStorePdf(
   listTitle: string,
   responseItemId: number,
   data: PdfFormData,
-  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void> } = {},
+  options: { replaceExistingPdfUrl?: string; onGeneratedBlob?: (blob: Blob) => void | Promise<void>; style?: PdfStyle } = {},
 ): Promise<string> {
   // ── Inject matrix child rows ──────────────────────────────────────────
   // For dynamicmatrix/tableinput fields, read child list rows and attach
@@ -262,9 +263,13 @@ export async function generateAndStorePdf(
   }
 
   await hydratePdfImages(token, data);
+  // Classic unless an administrator asked for the new design for this rebuild.
+  const style = options.style ?? DEFAULT_PDF_STYLE;
+  await preparePdfStyle(data, style);
+  const renderDocument = style === DEFAULT_PDF_STYLE ? FormPdfDocument : await pdfDocumentFor(style);
 
   const blob = await Promise.race([
-    pdf(FormPdfDocument(data)).toBlob(),
+    pdf(renderDocument(data)).toBlob(),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("PDF generation timed out")), 60_000)
     ),

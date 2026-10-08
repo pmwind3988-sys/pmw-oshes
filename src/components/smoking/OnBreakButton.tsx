@@ -39,13 +39,18 @@ export default function OnBreakButton({ outNow }: { outNow: SmokingBreak[] }) {
           fontSize: 12,
           fontWeight: 700,
           color: editorial.pmwBlueDark,
-          background: "none",
+          backgroundColor: editorial.pmwBlueSoft,
           border: "none",
-          p: 0,
+          borderRadius: radius.full,
+          px: 1.25,
+          py: 0.5,
+          minHeight: 28,
           cursor: "pointer",
           whiteSpace: "nowrap",
-          textDecoration: "underline",
-          textUnderlineOffset: "2px",
+          transition: "background-color 0.16s ease",
+          "&:hover": { backgroundColor: editorial.blueWash },
+          "&:active": { transform: "scale(.97)" },
+          "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
         }}
       >
         {label}
@@ -56,7 +61,7 @@ export default function OnBreakButton({ outNow }: { outNow: SmokingBreak[] }) {
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 320, borderRadius: radius.md } } }}
+        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 320, borderRadius: "16px", boxShadow: "0 16px 40px rgba(22,27,36,.18)" } } }}
       >
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           {outNow.map((b, index) => (

@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
-import { ArrowRight as ArrowForwardIcon } from "./ui/Icons";
-import { editorial, editorialHairline } from "../theme/editorial";
-import { panelSx, radius } from "../theme/surfaces";
+import { ArrowRight as ArrowForwardIcon, CheckCircle as CheckCircleIcon } from "./ui/Icons";
+import { editorial } from "../theme/editorial";
+import { panelSx } from "../theme/surfaces";
 
 /* ---------------------------------------------------------------------------
    The widget — one card shape, used by every panel in the portal and the admin
@@ -20,7 +20,15 @@ import { panelSx, radius } from "../theme/surfaces";
    in (`onOpen`). The arrow renders only where there is somewhere to go — a
    decorative chevron on a card that does not open is the same lie as an
    unpressable statistic.
+
+   Surfaces are fills, not outlines: a white card with no border and no shadow on
+   the tinted page ground. The soft-UI card is 24px; `surfaces.radius.lg` is the
+   shared 12px structural radius used by every other panel, so the 24px is written
+   here rather than changing that scale under the rest of the app.
 --------------------------------------------------------------------------- */
+
+const CARD_RADIUS = "24px";
+const FOCUS_RING = "3px solid #9DBDF5";
 
 export interface WidgetProps {
   /** Required in practice — omitted only alongside `bare`, where nothing draws it. */
@@ -35,7 +43,7 @@ export interface WidgetProps {
   openLabel?: string;
   /** Quiet controls sitting before the arrow — a filter, a range switch. */
   actions?: ReactNode;
-  /** Dropped below the body, above the card edge, behind a hairline. */
+  /** Dropped below the body, separated by space rather than a rule. */
   footer?: ReactNode;
   /** Skips the header entirely — for a card that is all body. */
   bare?: boolean;
@@ -59,13 +67,16 @@ export function Widget({
     <Box
       sx={{
         ...panelSx,
+        border: "none",
+        borderRadius: CARD_RADIUS,
+        boxShadow: "none",
         display: "flex",
         flexDirection: "column",
         // Widgets sit in a grid and a row of cards that stop at their own
         // content length reads as a broken column rather than a set.
         height: "100%",
         minWidth: 0,
-        p: { xs: 1.75, sm: 2 },
+        p: { xs: 2, sm: 2.5 },
         ...sx,
       }}
     >
@@ -73,65 +84,61 @@ export function Widget({
         <Stack
           direction="row"
           spacing={1.25}
-          sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 1.5, minWidth: 0 }}
+          sx={{ alignItems: "flex-start", justifyContent: "space-between", mb: 1.75, minWidth: 0 }}
         >
           <Box sx={{ minWidth: 0 }}>
-            <Typography component="h2" sx={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>
+            <Typography
+              component="h2"
+              sx={{ fontSize: 17.5, fontWeight: 800, lineHeight: 1.3, color: editorial.ink }}
+            >
               {title}
             </Typography>
             {caption && (
-              <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.15, lineHeight: 1.4 }}>
+              <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.25, lineHeight: 1.4 }}>
                 {caption}
               </Typography>
             )}
           </Box>
 
-          {/* The reference's control cluster: the summarising number, then any
-              quiet controls, then a hairline, then the way in. The rule is what
-              separates "what this card says" from "what you can do with it". */}
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flex: "none" }}>
+          {/* The control cluster: the summarising number, then any quiet
+              controls, then the way in. Spacing separates them; there is no rule. */}
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flex: "none" }}>
             {meta}
             {actions}
             {onOpen && (
-              <>
-                {(meta || actions) && (
-                  <Box
-                    aria-hidden
-                    sx={{ width: "1px", height: 18, mx: 0.5, backgroundColor: editorial.border, flex: "none" }}
-                  />
-                )}
-                <Tooltip title={openLabel ?? "Open"} enterDelay={300}>
-                  <Box
-                    component="button"
-                    type="button"
-                    onClick={onOpen}
-                    aria-label={openLabel ?? "Open"}
-                    sx={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 30,
-                      height: 30,
-                      p: 0,
-                      flex: "none",
-                      border: "none",
-                      borderRadius: radius.sm,
-                      backgroundColor: "transparent",
-                      color: editorial.softMuted,
-                      cursor: "pointer",
-                      transition: "color 0.16s ease, background-color 0.16s ease, transform 0.16s ease",
-                      "&:hover": {
-                        color: editorial.pmwBlueDark,
-                        backgroundColor: editorial.blueWash,
-                        transform: "translateX(2px)",
-                      },
-                      "@media (prefers-reduced-motion: reduce)": { "&:hover": { transform: "none" } },
-                    }}
-                  >
-                    <ArrowForwardIcon sx={{ fontSize: 17 }} />
-                  </Box>
-                </Tooltip>
-              </>
+              <Tooltip title={openLabel ?? "Open"} enterDelay={300}>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={onOpen}
+                  aria-label={openLabel ?? "Open"}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 36,
+                    height: 36,
+                    p: 0,
+                    flex: "none",
+                    border: "none",
+                    borderRadius: "999px",
+                    backgroundColor: editorial.neutralWash,
+                    color: editorial.ink,
+                    cursor: "pointer",
+                    transition: "color 0.16s ease, background-color 0.16s ease, transform 0.12s ease",
+                    "&:hover": {
+                      color: editorial.pmwBlueDark,
+                      backgroundColor: editorial.blueWash,
+                      transform: "translateX(2px)",
+                    },
+                    "&:active": { transform: "scale(0.97)" },
+                    "&:focus-visible": { outline: FOCUS_RING, outlineOffset: 2 },
+                    "@media (prefers-reduced-motion: reduce)": { "&:hover": { transform: "none" } },
+                  }}
+                >
+                  <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                </Box>
+              </Tooltip>
             )}
           </Stack>
         </Stack>
@@ -139,9 +146,7 @@ export function Widget({
 
       <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
 
-      {footer && (
-        <Box sx={{ mt: 1.5, pt: 1.25, borderTop: editorialHairline }}>{footer}</Box>
-      )}
+      {footer && <Box sx={{ mt: 1.75 }}>{footer}</Box>}
     </Box>
   );
 }
@@ -149,20 +154,30 @@ export function Widget({
 /**
  * The count that sits at a widget's top right.
  *
- * One number, tabular so a card does not jog as it counts up, and tinted only
- * when it is a number someone has to do something about.
+ * A neutral pill, tabular so a card does not jog as it counts up, and tinted red
+ * only when it is a number someone has to do something about.
  */
 export function WidgetCount({ value, tone = "ink" }: { value: number | string; tone?: "ink" | "alert" | "muted" }) {
   const zero = value === 0 || value === "0";
+  const alert = !zero && tone === "alert";
   return (
     <Typography
+      component="span"
       sx={{
-        fontSize: 22,
-        fontWeight: 700,
-        lineHeight: 1,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: 32,
+        px: 1.25,
+        py: 0.4,
+        borderRadius: "999px",
+        fontSize: 13,
+        fontWeight: 800,
+        lineHeight: 1.4,
         fontVariantNumeric: "tabular-nums",
         flex: "none",
-        color: zero || tone === "muted" ? editorial.softMuted : tone === "alert" ? editorial.error : editorial.ink,
+        backgroundColor: alert ? editorial.errorWash : editorial.neutralWash,
+        color: zero || tone === "muted" ? editorial.softMuted : alert ? editorial.error : editorial.ink,
       }}
     >
       {value}
@@ -211,9 +226,10 @@ export function WidgetGrid({
 /**
  * The page's own header: what this screen is, then what you can do to it.
  *
- * Every screen wrote this block by hand, which is why the title was 34px on
- * four of them and 26px on two, and why the export button sat above the title on
- * one and beside it on the rest.
+ * Every screen wrote this block by hand, which is why the title drifted between
+ * sizes and why the export button sat above the title on one screen and beside
+ * it on the rest. The title is 30px from the small breakpoint up and steps to
+ * 26px on a phone, so the first table row still clears the fold.
  */
 export function PageHeader({
   title,
@@ -246,34 +262,24 @@ export function PageHeader({
             the title breaks mid-word. */}
         <Box sx={{ minWidth: { xs: 0, sm: 200 }, flex: { sm: "1 1 200px" } }}>
           {eyebrow && (
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: editorial.softMuted,
-                mb: 0.5,
-              }}
-            >
+            <Typography sx={{ fontSize: 13, fontWeight: 700, color: editorial.muted, mb: 0.5 }}>
               {eyebrow}
             </Typography>
           )}
-          {/* 19/22px. Still nowhere near the 26/32px display size this used to
-              carry — that pushed the first table row below the fold on a phone —
-              but two points up from 17/19, because at 19px the screen title was
-              *smaller* than the 30px figure in the first statistic tile and no
-              larger than a 16px card title. A page heading that loses to the
-              content beneath it is not a heading. Tightened tracking keeps the
-              line the same visual weight per character. */}
           <Typography
             component="h1"
-            sx={{ fontSize: { xs: 19, sm: 22 }, fontWeight: 800, lineHeight: 1.2, letterSpacing: "-0.015em" }}
+            sx={{
+              fontSize: { xs: 26, sm: 30 },
+              fontWeight: 800,
+              lineHeight: 1.15,
+              letterSpacing: "-0.02em",
+              color: editorial.ink,
+            }}
           >
             {title}
           </Typography>
           {subtitle && (
-            <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.6, lineHeight: 1.5 }}>
+            <Typography sx={{ fontSize: 15, color: editorial.muted, mt: 0.75, lineHeight: 1.5 }}>
               {subtitle}
             </Typography>
           )}
@@ -285,7 +291,7 @@ export function PageHeader({
             sx={{ alignItems: "center", flex: "0 1 auto", flexWrap: "wrap", gap: 1.25, justifyContent: { sm: "flex-end" } }}
           >
             {meta && (
-              <Typography sx={{ fontSize: 12, color: editorial.muted, whiteSpace: "nowrap" }}>{meta}</Typography>
+              <Typography sx={{ fontSize: 13, color: editorial.muted, whiteSpace: "nowrap" }}>{meta}</Typography>
             )}
             {actions}
           </Stack>
@@ -295,16 +301,14 @@ export function PageHeader({
   );
 }
 
-/** The uppercase rule between groups of widgets. */
+/** A quiet heading between groups of widgets. Sentence case, no shouting. */
 export function SectionLabel({ children, sx }: { children: ReactNode; sx?: SxProps<Theme> }) {
   return (
     <Typography
       sx={{
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: 800,
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        color: editorial.softMuted,
+        color: editorial.muted,
         mb: 1.25,
         ...sx,
       }}
@@ -314,24 +318,40 @@ export function SectionLabel({ children, sx }: { children: ReactNode; sx?: SxPro
   );
 }
 
-/** What a widget says when it has counted nothing. Never blank — "none" is an answer. */
+/**
+ * What a widget says when it has counted nothing. Never blank — "none" is an
+ * answer. A round tinted circle with a check, and one sentence beneath it.
+ */
 export function WidgetEmpty({ children }: { children: ReactNode }) {
   return (
-    <Typography sx={{ fontSize: 13, color: editorial.muted, py: 1.25, lineHeight: 1.5 }}>{children}</Typography>
+    <Stack spacing={1.5} sx={{ alignItems: "center", textAlign: "center", py: 2 }}>
+      <Box
+        sx={{
+          flex: "none",
+          width: 112,
+          height: 112,
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: editorial.blueWash,
+          color: editorial.pmwBlueDark,
+        }}
+      >
+        <CheckCircleIcon sx={{ fontSize: 44 }} />
+      </Box>
+      <Typography sx={{ fontSize: 14, color: editorial.muted, lineHeight: 1.5, maxWidth: 280 }}>{children}</Typography>
+    </Stack>
   );
 }
 
 /**
- * The yellow call-to-action.
+ * The primary action: one filled blue pill per surface, at most.
  *
- * One per surface, at most. Yellow is the loudest thing on the page and it is
- * spent on the single action the card exists to make possible — signing the item
- * in front of you, filing the form. A second yellow button on the same screen
- * halves the value of the first, which is the whole reason it is a separate
- * component rather than a colour prop anyone can reach for.
- *
- * Square-cornered like every other MUI button here (DESIGN.md), and its ink is
- * near-black in every theme because the fill never changes.
+ * The one thing on a screen that asks to be pressed. A second filled button on the
+ * same screen halves the value of the first, which is why it is a separate
+ * component rather than a colour prop anyone can reach for. Text on it is white
+ * in every theme, because the brand fill does not change between themes.
  */
 export function CtaButton({
   children,
@@ -357,19 +377,21 @@ export function CtaButton({
         justifyContent: "center",
         gap: 0.75,
         width: fullWidth ? "100%" : "auto",
-        minHeight: size === "small" ? 32 : 40,
-        px: size === "small" ? 1.5 : 2.25,
+        minHeight: size === "small" ? 36 : 44,
+        px: size === "small" ? 1.75 : 2.5,
         border: "none",
-        borderRadius: radius.sm,
-        backgroundColor: editorial.cta,
-        color: editorial.onCta,
+        borderRadius: "999px",
+        backgroundColor: editorial.pmwBlue,
+        color: editorial.white,
         font: "inherit",
-        fontSize: size === "small" ? 12.5 : 13.5,
+        fontSize: size === "small" ? 13 : 14,
         fontWeight: 800,
         whiteSpace: "nowrap",
         cursor: "pointer",
-        transition: "background-color 0.16s ease",
-        "&:hover": { backgroundColor: editorial.ctaHover },
+        transition: "background-color 0.16s ease, transform 0.12s ease",
+        "&:hover": { backgroundColor: editorial.pmwBlueDark },
+        "&:active": { transform: "scale(0.97)" },
+        "&:focus-visible": { outline: FOCUS_RING, outlineOffset: 2 },
         "& .MuiSvgIcon-root": { fontSize: size === "small" ? 16 : 18 },
       }}
     >
@@ -380,18 +402,19 @@ export function CtaButton({
 }
 
 const CALLOUT_TONE = {
-  info: { border: editorial.pmwBlueSoft, background: editorial.blueWash, ink: editorial.pmwBlueDark },
-  warning: { border: editorial.warning, background: editorial.warningWash, ink: editorial.warning },
-  error: { border: editorial.error, background: editorial.errorWash, ink: editorial.error },
+  info: { background: editorial.blueWash, ink: editorial.pmwBlueDark },
+  warning: { background: editorial.warningWash, ink: editorial.warning },
+  error: { background: editorial.errorWash, ink: editorial.error },
 } as const;
 
 /**
  * A banner about the screen it sits above — a misconfiguration, a caveat, a
  * consequence worth reading before acting.
  *
- * Tone is the whole contract: `warning` and `error` keep the meanings DESIGN.md
- * gives them, so a callout is amber only when something is actually wrong. A
- * screen where every notice is amber has no way left to say "this one matters".
+ * A tinted fill on a 24px radius, with no outline. Tone is the whole contract:
+ * `warning` and `error` keep the meanings DESIGN.md gives them, so a callout is
+ * amber only when something is actually wrong. A screen where every notice is
+ * amber has no way left to say "this one matters".
  */
 export function Callout({
   tone = "info",
@@ -408,10 +431,10 @@ export function Callout({
   return (
     <Box
       sx={{
-        border: `1px solid ${palette.border}`,
+        border: "none",
         backgroundColor: palette.background,
-        borderRadius: radius.lg,
-        p: 2,
+        borderRadius: CARD_RADIUS,
+        p: 2.25,
         ...sx,
       }}
     >
@@ -442,6 +465,7 @@ export interface DataColumn {
  * decision about whether the head was uppercase. The differences were never
  * meant; they are what happens when a `<thead>` is retyped six times.
  *
+ * Borderless: rows are separated by space and by their tinted hover, not rules.
  * It scrolls inside its own box rather than widening the page: a table is the
  * one thing on these screens that legitimately needs more width than a phone
  * has, and the fix for that is a scrollbar on the table, never on the document.
@@ -462,11 +486,14 @@ export function DataTable({
   return (
     <Box
       sx={{
-        ...(framed ? panelSx : null),
+        ...(framed ? { ...panelSx, border: "none", borderRadius: CARD_RADIUS, boxShadow: "none", p: 1 } : null),
         overflowX: "auto",
       }}
     >
-      <Box component="table" sx={{ width: "100%", minWidth, borderCollapse: "collapse", fontSize: 13 }}>
+      <Box
+        component="table"
+        sx={{ width: "100%", minWidth, borderCollapse: "separate", borderSpacing: "0 2px", fontSize: 13 }}
+      >
         <Box component="thead">
           <Box
             component="tr"
@@ -475,15 +502,14 @@ export function DataTable({
               // the row outranks the individual cell's own class, so a default
               // here could only be beaten with `!important`.
               "& th": {
-                fontSize: 11,
-                fontWeight: 800,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
+                fontSize: 13,
+                fontWeight: 700,
+                textTransform: "none",
+                letterSpacing: 0,
                 color: editorial.muted,
-                px: framed ? 2 : 0,
-                pr: framed ? 2 : 1.5,
+                px: framed ? 2 : 1.5,
                 py: 1.25,
-                borderBottom: editorialHairline,
+                border: "none",
                 whiteSpace: "nowrap",
               },
             }}
@@ -509,6 +535,9 @@ export function DataTable({
 /**
  * One row. Pressable rows are keyboard-operable by construction — a `<tr>` with
  * an `onClick` and no key handler is a control half the office cannot use.
+ *
+ * A row has no rules. Hover lifts it into a 16px tinted tile; the tint sits on
+ * the cells, because a radius on a `<tr>` does not round its background.
  */
 export function DataRow({
   onOpen,
@@ -540,14 +569,16 @@ export function DataRow({
       sx={{
         cursor: onOpen ? "pointer" : "default",
         "& td": {
-          px: framed ? 2 : 0,
+          px: framed ? 2 : 1.5,
           pr: framed ? 2 : 1.5,
-          py: compact ? 0.85 : 1.25,
-          borderBottom: editorialHairline,
+          py: compact ? 1 : 1.5,
+          border: "none",
           verticalAlign: "top",
+          transition: "background-color 0.16s ease",
         },
-        ...(onOpen ? { "&:hover": { backgroundColor: editorial.blueWash } } : null),
-        "&:last-of-type td": { borderBottom: "none" },
+        "& td:first-of-type": { borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
+        "& td:last-of-type": { borderTopRightRadius: 16, borderBottomRightRadius: 16 },
+        ...(onOpen ? { "&:hover td": { backgroundColor: editorial.blueSoft } } : null),
       }}
     >
       {children}
@@ -585,15 +616,15 @@ export function DataCell({
 }
 
 const TILE_TONE = {
-  ink: { color: editorial.pmwBlueDark, backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlueSoft },
-  alert: { color: editorial.error, backgroundColor: editorial.errorWash, borderColor: editorial.error },
-  positive: { color: editorial.success, backgroundColor: editorial.successWash, borderColor: editorial.success },
-  muted: { color: editorial.muted, backgroundColor: editorial.neutralWash, borderColor: editorial.border },
+  ink: { color: editorial.pmwBlueDark, backgroundColor: editorial.blueWash },
+  alert: { color: editorial.error, backgroundColor: editorial.errorWash },
+  positive: { color: editorial.success, backgroundColor: editorial.successWash },
+  muted: { color: editorial.muted, backgroundColor: editorial.neutralWash },
 } as const;
 
 export type TileTone = keyof typeof TILE_TONE;
 
-/** The rounded glyph that opens a task row. Tinted by what the row is about. */
+/** The round glyph that opens a task row. Tinted by what the row is about. */
 export function IconTile({ children, tone = "ink" }: { children: ReactNode; tone?: TileTone }) {
   const palette = TILE_TONE[tone];
   return (
@@ -603,13 +634,12 @@ export function IconTile({ children, tone = "ink" }: { children: ReactNode; tone
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 34,
-        height: 34,
-        borderRadius: radius.md,
-        border: `1px solid ${palette.borderColor}`,
+        width: 40,
+        height: 40,
+        borderRadius: "50%",
         backgroundColor: palette.backgroundColor,
         color: palette.color,
-        "& .MuiSvgIcon-root": { fontSize: 18 },
+        "& .MuiSvgIcon-root": { fontSize: 19 },
       }}
     >
       {children}
@@ -624,6 +654,10 @@ export function IconTile({ children, tone = "ink" }: { children: ReactNode; tone
  * act is two clicks where the list already knew there was one thing to do. So
  * the primary action rides on the row, and the row itself opens the detail for
  * everything the button does not cover.
+ *
+ * The trailing action is drawn as a tonal pill whatever button the caller passes:
+ * a list full of solid buttons reads as a set of alarms. `divider` is still
+ * accepted for existing callers, but rows are borderless and it draws no rule.
  */
 export function TaskRow({
   icon,
@@ -634,7 +668,6 @@ export function TaskRow({
   badge,
   action,
   onOpen,
-  divider = true,
 }: {
   icon?: ReactNode;
   tone?: TileTone;
@@ -651,13 +684,11 @@ export function TaskRow({
   return (
     <Stack
       direction="row"
-      spacing={1.25}
+      spacing={1.5}
       sx={{
         alignItems: "center",
         py: 1.25,
         minWidth: 0,
-        borderBottom: divider ? editorialHairline : "none",
-        "&:last-of-type": { borderBottom: "none", pb: 0 },
       }}
     >
       {icon && <IconTile tone={tone}>{icon}</IconTile>}
@@ -679,25 +710,63 @@ export function TaskRow({
           "&:hover .task-row-title": onOpen ? { color: editorial.pmwBlueDark } : undefined,
         }}
       >
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
-          <Typography className="task-row-title" sx={{ fontSize: 13.5, fontWeight: 700, minWidth: 0 }} noWrap>
+        {/* The title may wrap onto a second line; the badge drops beneath it
+            rather than squeezing the words into a truncated fragment. */}
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 0.5, minWidth: 0 }}>
+          <Typography
+            className="task-row-title"
+            sx={{
+              fontSize: 14.5,
+              fontWeight: 700,
+              lineHeight: 1.35,
+              minWidth: 0,
+              overflowWrap: "break-word",
+              color: editorial.ink,
+            }}
+          >
             {title}
           </Typography>
-          {badge}
+          {badge && <Box sx={{ flex: "none" }}>{badge}</Box>}
         </Stack>
         {description && (
-          <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.2, lineHeight: 1.4 }} noWrap>
+          <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 0.25, lineHeight: 1.4 }} noWrap>
             {description}
           </Typography>
         )}
         {timestamp && (
-          <Typography sx={{ fontSize: 11, color: editorial.softMuted, mt: 0.3 }} noWrap>
+          <Typography sx={{ fontSize: 12, color: editorial.softMuted, mt: 0.3 }} noWrap>
             {timestamp}
           </Typography>
         )}
       </Box>
 
-      {action && <Box sx={{ flex: "none" }}>{action}</Box>}
+      {action && (
+        <Box
+          sx={{
+            flex: "none",
+            // Whatever button the caller passed, the trailing action is a tonal
+            // pill. These descendant rules outrank the button's own styling.
+            "& button, & a": {
+              minHeight: 36,
+              px: 1.75,
+              border: "none",
+              borderRadius: "999px",
+              boxShadow: "none",
+              backgroundColor: editorial.blueWash,
+              color: editorial.pmwBlueDark,
+              fontSize: 13,
+              fontWeight: 800,
+              textTransform: "none",
+              whiteSpace: "nowrap",
+              transition: "background-color 0.16s ease, transform 0.12s ease",
+            },
+            "& button:hover, & a:hover": { backgroundColor: editorial.pmwBlueSoft, boxShadow: "none" },
+            "& button:active, & a:active": { transform: "scale(0.97)" },
+          }}
+        >
+          {action}
+        </Box>
+      )}
     </Stack>
   );
 }
@@ -705,11 +774,9 @@ export function TaskRow({
 /**
  * The secondary action on a widget — "Open your queue", "See everything you filed".
  *
- * These were plain text links sitting at the same weight as the body copy above
- * them, which meant the one pressable thing in the footer looked exactly like
- * the prose. It carries a border and a ground now, so it reads as a control at
- * a glance, without going to a filled brand button: there are several of these
- * on the dashboard at once and a screen of solid CTAs signals nothing.
+ * A tonal pill with no outline, so it reads as a control at a glance without
+ * going to the filled primary: there are several of these on the dashboard at
+ * once and a screen of solid CTAs signals nothing.
  */
 export function QuietButton({
   children,
@@ -731,19 +798,21 @@ export function QuietButton({
         justifyContent: "center",
         gap: 0.5,
         width: fullWidth ? "100%" : "auto",
-        minHeight: 32,
-        px: 1.5,
-        border: editorialHairline,
-        borderRadius: radius.sm,
+        minHeight: 36,
+        px: 1.75,
+        border: "none",
+        borderRadius: "999px",
         backgroundColor: editorial.neutralWash,
         color: editorial.ink,
         font: "inherit",
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: 800,
         whiteSpace: "nowrap",
         cursor: "pointer",
-        transition: "background-color 0.16s ease, border-color 0.16s ease",
-        "&:hover": { backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlue },
+        transition: "background-color 0.16s ease, color 0.16s ease, transform 0.12s ease",
+        "&:hover": { backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark },
+        "&:active": { transform: "scale(0.97)" },
+        "&:focus-visible": { outline: FOCUS_RING, outlineOffset: 2 },
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { PageHeader, Widget } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
@@ -9,6 +9,30 @@ import AppearancePicker from "../../components/dashboard/AppearancePicker";
 import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
 import { accessSummary, portalNav, roleLabel } from "../../utils/portalRole";
 import type { PortalScreen } from "../../types";
+
+/** A tonal pill: the secondary action that is not the one primary on the page. */
+const tonalPillSx = {
+  minHeight: 40,
+  px: 2,
+  borderRadius: radius.full,
+  backgroundColor: editorial.pmwBlueSoft,
+  color: editorial.pmwBlueDark,
+  fontWeight: 700,
+  boxShadow: "none",
+  "&:hover": { backgroundColor: editorial.blueWash, boxShadow: "none" },
+} as const;
+
+/** A ghost pill: a filled well with no outline, for the quieter actions. */
+const ghostPillSx = {
+  minHeight: 40,
+  px: 2,
+  borderRadius: radius.full,
+  backgroundColor: editorial.neutralWash,
+  color: editorial.ink,
+  fontWeight: 700,
+  boxShadow: "none",
+  "&:hover": { backgroundColor: editorial.blueWash, boxShadow: "none" },
+} as const;
 
 /** A settings group. Roomier than a dashboard widget, because these are read, not scanned. */
 function Panel({ title, caption, children }: { title: string; caption: string; children: React.ReactNode }) {
@@ -24,7 +48,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <Stack
       direction={{ xs: "column", sm: "row" }}
       spacing={{ xs: 0.25, sm: 2 }}
-      sx={{ py: 1.1, borderTop: editorialHairline, alignItems: { sm: "baseline" } }}
+      sx={{ py: 1.1, alignItems: { sm: "baseline" } }}
     >
       <Typography sx={{ fontSize: 12, color: editorial.muted, width: { sm: 180 }, flex: "none" }}>{label}</Typography>
       <Box sx={{ fontSize: 13.5, minWidth: 0 }}>{value}</Box>
@@ -47,7 +71,7 @@ function Toggle({
     <Stack
       direction="row"
       spacing={2}
-      sx={{ py: 1.25, borderTop: editorialHairline, alignItems: "center", justifyContent: "space-between" }}
+      sx={{ py: 1.25, alignItems: "center", justifyContent: "space-between" }}
     >
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>{label}</Typography>
@@ -149,7 +173,6 @@ export default function SettingsScreen() {
                       px: 0.9,
                       py: 0.3,
                       borderRadius: radius.full,
-                      border: editorialHairline,
                       whiteSpace: "nowrap",
                       color: capability.granted ? editorial.pmwBlueDark : editorial.muted,
                       backgroundColor: capability.granted ? editorial.blueWash : "transparent",
@@ -196,7 +219,7 @@ export default function SettingsScreen() {
             />
           )}
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, pt: 2 }}>
-            <Button variant="outlined" onClick={() => setAppearanceOpen(true)} sx={{ minHeight: 40 }}>
+            <Button variant="text" onClick={() => setAppearanceOpen(true)} sx={tonalPillSx}>
               {isAdmin ? "Change appearance" : "View themes"}
             </Button>
           </Stack>
@@ -207,7 +230,7 @@ export default function SettingsScreen() {
             <Stack
               direction={{ xs: "column", sm: "row" }}
               spacing={2}
-              sx={{ py: 1.25, borderTop: editorialHairline, alignItems: { sm: "center" }, justifyContent: "space-between" }}
+              sx={{ py: 1.25, alignItems: { sm: "center" }, justifyContent: "space-between" }}
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>Start on</Typography>
@@ -253,16 +276,16 @@ export default function SettingsScreen() {
           />
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, pt: 2 }}>
             <Button
-              variant="outlined"
+              variant="text"
               onClick={() => {
                 refresh();
                 toast("Re-reading submissions from SharePoint...");
               }}
-              sx={{ minHeight: 40 }}
+              sx={ghostPillSx}
             >
               Refresh data
             </Button>
-            <Button variant="outlined" onClick={onSignOut} sx={{ minHeight: 40 }}>
+            <Button variant="text" onClick={onSignOut} sx={ghostPillSx}>
               Sign out
             </Button>
             <Button

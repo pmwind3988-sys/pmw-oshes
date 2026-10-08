@@ -3,13 +3,13 @@ import { Clock as AccessTimeIcon, XCircle as CancelIcon, CheckCircle as CheckCir
 import { editorial } from "../../theme/editorial";
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  fullyapproved: { label: "Fully Approved", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
+  fullyapproved: { label: "Fully approved", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
   approved: { label: "Approved", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
   confirmed: { label: "Confirmed", color: editorial.success, bg: editorial.successWash, dot: editorial.successFill },
   rejected: { label: "Rejected", color: editorial.error, bg: editorial.errorWash, dot: editorial.errorFill },
   inprogress: { label: "In Review", color: editorial.pmwBlueDark, bg: editorial.blueWash, dot: editorial.pmwBlue },
   pending: { label: "Pending", color: editorial.warning, bg: editorial.warningWash, dot: editorial.warningFill },
-  cancelled: { label: "Cancelled", color: editorial.muted, bg: editorial.paperSoft, dot: editorial.muted },
+  cancelled: { label: "Cancelled", color: editorial.muted, bg: editorial.neutralWash, dot: editorial.muted },
 } as const;
 
 function normalizeStatus(status: string | null): string {
@@ -47,15 +47,15 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
       label={cfg.label}
       size="small"
       sx={{
+        // A tonal fill with no ring: the status is the colour of the fill and
+        // the word beside it, never an outline.
         backgroundColor: cfg.bg,
         color: cfg.color,
-        // The ring used to be `${dot}33` — an 8-digit hex built by string
-        // concatenation, which produces `var(--pmw-error)33` now that the
-        // tokens are variables. `color-mix` is the composable form: it takes
-        // the resolved variable and thins it.
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cfg.dot} 26%, transparent)`,
-        fontWeight: 800,
-        fontSize: "0.75rem",
+        borderRadius: "999px",
+        border: "none",
+        fontWeight: 700,
+        fontSize: "0.8125rem",
+        "& .MuiChip-icon": { marginLeft: "10px" },
       }}
     />
   );

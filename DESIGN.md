@@ -1,33 +1,36 @@
 ---
 name: PMW Editorial
 colors:
-  ink: '#101010'
-  muted: '#5F646D'
-  soft-muted: '#747B86'
+  ink: '#161B24'
+  muted: '#586174'
+  soft-muted: '#6B7385'
   white: '#FFFFFF'
   black: '#000000'
   panel: '#FFFFFF'
-  paper: '#F8FAFC'
-  paper-soft: '#F9FBFD'
-  app-surface: '#F6F9FC'
+  paper: '#F5F7FB'
+  paper-soft: '#F9FAFC'
+  app-surface: '#EEF2F8'
+  chip-neutral: '#EDF0F5'
+  primary-container: '#D9E5FB'
+  on-primary-container: '#0B3B8C'
   sky: '#BFDDF4'
   sky-soft: '#EEF7FD'
   blue-wash: '#EDF7FE'
   blue-soft: '#F6FAFD'
   purple-wash: '#F4F3FB'
-  border: '#DDE4EC'
-  border-strong: '#111111'
-  primary: '#0078D4'
-  primary-dark: '#005A9E'
-  primary-soft: '#D7ECFA'
+  border: '#E3E8F0'
+  border-strong: '#161B24'
+  primary: '#1A5FD0'
+  primary-dark: '#174FB0'
+  primary-soft: '#C9DAF8'
   secondary: '#6264A7'
   secondary-dark: '#4B4D89'
   secondary-soft: '#E6E7F6'
   accent: '#FFF546'
   accent-soft: '#FFF4D6'
-  success: '#107C10'
-  warning: '#B15C00'
-  error: '#C62828'
+  success: '#2E9D6A'
+  warning: '#B7791F'
+  error: '#B3261E'
   grey-50: '#FBFAF5'
   grey-100: '#F7F5EF'
   grey-200: '#E7E2D6'
@@ -38,83 +41,84 @@ colors:
   grey-700: '#3F444C'
   grey-800: '#24262B'
   grey-900: '#101010'
-  app-bg-start: '#EAF5FC'
-  app-bg-mid: '#F7FAFD'
-  app-bg-end: '#FFFFFF'
+  app-bg-start: '#EEF2F8'
+  app-bg-mid: '#EEF2F8'
+  app-bg-end: '#EEF2F8'
 typography:
   h1:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 4.5rem
     fontWeight: '400'
     lineHeight: '1'
     letterSpacing: '0'
   h2:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 3.25rem
     fontWeight: '400'
     lineHeight: '1.05'
     letterSpacing: '0'
   h3:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 2rem
     fontWeight: '700'
     lineHeight: '1.15'
     letterSpacing: '0'
   h4:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 1.35rem
     fontWeight: '700'
     lineHeight: '1.3'
     letterSpacing: '0'
   h5:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 1.15rem
     fontWeight: '700'
     lineHeight: '1.4'
     letterSpacing: '0'
   h6:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 1rem
     fontWeight: '700'
     lineHeight: '1.45'
     letterSpacing: '0'
   body1:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 0.96rem
     fontWeight: '400'
     lineHeight: '1.65'
   body2:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 0.875rem
     fontWeight: '400'
     lineHeight: '1.55'
   caption:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 0.75rem
     fontWeight: '600'
     lineHeight: '1.5'
     letterSpacing: '0'
   button:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 0.875rem
     fontWeight: '700'
     letterSpacing: '0'
   stat:
-    fontFamily: Inter
+    fontFamily: Figtree
     fontSize: 2.4rem
     fontWeight: '800'
     lineHeight: '1.1'
   overline:
-    fontFamily: Inter
-    fontSize: 0.8rem
+    fontFamily: Figtree
+    fontSize: 0.8125rem
     fontWeight: '700'
-    letterSpacing: '0.06em'
+    letterSpacing: '0'
 rounded:
   none: '0'
-  sm: '8px'
-  DEFAULT: '12px'
-  lg: '14px'
-  md: '10px'
+  sm: '16px'
+  DEFAULT: '24px'
+  lg: '24px'
+  xl: '32px'
+  md: '16px'
   full: '999px'
 spacing:
   unit: 8px

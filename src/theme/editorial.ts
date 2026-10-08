@@ -23,33 +23,33 @@
 /** The literal light-theme defaults. Real colours, safe to parse and compute on. */
 export const editorialHex = {
   black: "#000000",
-  ink: "#101010",
-  muted: "#5F646D",
-  softMuted: "#747B86",
+  ink: "#161B24",
+  muted: "#586174",
+  softMuted: "#6B7385",
   white: "#FFFFFF",
   sky: "#BFDDF4",
   skySoft: "#EEF7FD",
   blueWash: "#EDF7FE",
   blueSoft: "#F6FAFD",
   purpleWash: "#F4F3FB",
-  paper: "#F8FAFC",
-  neutralWash: "#F1F3F6",
-  appSurface: "#F6F9FC",
-  paperSoft: "#F9FBFD",
+  paper: "#F5F7FB",
+  neutralWash: "#EDF0F5",
+  appSurface: "#EEF2F8",
+  paperSoft: "#F9FAFC",
   panel: "#FFFFFF",
-  border: "#DDE4EC",
-  borderStrong: "#111111",
-  pmwBlue: "#0078D4",
-  pmwBlueDark: "#005A9E",
-  pmwBlueSoft: "#D7ECFA",
+  border: "#E3E8F0",
+  borderStrong: "#161B24",
+  pmwBlue: "#1A5FD0",
+  pmwBlueDark: "#174FB0",
+  pmwBlueSoft: "#D9E5FB",
   pmwPurple: "#6264A7",
   pmwPurpleDark: "#4B4D89",
   pmwPurpleSoft: "#E6E7F6",
   yellow: "#FFF546",
   yellowSoft: "#FFF4D6",
-  success: "#107C10",
-  warning: "#B15C00",
-  error: "#C62828",
+  success: "#2E9D6A",
+  warning: "#B7791F",
+  error: "#B3261E",
   inverseSurface: "#000000",
   inverseInk: "#FFFFFF",
 } as const;
@@ -123,9 +123,9 @@ export const editorial = {
   errorFill: v("error", editorialHex.error),
 
   /** Status at wash strength — the tint behind a status pill or banner. */
-  successWash: v("success-wash", "rgba(16, 124, 16, 0.10)"),
+  successWash: v("success-wash", "rgba(46, 157, 106, 0.10)"),
   warningWash: v("warning-wash", editorialHex.yellowSoft),
-  errorWash: v("error-wash", "rgba(198, 40, 40, 0.10)"),
+  errorWash: v("error-wash", "rgba(179, 38, 30, 0.10)"),
 
   /** Text on a saturated status fill. */
   onStatus: v("on-blue", editorialHex.white),
@@ -178,7 +178,7 @@ export function seriesColour(index: number): string {
   return editorialSeries[index % editorialSeries.length];
 }
 
-export const editorialShadow = `var(--pmw-shadow, 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 14px 36px rgba(0, 90, 158, 0.08))`;
-export const editorialShadowHover = `var(--pmw-shadow-hover, 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px -2px rgba(0, 0, 0, 0.1), 0 18px 42px rgba(0, 90, 158, 0.12))`;
+export const editorialShadow = `var(--pmw-shadow, 0 1px 3px rgba(22, 27, 36, 0.08))`;
+export const editorialShadowHover = `var(--pmw-shadow-hover, 0 16px 40px rgba(22, 27, 36, 0.18))`;
 export const editorialHairline = `1px solid ${editorial.border}`;
 export const editorialInkline = `1px solid ${editorial.borderStrong}`;

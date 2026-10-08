@@ -10,12 +10,10 @@ import { editorial } from "../theme/editorial";
  * so the ID looks the same wherever someone meets it and stays findable at a
  * glance in a column of otherwise similar grey metadata.
  *
- * Blue rather than a neutral because DESIGN.md reserves blue for action and
- * identity, and this is the identity. The palette and 8px radius are lifted from
- * the dashboard's existing `identityChipSx` rather than invented, so the two
- * halves of the product show an ID the same way. It stays deliberately quieter
- * than StatusPill and the severity pills: a reference is never *urgent*, and a
- * screen where everything competes signals nothing.
+ * A neutral monospace pill: the reference is an identifier to read and copy, not
+ * an action or a status, so it takes the quiet chip fill and no colour. It stays
+ * deliberately quieter than StatusPill and the severity pills: a reference is
+ * never *urgent*, and a screen where everything competes signals nothing.
  *
  * `userSelect: all` makes a single click select the whole ID. These get read
  * down the phone and pasted into mail all day, and part of one is worse than
@@ -24,10 +22,13 @@ import { editorial } from "../theme/editorial";
 
 export type ReferenceTagSize = "sm" | "md" | "lg";
 
+/** Monospace, so a reference reads as an identifier, and set as a pill like every other tag. */
+const MONO_STACK = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
+
 const SIZES: Record<ReferenceTagSize, { fontSize: number; px: number; py: number }> = {
-  sm: { fontSize: 11.5, px: 0.7, py: 0.1 },
-  md: { fontSize: 13, px: 0.9, py: 0.25 },
-  lg: { fontSize: 16, px: 1.2, py: 0.4 },
+  sm: { fontSize: 12, px: 1, py: 0.2 },
+  md: { fontSize: 13, px: 1.25, py: 0.3 },
+  lg: { fontSize: 16, px: 1.5, py: 0.45 },
 };
 
 interface ReferenceTagProps {
@@ -47,13 +48,14 @@ export default function ReferenceTag({ value, size = "sm", sx }: ReferenceTagPro
         display: "inline-block",
         px: scale.px,
         py: scale.py,
-        borderRadius: "8px",
-        backgroundColor: editorial.blueWash,
-        border: `1px solid ${editorial.pmwBlueSoft}`,
-        color: editorial.pmwBlueDark,
+        borderRadius: "999px",
+        backgroundColor: editorial.neutralWash,
+        border: "none",
+        color: editorial.ink,
+        fontFamily: MONO_STACK,
         fontSize: scale.fontSize,
-        fontWeight: 800,
-        letterSpacing: "0.02em",
+        fontWeight: 600,
+        letterSpacing: "0.01em",
         fontVariantNumeric: "tabular-nums",
         whiteSpace: "nowrap",
         userSelect: "all",
