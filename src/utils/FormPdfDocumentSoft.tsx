@@ -16,6 +16,7 @@ import { collectImageSources, imageCaption, isEmbeddableImage, isRecord, isSigna
 import { isChoiceField, readTicks, shouldListChoices } from "./pdfChoiceMatching";
 import { chainProgress, isAwaitingLayer } from "./pdfLayerProgress";
 import { REFERENCE_NO_FIELD } from "./referenceNumber";
+import { signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "./signOff";
 import { absoluteAttachmentUrl, attachmentName, attachmentUrls, collectRecordAttachments, isFileQuestionType } from "./fileAttachments";
 import type { DocumentControlHeader } from "../types";
 import type { ReactNode } from "react";
@@ -749,7 +750,7 @@ function journeySteps(meta: PdfFormData["meta"], layers: PdfLayerResult[], showS
     const manual = layer.status.trim().toLowerCase().startsWith("manual ");
     steps.push({
       label: status.tone === "rejected" ? "Rejected" : layer.type === "evaluation" ? "Evaluated" : "Approved",
-      who: manual ? "" : (layer.confirmerName || layer.email || ""),
+      who: manual ? "" : (layer.signerName || layer.confirmerName || layer.email || ""),
       when: manual ? "" : fmtDate(layer.signedAt),
       state: status.tone === "rejected" ? "rejected" : "done",
     });
@@ -812,8 +813,15 @@ function LayerCard({ layer, index, showSignature, showEvaluationDetails, include
   const evaluationFields = showEvaluationDetails && layer.type === "evaluation"
     ? evaluationFieldsForLayer(layer, includeEmptyEvaluationFields)
     : [];
-  const person = (layer.confirmerName || "").trim();
   const email = (layer.confirmerEmail || layer.email || "").trim();
+  // Signed like a paper form, as the classic layout does: "Approved By / name /
+  // post". Only a personal decision is signed (see utils/signOff.ts); pending,
+  // paper and cascaded layers keep the plain "Actioned by" line.
+  const verdict = includeEmptyEvaluationFields ? null : signOffVerdictFromStatus(layer.rawStatus ?? layer.status);
+  const person = verdict
+    ? signOffName(layer.signerName || layer.confirmerName, email)
+    : (layer.confirmerName || "").trim();
+  const position = verdict ? signOffPosition(layer.signerPosition, layer.layerTitle) : "";
   const ink = includeEmptyEvaluationFields ? "" : (layer.signature || "").trim();
   // A rule to sign in pen is only drawn on the blank form. A layer that captured
   // no ink gets no signature block: an empty rule would read as ink that failed.
@@ -833,8 +841,9 @@ function LayerCard({ layer, index, showSignature, showEvaluationDetails, include
         </View>
       ) : null}
       <View style={drawWell ? S.wellRule : { marginTop: 2 }}>
-        <Text style={S.cardSub}>Actioned by</Text>
+        <Text style={[S.cardSub, verdict === "rejected" ? { color: T.red } : {}]}>{verdict ? signOffLabel(verdict) : "Actioned by"}</Text>
         <Text style={S.wellName}>{person || email || "—"}</Text>
+        {position ? <Text style={S.wellDetail}>{position}</Text> : null}
         <Text style={S.wellDetail}>
           {fmtDate(layer.signedAt)}{person && email ? ` · ${email}` : ""}
         </Text>

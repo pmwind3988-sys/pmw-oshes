@@ -268,7 +268,9 @@ describe("the journey strip", () => {
       ...chain(),
       pdfConfig: { enabled: true, title: "Permit To Work", deliveryMethod: "sharepoint", showApproverChain: false },
     }));
-    expect(text).not.toContain("EVALUATED");
+    // No journey step: the strip would print "Evaluated <name>" under the node,
+    // while the sign-off card says "Evaluated By <name>".
+    expect(text).not.toMatch(/EVALUATED (?!BY)/);
     // The unfinished chain is still named, in the signature section.
     expect(text).toContain("NOT SIGNED");
   });
@@ -362,8 +364,9 @@ describe("sign-off", () => {
     expect(text).toContain("REQUESTER SIGNATURE");
     expect(text).toContain("LAYER 1 · APPROVAL");
     expect(text).toContain("LAYER 2 · APPROVAL");
-    // One "Actioned by" per layer card, the requester's card says "Filed by" instead.
-    expect(occurrences(text, "ACTIONED BY")).toBe(2);
+    // Each decided layer is signed like a paper form ("Approved By", see
+    // utils/signOff.ts); the requester's card is captioned by the filer instead.
+    expect(occurrences(text, "APPROVED BY")).toBe(2);
   });
 
   it("prints an evaluation's responses inside that layer's card", async () => {
@@ -414,7 +417,7 @@ describe("sign-off", () => {
       }],
     });
     const raw = await renderPdf(data);
-    expect(flatText(raw)).toContain("ACTIONED BY");
+    expect(flatText(raw)).toContain("EVALUATED BY MUHAMMAD ASHRAF BIN AZAHARI");
     // The logo and nothing else: no well, no rule, no raster for a layer with no ink.
     expect(drawnImageBoxes(raw)).toHaveLength(1);
   });
