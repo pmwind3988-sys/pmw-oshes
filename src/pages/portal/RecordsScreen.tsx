@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Box, Button, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { ArrowLeft as ArrowBackIcon } from "../../components/ui/Icons";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { liftSx, panelSx, radius } from "../../theme/surfaces";
+import { editorial } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import {
   DataCell,
@@ -38,6 +38,38 @@ const WORKFLOW_OPTIONS = [
   { value: "chain", label: "Has an approval chain" },
   { value: "none", label: "No approval step" },
 ] as const;
+
+/**
+ * The filter controls as pills: a filled well with no outline, so the bar reads
+ * as a row of chips rather than a form. The label stays (it is the accessible
+ * name), but the outline notch that would draw a rectangle round it is removed.
+ */
+const pillFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: radius.full,
+    backgroundColor: editorial.neutralWash,
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+  "& .MuiOutlinedInput-root:hover": { backgroundColor: editorial.blueWash },
+  "& .MuiOutlinedInput-root.Mui-focused": { boxShadow: "0 0 0 3px #9DBDF5" },
+  "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": { border: "none" },
+} as const;
+
+/** A ghost pill: a filled well, no outline, for secondary actions. */
+const ghostPillSx = {
+  minHeight: 40,
+  px: 2,
+  flex: "none",
+  borderRadius: radius.full,
+  backgroundColor: editorial.neutralWash,
+  color: editorial.ink,
+  fontWeight: 700,
+  border: "none",
+  boxShadow: "none",
+  "&:hover": { backgroundColor: editorial.blueWash, boxShadow: "none" },
+} as const;
 
 /** The cell contents each row needs, shared by the table and the phone card. */
 function stageLine(record: PortalRecord): string {
@@ -156,9 +188,9 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
              end for an account that can see more than its own filings. */
           records.length > myRecords.length ? (
             <Button
-              variant="outlined"
+              variant="text"
               onClick={() => setScreen(mine ? "subs" : "mine", formFilter === "all" ? null : formFilter, statusFilter)}
-              sx={{ minHeight: 40, flex: "none" }}
+              sx={ghostPillSx}
             >
               {mine ? "Show everything I can see" : "Show only mine"}
             </Button>
@@ -173,7 +205,8 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
         direction="row"
         spacing={1.5}
         sx={{
-          ...panelSx,
+          backgroundColor: editorial.panel,
+          borderRadius: "24px",
           p: { xs: 1.5, sm: 1.75 },
           mb: 2,
           flexWrap: "wrap",
@@ -187,7 +220,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Form type"
           value={formFilter}
           onChange={(event) => setFormFilter(event.target.value)}
-          sx={{ width: { xs: "100%", sm: 210 } }}
+          sx={{ width: { xs: "100%", sm: 210 }, ...pillFieldSx }}
         >
           <MenuItem value="all">All form types</MenuItem>
           {catalogue.map((entry) => (
@@ -203,7 +236,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as StatFilter)}
-          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 } }}
+          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 }, ...pillFieldSx }}
         >
           {statusOptions.map((option) => (
             <MenuItem key={option.value} value={option.value}>
@@ -218,7 +251,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Workflow"
           value={workflowFilter}
           onChange={(event) => setWorkflowFilter(event.target.value as typeof workflowFilter)}
-          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 } }}
+          sx={{ width: { xs: "calc(50% - 6px)", sm: 200 }, ...pillFieldSx }}
         >
           {WORKFLOW_OPTIONS.map((option) => (
             <MenuItem key={option.value} value={option.value}>
@@ -232,7 +265,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           label="Search reference, subject or form"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
+          sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 }, ...pillFieldSx }}
         />
 
         {access.canExport && (
@@ -242,7 +275,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
               `Exported ${count} record${count === 1 ? "" : "s"} in full: every answer, every decision, signatures as images, times in Malaysian time.`
             }
             run={(token) => exportRecordsCsv(rows, { token })}
-            sx={{ width: { xs: "100%", sm: "auto" } }}
+            sx={{ width: { xs: "100%", sm: "auto" }, ...ghostPillSx }}
           />
         )}
       </Stack>
@@ -262,14 +295,18 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
                 type="button"
                 onClick={() => openRecord(record)}
                 sx={{
-                  ...panelSx,
-                  ...liftSx,
                   width: "100%",
                   textAlign: "left",
                   font: "inherit",
                   color: "inherit",
-                  p: 1.5,
+                  p: 2,
+                  border: "none",
+                  borderRadius: "20px",
+                  backgroundColor: editorial.panel,
                   cursor: "pointer",
+                  transition: "background-color 0.16s ease",
+                  "&:hover": { backgroundColor: editorial.blueSoft },
+                  "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
                 }}
               >
                 <Stack
@@ -277,7 +314,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
                   spacing={1}
                   sx={{ alignItems: "center", justifyContent: "space-between", mb: 0.75 }}
                 >
-                  <ReferenceTag value={record.reference} size="md" />
+                  <ReferenceTag value={record.reference} size="md" sx={{ whiteSpace: "nowrap" }} />
                   <StatusPill status={record.status} />
                 </Stack>
                 <Typography sx={{ fontSize: 14.5, fontWeight: 700, lineHeight: 1.3 }}>{record.subject}</Typography>
@@ -287,8 +324,6 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
                   spacing={1}
                   sx={{
                     mt: 1,
-                    pt: 1,
-                    borderTop: editorialHairline,
                     alignItems: "baseline",
                     justifyContent: "space-between",
                   }}
@@ -322,7 +357,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
               {rows.map((record) => (
                 <DataRow key={recordKey(record)} compact={compact} onOpen={() => openRecord(record)}>
                   <DataCell>
-                    <ReferenceTag value={record.reference} size="md" />
+                    <ReferenceTag value={record.reference} size="md" sx={{ whiteSpace: "nowrap" }} />
                   </DataCell>
                   <DataCell>
                     <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>

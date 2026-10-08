@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
-import { panelSx } from "../../theme/surfaces";
 import { Callout, PageHeader, Widget } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { writeAuditEntry } from "../../utils/portalAudit";
@@ -69,6 +68,32 @@ function RefreshStatus({ updatedAt, failed, short = false }: { updatedAt: Date |
   );
 }
 const mytDateToIsoStart = (dateStr: string) => mytInputToIso(`${dateStr}T00:00`);
+
+/** Filled pill fields for the filter bar: no outline, the fill does the work. */
+const PILL_FIELD = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 999,
+    backgroundColor: editorial.panel,
+    "& fieldset": { border: "none" },
+  },
+} as const;
+
+/** The theme's pill switch: a rounded track, a round thumb, primary when on. */
+const PILL_SWITCH = {
+  width: 46,
+  height: 26,
+  p: 0,
+  "& .MuiSwitch-switchBase": {
+    p: "3px",
+    "&.Mui-checked": {
+      transform: "translateX(20px)",
+      color: editorial.white,
+      "& + .MuiSwitch-track": { backgroundColor: editorial.pmwBlue, opacity: 1 },
+    },
+  },
+  "& .MuiSwitch-thumb": { width: 20, height: 20, boxShadow: "none" },
+  "& .MuiSwitch-track": { borderRadius: 999, backgroundColor: editorial.border, opacity: 1 },
+} as const;
 
 export default function SmokingLogScreen() {
   const { access, spClient, userEmail, audit, appendAudit, toast } = usePortal();
@@ -319,11 +344,11 @@ export default function SmokingLogScreen() {
                     }}
                   />
                 }
-                sx={{ minHeight: 40 }}
+                sx={{ minHeight: 40, borderRadius: 999 }}
               >
                 {refreshing ? "Refreshing…" : "Refresh"}
               </Button>
-              <Button variant="outlined" size={phone ? "small" : "medium"} onClick={handleExport} sx={{ minHeight: 40 }}>
+              <Button variant="outlined" size={phone ? "small" : "medium"} onClick={handleExport} sx={{ minHeight: 40, borderRadius: 999 }}>
                 {phone ? "Export" : "Export to CSV"}
               </Button>
             </>
@@ -336,7 +361,25 @@ export default function SmokingLogScreen() {
         onChange={(_, next: Tab_) => setTab(next)}
         variant="scrollable"
         scrollButtons={false}
-        sx={{ mb: 2, minHeight: 42, "& .MuiTab-root": { minHeight: 42, fontSize: 13, fontWeight: 700, minWidth: { xs: 0, sm: 90 }, px: { xs: 1.25, sm: 2 } } }}
+        sx={{
+          mb: 2,
+          minHeight: 42,
+          "& .MuiTabs-indicator": { display: "none" },
+          "& .MuiTabs-flexContainer": { gap: 0.75 },
+          "& .MuiTab-root": {
+            minHeight: 38,
+            borderRadius: 999,
+            textTransform: "none",
+            color: editorial.muted,
+            backgroundColor: editorial.neutralWash,
+            fontSize: 13,
+            fontWeight: 700,
+            minWidth: { xs: 0, sm: 90 },
+            px: { xs: 1.5, sm: 2 },
+            transition: "background-color 0.16s ease, color 0.16s ease",
+          },
+          "& .MuiTab-root.Mui-selected": { backgroundColor: editorial.pmwBlueSoft, color: editorial.pmwBlueDark },
+        }}
       >
         <Tab value="log" label="Log" />
         <Tab value="totals" label="Totals" />
@@ -350,7 +393,7 @@ export default function SmokingLogScreen() {
           <Stack
             direction="row"
             spacing={1.5}
-            sx={{ ...panelSx, p: { xs: 1.5, sm: 1.75 }, mb: 2, flexWrap: "wrap", alignItems: "flex-end", rowGap: 1.5 }}
+            sx={{ backgroundColor: editorial.paper, borderRadius: "24px", p: { xs: 1.5, sm: 1.75 }, mb: 2, flexWrap: "wrap", alignItems: "flex-end", rowGap: 1.5 }}
           >
             <TextField
               type="date"
@@ -359,7 +402,7 @@ export default function SmokingLogScreen() {
               value={isoToMytDate(range.from)}
               onChange={(e) => e.target.value && setRange((r) => ({ ...r, from: mytDateToIsoStart(e.target.value) }))}
               slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ width: { xs: "calc(50% - 6px)", sm: 160 } }}
+              sx={{ ...PILL_FIELD, width: { xs: "calc(50% - 6px)", sm: 160 } }}
             />
             <TextField
               type="date"
@@ -371,14 +414,14 @@ export default function SmokingLogScreen() {
                 setRange((r) => ({ ...r, to: new Date(new Date(mytDateToIsoStart(e.target.value)).getTime() + ONE_DAY_MS).toISOString() }))
               }
               slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ width: { xs: "calc(50% - 6px)", sm: 160 } }}
+              sx={{ ...PILL_FIELD, width: { xs: "calc(50% - 6px)", sm: 160 } }}
             />
             {phone && (
               <Button
                 variant={extraFilters ? "contained" : "outlined"}
                 aria-expanded={filtersOpen}
                 onClick={() => setFiltersOpen((open) => !open)}
-                sx={{ minHeight: 40, width: "100%" }}
+                sx={{ minHeight: 40, width: "100%", borderRadius: 999 }}
               >
                 {filtersOpen ? "Hide filters" : extraFilters ? `More filters (${extraFilters} on)` : "More filters"}
               </Button>
@@ -391,7 +434,7 @@ export default function SmokingLogScreen() {
                   label="Department"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  sx={{ width: { xs: "calc(50% - 6px)", sm: 190 } }}
+                  sx={{ ...PILL_FIELD, width: { xs: "calc(50% - 6px)", sm: 190 } }}
                 >
                   <MenuItem value="">All departments</MenuItem>
                   {departments.map((d) => (
@@ -406,7 +449,7 @@ export default function SmokingLogScreen() {
                   label="Company"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
+                  sx={{ ...PILL_FIELD, width: { xs: "calc(50% - 6px)", sm: 170 } }}
                 >
                   <MenuItem value="">All companies</MenuItem>
                   {companies.map((c) => (
@@ -421,7 +464,7 @@ export default function SmokingLogScreen() {
                   label="Area"
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
-                  sx={{ width: { xs: "calc(50% - 6px)", sm: 170 } }}
+                  sx={{ ...PILL_FIELD, width: { xs: "calc(50% - 6px)", sm: 170 } }}
                 >
                   <MenuItem value="">All areas</MenuItem>
                   {areas.map((a) => (
@@ -435,13 +478,14 @@ export default function SmokingLogScreen() {
                   label="Search name or email"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  sx={{ flex: 1, minWidth: { xs: "100%", sm: 200 } }}
+                  sx={{ ...PILL_FIELD, flex: 1, minWidth: { xs: "100%", sm: 200 } }}
                 />
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                   <Typography sx={{ fontSize: 12.5, color: editorial.muted, fontWeight: 700 }}>Flagged only</Typography>
                   <Switch
                     checked={flaggedOnly}
                     onChange={(e) => setFlaggedOnly(e.target.checked)}
+                    sx={PILL_SWITCH}
                     slotProps={{ input: { "aria-label": "Flagged only" } }}
                   />
                 </Stack>
@@ -451,6 +495,7 @@ export default function SmokingLogScreen() {
                     <Switch
                       checked={groupByDepartment}
                       onChange={(e) => setGroupByDepartment(e.target.checked)}
+                      sx={PILL_SWITCH}
                       slotProps={{ input: { "aria-label": "Group by department" } }}
                     />
                   </Stack>

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { useMemo, useState, type MouseEvent } from "react";
+import { Box, Button, Divider, IconButton, Menu, MenuItem, Stack, Typography } from "@mui/material";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import { ClipboardClock as PendingActionsOutlinedIcon } from "../../components/ui/Icons";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { liftSx, panelSx, radius } from "../../theme/surfaces";
+import { editorial } from "../../theme/editorial";
+import { liftSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import {
   PageHeader,
@@ -50,6 +51,8 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
   const { records, queue, catalogue, access, openDrawer, userEmail } = portal;
   const [withdrawTarget, setWithdrawTarget] = useState<PortalRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PortalRecord | null>(null);
+  /** The open ⋯ menu for one waiting row: where it hangs, and which record it acts on. */
+  const [actionsMenu, setActionsMenu] = useState<{ anchor: HTMLElement; record: PortalRecord } | null>(null);
 
   const severe = useMemo(() => severeRecords(records), [records]);
   // Where no form declares an SLA, "stuck" cannot mean "breached" — so the
@@ -111,59 +114,80 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
     [queue, access.isEvaluator],
   );
 
-  const severePanel = (
-    <Widget
-      key="severity"
-      title="High severity · last 24 hours"
-      caption="paged to the duty officer on receipt"
-      meta={<WidgetCount value={severe.length} tone={severe.length > 0 ? "alert" : "ink"} />}
+  const severeCards = severe.map((record) => (
+    <Box
+      key={recordKey(record)}
+      component="button"
+      type="button"
+      onClick={() => openDrawer(recordKey(record))}
+      sx={{
+        ...liftSx,
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        textAlign: "left",
+        borderRadius: "24px",
+        border: "none",
+        backgroundColor: editorial.paper,
+        font: "inherit",
+        color: "inherit",
+        p: 2,
+        cursor: "pointer",
+      }}
     >
-      {severe.length === 0 ? (
-        <WidgetEmpty>Nothing high-severity in the last 24 hours.</WidgetEmpty>
-      ) : (
-        <WidgetGrid min={230}>
-          {severe.map((record) => (
-            <Box
-              key={recordKey(record)}
-              component="button"
-              type="button"
-              onClick={() => openDrawer(recordKey(record))}
-              sx={{
-                ...panelSx,
-                ...liftSx,
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                textAlign: "left",
-                borderRadius: radius.base,
-                font: "inherit",
-                color: "inherit",
-                p: 1.5,
-                cursor: "pointer",
-              }}
-            >
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
-                  <ReferenceTag value={record.reference} />
-                  <SeverityPill label={record.severity} tone={record.tone} />
-                </Stack>
-                <Typography sx={{ fontSize: 11, color: editorial.muted, whiteSpace: "nowrap" }}>
-                  {record.filedLabel}
-                </Typography>
-              </Stack>
-              <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
-              <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.5 }}>
-                {record.location || "Location not given"}
-              </Typography>
-              <Typography sx={{ fontSize: 11, color: editorial.muted, mt: "auto", pt: 1.25 }}>
-                {record.layerLabel}
-              </Typography>
-            </Box>
-          ))}
-        </WidgetGrid>
-      )}
-    </Widget>
-  );
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
+          <ReferenceTag value={record.reference} />
+          <SeverityPill label={record.severity} tone={record.tone} />
+        </Stack>
+        <Typography sx={{ fontSize: 11, color: editorial.muted, whiteSpace: "nowrap" }}>
+          {record.filedLabel}
+        </Typography>
+      </Stack>
+      <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
+      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.5 }}>
+        {record.location || "Location not given"}
+      </Typography>
+      <Typography sx={{ fontSize: 11, color: editorial.muted, mt: "auto", pt: 1.25 }}>
+        {record.layerLabel}
+      </Typography>
+    </Box>
+  ));
+
+  // Nothing to report is one green pill line, not an empty card: the good news
+  // takes no more of the page than it needs.
+  const severePanel =
+    severe.length === 0 ? (
+      <Box key="severity" sx={{ display: "flex" }}>
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            px: 1.75,
+            py: 0.875,
+            borderRadius: radius.full,
+            backgroundColor: editorial.successWash,
+            color: editorial.success,
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          No high-severity reports in the last 24 hours
+        </Box>
+      </Box>
+    ) : (
+      <Widget
+        key="severity"
+        title="High severity · last 24 hours"
+        caption="paged to the duty officer on receipt"
+        meta={<WidgetCount value={severe.length} tone="alert" />}
+      >
+        <WidgetGrid min={230}>{severeCards}</WidgetGrid>
+      </Widget>
+    );
+
+  const menuRecord = actionsMenu?.record ?? null;
+  const menuWithdraw = menuRecord !== null && canWithdrawRecord(menuRecord, access, userEmail);
 
   const stuckPanel = (
     <Widget
@@ -185,106 +209,139 @@ export default function TodayScreen({ severityFirst = true, showBottlenecks = tr
                 sx={{
                   "& th": {
                     textAlign: "left",
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
+                    fontSize: 12,
+                    fontWeight: 700,
                     color: editorial.muted,
                     pb: 1,
-                    borderBottom: editorialHairline,
                   },
                 }}
               >
-                <Box component="th" sx={{ width: 118 }}>Reference</Box>
+                <Box component="th" sx={{ width: 150 }}>Reference</Box>
                 <Box component="th">Form</Box>
                 <Box component="th" sx={{ width: 170 }}>Waiting on</Box>
                 <Box component="th" sx={{ width: 86 }}>Layer</Box>
                 <Box component="th" sx={{ width: 130 }}>Age on layer</Box>
-                {showActions && <Box component="th" sx={{ width: 180, textAlign: "right !important" }}>Actions</Box>}
+                {showActions && <Box component="th" sx={{ width: 56 }} aria-label="Actions" />}
               </Box>
             </Box>
             <Box component="tbody">
-              {waiting.map((record) => (
-                <Box
-                  component="tr"
-                  key={recordKey(record)}
-                  sx={{
-                    "& td": { py: 1.25, borderBottom: editorialHairline, verticalAlign: "top" },
-                    "&:hover td": { backgroundColor: editorial.blueSoft },
-                  }}
-                >
-                  <Box component="td">
-                    <Box
-                      component="button"
-                      type="button"
-                      onClick={() => openDrawer(recordKey(record))}
-                      sx={{
-                        border: "none",
-                        background: "none",
-                        p: 0,
-                        font: "inherit",
-                        fontWeight: 700,
-                        color: editorial.pmwBlueDark,
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                    >
-                      {record.reference}
+              {waiting.map((record) => {
+                const canAct = canDelete || canWithdrawRecord(record, access, userEmail);
+                return (
+                  <Box
+                    component="tr"
+                    key={recordKey(record)}
+                    sx={{
+                      "& td": { py: 1.25, verticalAlign: "middle" },
+                      "&:hover td": { backgroundColor: editorial.blueSoft },
+                    }}
+                  >
+                    <Box component="td">
+                      <Box
+                        component="button"
+                        type="button"
+                        onClick={() => openDrawer(recordKey(record))}
+                        sx={{
+                          border: "none",
+                          background: "none",
+                          p: 0,
+                          font: "inherit",
+                          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                          color: editorial.pmwBlueDark,
+                          cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        {record.reference}
+                      </Box>
                     </Box>
-                  </Box>
-                  <Box component="td">
-                    <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>
-                    <Typography sx={{ fontSize: 12, color: editorial.muted }}>{record.subject}</Typography>
-                  </Box>
-                  <Box component="td">
-                    <Typography sx={{ fontSize: 13 }}>{record.currentAssignee}</Typography>
-                    <Typography sx={{ fontSize: 11, color: editorial.muted }}>{record.currentRole}</Typography>
-                  </Box>
-                  <Box component="td" sx={{ fontVariantNumeric: "tabular-nums" }}>{record.layerLabel}</Box>
-                  <Box component="td">
-                    <Typography sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
-                      {record.ageOnLayerLabel}
-                    </Typography>
-                    {record.slaNote && (
-                      <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
-                        {record.slaNote}
+                    <Box component="td" sx={{ verticalAlign: "top" }}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{record.formName}</Typography>
+                      <Typography sx={{ fontSize: 12, color: editorial.muted }}>{record.subject}</Typography>
+                    </Box>
+                    <Box component="td" sx={{ verticalAlign: "top" }}>
+                      <Typography sx={{ fontSize: 13 }}>{record.currentAssignee}</Typography>
+                      <Typography sx={{ fontSize: 11, color: editorial.muted }}>{record.currentRole}</Typography>
+                    </Box>
+                    <Box component="td" sx={{ fontVariantNumeric: "tabular-nums" }}>{record.layerLabel}</Box>
+                    <Box component="td" sx={{ verticalAlign: "top" }}>
+                      <Typography sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                        {record.ageOnLayerLabel}
                       </Typography>
-                    )}
-                  </Box>
-                  {showActions && (
-                    <Box component="td" sx={{ textAlign: "right" }}>
-                      <Stack direction="row" spacing={0.75} sx={{ justifyContent: "flex-end" }}>
-                        {canWithdrawRecord(record, access, userEmail) && (
-                          <Button
+                      {record.slaNote && (
+                        <Typography sx={{ fontSize: 11, color: record.overdue ? editorial.error : editorial.muted }}>
+                          {record.slaNote}
+                        </Typography>
+                      )}
+                    </Box>
+                    {showActions && (
+                      <Box component="td" sx={{ textAlign: "right" }}>
+                        {canAct && (
+                          <IconButton
                             size="small"
-                            variant="outlined"
-                            onClick={() => setWithdrawTarget(record)}
-                            sx={{ minHeight: 32, px: 1.25, whiteSpace: "nowrap" }}
-                          >
-                            {withdrawLabel(record, userEmail)}
-                          </Button>
-                        )}
-                        {canDelete && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setDeleteTarget(record)}
+                            aria-label={`Actions for ${record.reference}`}
+                            aria-haspopup="menu"
+                            onClick={(event: MouseEvent<HTMLElement>) =>
+                              setActionsMenu({ anchor: event.currentTarget, record })
+                            }
                             sx={{
-                              minHeight: 32,
-                              px: 1.25,
-                              color: editorial.error,
-                              borderColor: "rgba(198, 40, 40, 0.4)",
+                              width: 36,
+                              height: 36,
+                              color: editorial.muted,
+                              backgroundColor: editorial.neutralWash,
+                              "&:hover": { backgroundColor: editorial.blueWash, color: editorial.pmwBlueDark },
                             }}
                           >
-                            Delete
-                          </Button>
+                            <MoreHorizIcon fontSize="small" />
+                          </IconButton>
                         )}
-                      </Stack>
-                    </Box>
-                  )}
-                </Box>
-              ))}
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
             </Box>
           </Box>
+          <Menu
+            anchorEl={actionsMenu?.anchor ?? null}
+            open={actionsMenu !== null}
+            onClose={() => setActionsMenu(null)}
+            slotProps={{
+              paper: {
+                sx: {
+                  borderRadius: radius.base,
+                  minWidth: 200,
+                  boxShadow: "0 16px 40px rgba(22, 27, 36, 0.18)",
+                },
+              },
+            }}
+          >
+            {menuRecord && menuWithdraw && (
+              <MenuItem
+                onClick={() => {
+                  setWithdrawTarget(menuRecord);
+                  setActionsMenu(null);
+                }}
+              >
+                {withdrawLabel(menuRecord, userEmail)}
+              </MenuItem>
+            )}
+            {menuRecord && menuWithdraw && canDelete && <Divider />}
+            {menuRecord && canDelete && (
+              <MenuItem
+                onClick={() => {
+                  setDeleteTarget(menuRecord);
+                  setActionsMenu(null);
+                }}
+                sx={{ color: editorial.error }}
+              >
+                Delete…
+              </MenuItem>
+            )}
+          </Menu>
         </Box>
       )}
     </Widget>

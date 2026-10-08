@@ -73,12 +73,25 @@ export default function SmokingHeatmap({ heatmap, metric }: { heatmap: Heatmap; 
                       aria-label={cellSummary(cell)}
                       sx={{
                         height: 26,
-                        borderRadius: radius.sm,
-                        backgroundColor: stepColour(step),
+                        display: "grid",
+                        placeItems: "center",
+                        borderRadius: radius.full,
                         outlineOffset: 1,
                         "&:hover, &:focus-visible": { outline: `2px solid ${editorial.ink}` },
                       }}
-                    />
+                    >
+                      {/* A circle, sized and shaded by the value: a quiet slot is a small pale dot, a busy one a full disc. */}
+                      <Box
+                        aria-hidden
+                        sx={{
+                          width: step === 0 ? 8 : 10 + step * 2.5,
+                          height: step === 0 ? 8 : 10 + step * 2.5,
+                          borderRadius: radius.full,
+                          backgroundColor: stepColour(step),
+                          transition: "width 0.16s ease, height 0.16s ease",
+                        }}
+                      />
+                    </Box>
                   </Tooltip>
                 );
               })}
@@ -101,7 +114,7 @@ export default function SmokingHeatmap({ heatmap, metric }: { heatmap: Heatmap; 
         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }} aria-hidden>
           <Typography sx={{ fontSize: 10.5, color: editorial.softMuted, mr: 0.25 }}>Fewer</Typography>
           {[0, 1, 2, 3, 4, 5].map((step) => (
-            <Box key={step} sx={{ width: 14, height: 14, borderRadius: radius.sm, backgroundColor: stepColour(step) }} />
+            <Box key={step} sx={{ width: 14, height: 14, borderRadius: radius.full, backgroundColor: stepColour(step) }} />
           ))}
           <Typography sx={{ fontSize: 10.5, color: editorial.softMuted, ml: 0.25 }}>More</Typography>
         </Stack>

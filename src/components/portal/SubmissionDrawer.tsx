@@ -3,9 +3,12 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Divider,
   Drawer,
   IconButton,
+  ListItemIcon,
   ListItemText,
+  ListSubheader,
   Menu,
   MenuItem,
   Stack,
@@ -14,7 +17,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ChevronDown as ArrowDropDownIcon, Ban as BlockIcon, X as CloseIcon, Trash2 as DeleteForeverIcon } from "../ui/Icons";
+import { ChevronDown as ArrowDropDownIcon, Ban as BlockIcon, Check as CheckIcon, X as CloseIcon, Trash2 as DeleteForeverIcon } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import ReferenceTag from "../ReferenceTag";
 import { usePortal } from "../../contexts/PortalContext";
@@ -32,6 +35,7 @@ import {
   recordAttachments,
 } from "../../utils/portalPdf";
 import { recordKey } from "../../utils/portalRecords";
+import { DEFAULT_PDF_STYLE, PDF_STYLE_LABELS, type PdfStyle } from "../../utils/pdfStyle";
 import { SeverityPill, StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
 import DeleteRecordDialog from "./DeleteRecordDialog";
@@ -189,12 +193,17 @@ export default function SubmissionDrawer() {
   // Administrators only: it fetches every attached file, which can be large,
   // and the plain download already links each one.
   const canDownloadWithAttachments = Boolean(record) && access.isAdmin && Boolean(spClient);
+  // Every PDF is drawn in the classic layout unless an administrator picks the
+  // new one here; the pick covers this drawer's downloads and rebuilds only.
+  const [pdfStyle, setPdfStyle] = useState<PdfStyle>(DEFAULT_PDF_STYLE);
+  const canChooseStyle = Boolean(record) && access.isAdmin;
+  const styleFor: PdfStyle = canChooseStyle ? pdfStyle : DEFAULT_PDF_STYLE;
 
   const handlePdf = async () => {
     if (!record || pdfBusy) return;
     setPdfBusy("download");
     try {
-      await downloadRecordPdf(record, formSurveyJson, spClient);
+      await downloadRecordPdf(record, formSurveyJson, spClient, styleFor);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not generate the PDF.");
     } finally {
@@ -206,7 +215,7 @@ export default function SubmissionDrawer() {
     if (!record || pdfBusy || !spClient) return;
     setPdfBusy("attachments");
     try {
-      toast(attachmentDownloadMessage(await downloadRecordPdfWithAttachments(record, formSurveyJson, spClient)));
+      toast(attachmentDownloadMessage(await downloadRecordPdfWithAttachments(record, formSurveyJson, spClient, styleFor)));
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not build the PDF with attachments.");
     } finally {
@@ -218,7 +227,7 @@ export default function SubmissionDrawer() {
     if (!record || pdfBusy) return;
     setPdfBusy("regenerate");
     try {
-      const result = await regenerateSubmissionPdf(actor, record, formSurveyJson);
+      const result = await regenerateSubmissionPdf(actor, record, formSurveyJson, styleFor);
       applyPatch(record, result.fields);
       appendAudit(result.audit);
       toast(result.toast);
@@ -391,9 +400,9 @@ export default function SubmissionDrawer() {
                     "Download" should do. */}
                 <ButtonGroup variant={hasActions ? "text" : "outlined"} sx={{ alignItems: "stretch" }}>
                   <Button onClick={() => void handlePdf()} disabled={Boolean(pdfBusy)} sx={{ minHeight: 40 }}>
-                    {pdfBusy === "download" || pdfBusy === "attachments" ? "Preparing…" : "Download PDF"}
+                    {pdfBusy === "download" || pdfBusy === "attachments" ? "Preparing…" : styleFor === "soft" ? "Download PDF · new design" : "Download PDF"}
                   </Button>
-                  {(canRegenerate || canDownloadWithAttachments) && (
+                  {(canRegenerate || canDownloadWithAttachments || canChooseStyle) && (
                     <Button
                       aria-label="Other PDF actions"
                       aria-haspopup="menu"
@@ -491,6 +500,33 @@ export default function SubmissionDrawer() {
             />
           </MenuItem>
         )}
+        {canChooseStyle && [
+          <Divider key="style-divider" />,
+          <ListSubheader key="style-heading" sx={{ fontSize: 12, fontWeight: 700, lineHeight: "32px", bgcolor: "transparent" }}>
+            PDF design
+          </ListSubheader>,
+          ...(["classic", "soft"] as const).map((style) => (
+            <MenuItem
+              key={style}
+              selected={pdfStyle === style}
+              onClick={() => setPdfStyle(style)}
+              role="menuitemradio"
+              aria-checked={pdfStyle === style}
+            >
+              <ListItemIcon sx={{ minWidth: 28 }}>
+                {pdfStyle === style ? <CheckIcon fontSize="small" /> : null}
+              </ListItemIcon>
+              <ListItemText
+                primary={style === DEFAULT_PDF_STYLE ? `${PDF_STYLE_LABELS[style].title} (default)` : PDF_STYLE_LABELS[style].title}
+                secondary={PDF_STYLE_LABELS[style].detail}
+                slotProps={{
+                  primary: { sx: { fontSize: 13.5, fontWeight: 700 } },
+                  secondary: { sx: { fontSize: 11.5, whiteSpace: "normal" } },
+                }}
+              />
+            </MenuItem>
+          )),
+        ]}
       </Menu>
 
       <WithdrawDialog

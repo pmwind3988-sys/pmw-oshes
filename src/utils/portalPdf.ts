@@ -1,6 +1,7 @@
 import { COMPANY } from "../config/company";
 import type { LayerStatus, PortalRecord, SharePointClient, SurveyJson } from "../types";
 import type { PdfFormData, PdfLayerResult } from "./FormPdfDocument";
+import { DEFAULT_PDF_STYLE, pdfDocumentFor, preparePdfStyle, type PdfStyle } from "./pdfStyle";
 import { PDF_LAYER_AWAITING, PDF_LAYER_NOT_REACHED } from "./pdfLayerProgress";
 import { layerStatusLabel, normalizeLayerStatus } from "./statusConstants";
 import { collectRecordAttachments, type RecordAttachment } from "./fileAttachments";
@@ -142,12 +143,14 @@ export async function downloadRecordPdf(
   record: PortalRecord,
   surveyJson: SurveyJson | null,
   spClient?: SharePointClient,
+  style: PdfStyle = DEFAULT_PDF_STYLE,
 ): Promise<void> {
   const { pdf } = await import("@react-pdf/renderer");
-  const { default: FormPdfDocument } = await import("./FormPdfDocument");
+  const FormPdfDocument = await pdfDocumentFor(style);
   const { createElement } = await import("react");
 
   const data = recordPdfData(record, surveyJson);
+  await preparePdfStyle(data, style);
 
   if (spClient) {
     try {
@@ -189,14 +192,16 @@ export async function downloadRecordPdfWithAttachments(
   record: PortalRecord,
   surveyJson: SurveyJson | null,
   spClient: SharePointClient,
+  style: PdfStyle = DEFAULT_PDF_STYLE,
 ): Promise<AttachmentDownloadSummary> {
   const { pdf } = await import("@react-pdf/renderer");
-  const { default: FormPdfDocument } = await import("./FormPdfDocument");
+  const FormPdfDocument = await pdfDocumentFor(style);
   const { createElement } = await import("react");
   const { hydratePdfImages } = await import("./generateFormPdf");
 
   const token = await spClient.acquireToken();
   const data: PdfFormData = { ...recordPdfData(record, surveyJson), attachmentsAppended: true };
+  await preparePdfStyle(data, style);
   const attachments = collectRecordAttachments(data.surveyJson, data.responseData);
   try {
     await hydratePdfImages(token, data);
@@ -280,6 +285,7 @@ export async function regenerateRecordPdf(
   record: PortalRecord,
   surveyJson: SurveyJson | null,
   spClient: SharePointClient,
+  style: PdfStyle = DEFAULT_PDF_STYLE,
 ): Promise<string> {
   const itemId = Number(record.itemId);
   if (!Number.isFinite(itemId) || itemId <= 0) {
@@ -292,5 +298,6 @@ export async function regenerateRecordPdf(
   return generateAndStorePdf(token, record.listTitle, itemId, recordPdfData(record, surveyJson), {
     ...(record.submission.pdfUrl ? { replaceExistingPdfUrl: record.submission.pdfUrl } : {}),
     onGeneratedBlob: (blob) => saveBlob(blob, `${record.reference}.pdf`),
+    style,
   });
 }

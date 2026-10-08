@@ -5,7 +5,6 @@ import { editorial } from "../../theme/editorial";
 import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import {
-  CtaButton,
   PageHeader,
   QuietButton,
   SectionLabel,
@@ -68,10 +67,11 @@ function FormCard({
         textAlign: "left",
         font: "inherit",
         color: "inherit",
-        p: { xs: 1.75, sm: 2 },
-        borderColor: urgent ? editorial.error : editorial.border,
+        p: { xs: 2, sm: 2.25 },
+        border: "none",
+        borderRadius: "24px",
+        backgroundColor: editorial.panel,
         cursor: "pointer",
-        "&:hover": { ...liftSx["&:hover"], borderColor: urgent ? editorial.error : editorial.pmwBlue },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "center", width: "100%", mb: 0.75, minWidth: 0 }}>
@@ -80,19 +80,24 @@ function FormCard({
           <Box
             component="span"
             sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.6,
               flex: "none",
               ml: "auto",
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              px: 0.8,
-              py: 0.3,
+              fontSize: 12,
+              fontWeight: 700,
+              px: 1,
+              py: 0.25,
               borderRadius: radius.full,
-              color: editorial.onStatus,
-              backgroundColor: editorial.errorFill,
+              color: editorial.error,
+              backgroundColor: editorial.errorWash,
             }}
           >
+            <Box
+              aria-hidden="true"
+              sx={{ width: 6, height: 6, borderRadius: radius.full, backgroundColor: editorial.errorFill }}
+            />
             {waiting} on you
           </Box>
         )}
@@ -114,7 +119,6 @@ function FormCard({
           mt: "auto",
           pt: 1.5,
           width: "100%",
-          borderTop: `1px solid ${editorial.border}`,
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr)) auto",
           alignItems: "end",
@@ -131,30 +135,19 @@ function FormCard({
             sx={{
               minWidth: 0,
               pl: index === 0 ? 0 : 1.25,
-              borderLeft: index === 0 ? "none" : `1px solid ${editorial.border}`,
             }}
           >
             <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
               {stat.value}
             </Typography>
-            <Typography
-              sx={{
-                fontSize: 9.5,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: editorial.muted,
-                mt: 0.4,
-              }}
-              noWrap
-            >
+            <Typography sx={{ fontSize: 12, fontWeight: 600, color: editorial.muted, mt: 0.4 }} noWrap>
               {stat.label}
             </Typography>
           </Box>
         ))}
         {/* Not a <button>: the whole card is already the button, and nesting one
             inside another is invalid. This is the affordance, not the target. */}
-        <Typography sx={{ pl: 1.5, fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark }}>
+        <Typography sx={{ pl: 1.5, fontSize: 13, fontWeight: 700, color: editorial.pmwBlueDark }}>
           Open →
         </Typography>
       </Box>
@@ -187,11 +180,13 @@ function LinkTile({
         textAlign: "left",
         font: "inherit",
         color: "inherit",
-        p: 1.5,
-        borderRadius: radius.base,
+        p: 1.75,
+        border: "none",
+        borderRadius: "24px",
+        backgroundColor: editorial.panel,
         cursor: "pointer",
-        transition: "border-color 0.16s ease, background-color 0.16s ease",
-        "&:hover": { borderColor: editorial.pmwBlue, backgroundColor: editorial.blueWash },
+        transition: "background-color 0.16s ease",
+        "&:hover": { backgroundColor: editorial.blueSoft },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", justifyContent: "space-between" }}>
@@ -346,7 +341,11 @@ export default function HomeScreen() {
         meta={formatTodayDate()}
         actions={
           has("file") && access.canFile ? (
-            <Button variant="outlined" onClick={() => setScreen("file")} sx={{ minHeight: 40 }}>
+            <Button
+              variant="text"
+              onClick={() => setScreen("file")}
+              sx={{ minHeight: 40, px: 1.5, fontWeight: 700, color: editorial.pmwBlueDark, borderRadius: radius.full, "&:hover": { backgroundColor: editorial.blueWash } }}
+            >
               File a form
             </Button>
           ) : undefined
@@ -421,9 +420,21 @@ export default function HomeScreen() {
                     timestamp={record.waitNote || `waiting ${record.ageOnLayerLabel}`}
                     onOpen={() => openDrawer(recordKey(record))}
                     action={
-                      <CtaButton size="small" onClick={() => openDrawer(recordKey(record))}>
+                      <Button
+                        size="small"
+                        onClick={() => openDrawer(recordKey(record))}
+                        sx={{
+                          minHeight: 32,
+                          px: 1.75,
+                          borderRadius: radius.full,
+                          fontWeight: 700,
+                          backgroundColor: editorial.pmwBlueSoft,
+                          color: editorial.pmwBlueDark,
+                          "&:hover": { backgroundColor: editorial.blueWash },
+                        }}
+                      >
                         Review
-                      </CtaButton>
+                      </Button>
                     }
                   />
                 ))}

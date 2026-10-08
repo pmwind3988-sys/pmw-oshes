@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { ArrowLeft as ArrowBackIcon } from "../../components/ui/Icons";
 import { editorial } from "../../theme/editorial";
-import { liftSx, panelSx, radius } from "../../theme/surfaces";
+import { radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import { PageHeader, TaskRow, Widget, WidgetCount, WidgetEmpty, WidgetGrid } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
@@ -45,7 +45,6 @@ function Door({
   onOpen: () => void;
 }) {
   const disabled = Boolean(disabledReason);
-  const accent = tone === "alert" ? editorial.error : editorial.pmwBlue;
 
   return (
     <Box
@@ -54,7 +53,6 @@ function Door({
       disabled={disabled}
       onClick={onOpen}
       sx={{
-        ...panelSx,
         display: "flex",
         flexDirection: "column",
         width: "100%",
@@ -63,28 +61,25 @@ function Door({
         textAlign: "left",
         font: "inherit",
         color: "inherit",
-        p: { xs: 1.75, sm: 2 },
-        borderColor: primary ? accent : editorial.border,
+        p: { xs: 2, sm: 2.25 },
+        border: "none",
+        borderRadius: "24px",
         backgroundColor: primary ? editorial.blueWash : editorial.panel,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.62 : 1,
-        transition: liftSx.transition,
-        "&:hover:not(:disabled)": { ...liftSx["&:hover"], borderColor: accent },
-        "&:active:not(:disabled)": { transform: "translateY(0)" },
-        "@media (prefers-reduced-motion: reduce)": {
-          transition: "none",
-          "&:hover:not(:disabled)": { transform: "none" },
-        },
+        transition: "background-color 0.16s ease, box-shadow 0.16s ease",
+        "&:hover:not(:disabled)": { boxShadow: "0 1px 3px rgba(22, 27, 36, 0.08)", backgroundColor: primary ? editorial.pmwBlueSoft : editorial.blueSoft },
+        "&:active:not(:disabled)": { transform: "scale(0.985)" },
+        "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
+        "@media (prefers-reduced-motion: reduce)": { transition: "none" },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", justifyContent: "space-between", width: "100%" }}>
         <Typography
           sx={{
-            fontSize: 10.5,
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: primary ? editorial.pmwBlueDark : editorial.softMuted,
+            fontSize: 12,
+            fontWeight: 700,
+            color: primary ? editorial.pmwBlueDark : editorial.muted,
           }}
         >
           {eyebrow}
@@ -113,7 +108,7 @@ function Door({
       </Typography>
 
       {!disabled && (
-        <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: editorial.pmwBlueDark, mt: "auto", pt: 1.25 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: editorial.pmwBlueDark, mt: "auto", pt: 1.25 }}>
           Open →
         </Typography>
       )}
@@ -123,9 +118,9 @@ function Door({
 
 function Badge({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "blue" | "purple" }) {
   const colours = {
-    muted: { color: editorial.muted, backgroundColor: editorial.paper, borderColor: editorial.border },
-    blue: { color: editorial.pmwBlueDark, backgroundColor: editorial.blueWash, borderColor: editorial.pmwBlueSoft },
-    purple: { color: editorial.pmwPurpleDark, backgroundColor: editorial.pmwPurpleSoft, borderColor: editorial.pmwPurpleSoft },
+    muted: { color: editorial.muted, backgroundColor: editorial.neutralWash },
+    blue: { color: editorial.pmwBlueDark, backgroundColor: editorial.blueWash },
+    purple: { color: editorial.pmwPurpleDark, backgroundColor: editorial.pmwPurpleSoft },
   }[tone];
 
   return (
@@ -140,7 +135,6 @@ function Badge({ children, tone = "muted" }: { children: React.ReactNode; tone?:
         px: 0.9,
         py: 0.3,
         borderRadius: radius.full,
-        border: "1px solid",
         whiteSpace: "nowrap",
       }}
     >

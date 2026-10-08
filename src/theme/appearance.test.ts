@@ -118,12 +118,12 @@ describe("normalizeAppearance", () => {
     expect(normalizeAppearance(null)).toEqual({
       colorThemeId: "pmw",
       contrastThemeId: "paper",
-      fontThemeId: "inter",
+      fontThemeId: "figtree",
     });
     expect(normalizeAppearance({ colorThemeId: "chartreuse", contrastThemeId: 7 })).toEqual({
       colorThemeId: "pmw",
       contrastThemeId: "paper",
-      fontThemeId: "inter",
+      fontThemeId: "figtree",
     });
   });
 

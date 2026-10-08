@@ -1,8 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Box, IconButton, Stack, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from "../ui/Icons";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { panelSx } from "../../theme/surfaces";
+import { editorial } from "../../theme/editorial";
 
 /** Rows per page: a phone gets a screen's worth, not a scroll through the week. */
 const PAGE_SIZE = { phone: 10, wide: 25 } as const;
@@ -93,7 +92,7 @@ export function Pager({ paged, noun }: { paged: Paged<unknown>; noun: string }) 
 /** A phone's stand-in for a wide table: one short card per row, in one frame. */
 export function CardList({ children }: { children: ReactNode }) {
   return (
-    <Box component="ul" sx={{ ...panelSx, listStyle: "none", m: 0, p: 0, overflow: "hidden" }}>
+    <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0.75, overflow: "hidden", borderRadius: "24px", backgroundColor: editorial.paper }}>
       {children}
     </Box>
   );
@@ -115,7 +114,17 @@ export function CardRow({
   actions?: ReactNode;
 }) {
   return (
-    <Box component="li" sx={{ px: 1.75, py: 1.25, "& + &": { borderTop: editorialHairline } }}>
+    <Box
+      component="li"
+      sx={{
+        px: 1.75,
+        py: 1.25,
+        borderRadius: "16px",
+        transition: "background-color 0.16s ease",
+        "&:hover": { backgroundColor: editorial.blueSoft },
+        "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+      }}
+    >
       <Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", gap: 1 }}>
         <Typography sx={{ fontSize: 14, fontWeight: 700, color: editorial.ink, minWidth: 0, overflowWrap: "anywhere" }}>{title}</Typography>
         {badge && <Box sx={{ flex: "none" }}>{badge}</Box>}

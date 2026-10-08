@@ -117,7 +117,7 @@ const drawCheck = keyframes`
  * A success that lands: the disc pops in, then the tick draws itself across it.
  * With reduced motion it simply appears, already drawn.
  */
-function SuccessCheck({ fill, size = 72 }: { fill: string; size?: number }) {
+function SuccessCheck({ fill, size = 72, bare = false }: { fill: string; size?: number; bare?: boolean }) {
   return (
     <Box
       aria-hidden="true"
@@ -127,9 +127,9 @@ function SuccessCheck({ fill, size = 72 }: { fill: string; size?: number }) {
         width: size,
         height: size,
         borderRadius: radius.full,
-        backgroundColor: fill,
-        color: editorial.onStatus,
-        boxShadow: `0 6px 16px color-mix(in srgb, ${fill} 28%, transparent)`,
+        backgroundColor: bare ? "transparent" : fill,
+        color: bare ? fill : editorial.onStatus,
+        boxShadow: bare ? "none" : `0 6px 16px color-mix(in srgb, ${fill} 28%, transparent)`,
         animation: `${popIn} 420ms cubic-bezier(0.16, 1, 0.3, 1) both`,
         "& polyline": {
           strokeDasharray: 24,
@@ -142,7 +142,7 @@ function SuccessCheck({ fill, size = 72 }: { fill: string; size?: number }) {
         },
       }}
     >
-      <svg width={size / 2} height={size / 2} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      <svg width={bare ? size * 0.6 : size / 2} height={bare ? size * 0.6 : size / 2} viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" focusable="false">
         <polyline points="20 6 9 17 4 12" />
       </svg>
@@ -151,7 +151,7 @@ function SuccessCheck({ fill, size = 72 }: { fill: string; size?: number }) {
 }
 
 /** The primary action's size: a glove-sized target, per DESIGN.md's public QR flow. */
-const TAP = { minHeight: 48 } as const;
+const TAP = { minHeight: 48, borderRadius: radius.full } as const;
 
 interface ProfileDraft {
   fullName: string;
@@ -465,10 +465,10 @@ export default function SmokingScanPage() {
         mx: { xs: -1, sm: -1.5 },
       }}
     >
-      <Button onClick={editProfile} startIcon={<Pencil size={16} />} sx={{ minHeight: 44, px: 1.5, color: editorial.pmwBlueDark }}>
+      <Button onClick={editProfile} startIcon={<Pencil size={16} />} sx={{ minHeight: 44, px: 1.5, borderRadius: radius.full, color: editorial.pmwBlueDark }}>
         Edit my profile
       </Button>
-      <Button onClick={signOut} sx={{ minHeight: 44, px: 1.5, color: editorial.muted }}>
+      <Button onClick={signOut} sx={{ minHeight: 44, px: 1.5, borderRadius: radius.full, color: editorial.muted }}>
         Not you? Sign out
       </Button>
     </Stack>
@@ -514,6 +514,8 @@ export default function SmokingScanPage() {
           key={stage}
           sx={{
             ...panelSx,
+            borderRadius: "32px",
+            overflow: stage === "result" ? "hidden" : undefined,
             boxShadow: editorialShadow,
             p: { xs: 2.5, sm: 3.5 },
             animation: `${riseIn} 180ms cubic-bezier(0.16, 1, 0.3, 1)`,
@@ -535,12 +537,12 @@ export default function SmokingScanPage() {
                   : "Sign in once on this phone, then scan the QR poster at your smoking area."}
               </Lede>
               <Stack sx={{ alignItems: "center", gap: 2, mt: 3 }}>
-                {GOOGLE_CLIENT_ID ? (
-                  <Box ref={googleButton} sx={{ minHeight: 44, display: "flex", justifyContent: "center", width: "100%" }} />
-                ) : (
-                  <Alert severity="warning" sx={{ width: "100%" }}>Google sign-in is not set up yet. Tell OSHES.</Alert>
+                {GOOGLE_CLIENT_ID && (
+                  <>
+                    <Box ref={googleButton} sx={{ minHeight: 44, display: "flex", justifyContent: "center", width: "100%" }} />
+                    <Divider flexItem sx={{ fontSize: 13, color: editorial.muted }}>or</Divider>
+                  </>
                 )}
-                <Divider flexItem sx={{ fontSize: 13, color: editorial.muted }}>or</Divider>
                 <Button
                   variant="outlined"
                   onClick={() => void signInMicrosoft()}
@@ -550,6 +552,7 @@ export default function SmokingScanPage() {
                     ...TAP,
                     width: "100%",
                     maxWidth: 300,
+                    borderRadius: radius.full,
                     color: editorial.ink,
                     borderColor: editorial.border,
                     backgroundColor: editorial.panel,
@@ -558,6 +561,26 @@ export default function SmokingScanPage() {
                 >
                   {microsoftBusy ? "Waiting for Microsoft…" : "Sign in with PMW Microsoft"}
                 </Button>
+                {!GOOGLE_CLIENT_ID && (
+                  <Stack
+                    role="note"
+                    sx={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 1,
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: radius.full,
+                      backgroundColor: editorial.warningWash,
+                      color: editorial.warning,
+                    }}
+                  >
+                    <AlertTriangle size={14} style={{ flex: "none" }} />
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, color: "inherit", lineHeight: 1.4 }}>
+                      Google sign-in is not set up yet. Tell OSHES.
+                    </Typography>
+                  </Stack>
+                )}
               </Stack>
             </>
           )}
@@ -669,36 +692,41 @@ export default function SmokingScanPage() {
                   textAlign: "center",
                   gap: 1.5,
                   px: 2,
-                  py: 3.5,
-                  borderRadius: radius.base,
+                  pt: { xs: 4, sm: 5 },
+                  pb: { xs: 3.5, sm: 4 },
+                  mx: { xs: -2.5, sm: -3.5 },
+                  mt: { xs: -2.5, sm: -3.5 },
                   backgroundColor: tone.wash,
                 }}
               >
-                {!blocked && !replayed && (view.tone === "in" || view.tone === "out") ? (
-                  <SuccessCheck fill={tone.fill} />
-                ) : (
-                  <Box
-                    sx={{
-                      display: "grid",
-                      placeItems: "center",
-                      width: 64,
-                      height: 64,
-                      borderRadius: radius.full,
-                      backgroundColor: tone.fill,
-                      color: editorial.onStatus,
-                      boxShadow: `0 6px 16px color-mix(in srgb, ${tone.fill} 28%, transparent)`,
-                    }}
-                  >
-                    <ToneIcon size={30} />
-                  </Box>
-                )}
+                <Box
+                  sx={{
+                    display: "grid",
+                    placeItems: "center",
+                    width: 184,
+                    height: 184,
+                    maxWidth: "60vw",
+                    maxHeight: "60vw",
+                    aspectRatio: "1 / 1",
+                    borderRadius: radius.full,
+                    backgroundColor: editorial.panel,
+                    color: tone.ink,
+                    boxShadow: `0 10px 30px color-mix(in srgb, ${tone.fill} 18%, transparent)`,
+                  }}
+                >
+                  {!blocked && !replayed && (view.tone === "in" || view.tone === "out") ? (
+                    <SuccessCheck fill={tone.fill} size={120} bare />
+                  ) : (
+                    <ToneIcon size={72} />
+                  )}
+                </Box>
                 <Heading
                   sx={{
-                    fontSize: view.time ? 30 : 26,
+                    fontSize: 34,
                     fontWeight: 800,
                     lineHeight: 1.1,
                     color: tone.ink,
-                    mt: 0.5,
+                    mt: 1,
                   }}
                 >
                   {view.headline}
@@ -715,7 +743,7 @@ export default function SmokingScanPage() {
               </Stack>
 
               {view.hint && (
-                <Stack sx={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 1, mt: 2, color: editorial.muted }}>
+                <Stack sx={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 1, mt: 3, color: editorial.muted }}>
                   <QrCode size={16} style={{ flex: "none" }} />
                   <Typography sx={{ fontSize: 14, color: "inherit" }}>{view.hint}</Typography>
                 </Stack>

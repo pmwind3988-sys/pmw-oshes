@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Box, Button, Divider, Stack, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { panelSx } from "../../theme/surfaces";
+import { Box, Stack, Typography } from "@mui/material";
 import { OSHES_APP } from "../../config/oshes";
 import { DEV_ROLE_OPTIONS, isDevRoleSwitchEnabled, readDevRole, writeDevRole } from "../../utils/devRoleOverride";
 import type { PortalRole } from "../../types";
 import Logo from "../Logo";
+import { Check as CheckIcon } from "../ui/Icons";
 import IdleAnimationPanel from "./IdleAnimationPanel";
+import { authPageSx, authPill, authSoft, AUTH_FONT } from "./LoadingScreen";
+import { fadeInUp } from "../../theme";
 
 interface SignInScreenProps {
   onLogin: () => void;
@@ -15,7 +16,7 @@ interface SignInScreenProps {
 /** Microsoft's four-square mark. Their branding guidance wants it on the button that starts their sign-in. */
 function MicrosoftMark() {
   return (
-    <Box component="svg" viewBox="0 0 20 20" aria-hidden focusable="false" sx={{ width: 18, height: 18, flexShrink: 0 }}>
+    <Box component="svg" viewBox="0 0 20 20" aria-hidden focusable="false" sx={{ width: 15, height: 15, flexShrink: 0 }}>
       <rect x="0" y="0" width="9" height="9" fill="#F25022" />
       <rect x="11" y="0" width="9" height="9" fill="#7FBA00" />
       <rect x="0" y="11" width="9" height="9" fill="#00A4EF" />
@@ -25,15 +26,9 @@ function MicrosoftMark() {
 }
 
 /**
- * One door in, presented as a single centred card: the mark, the product name,
- * and the Microsoft button. The public report and tracking flows are reached by
- * their own links off the poster, so they are no longer offered here — this
- * screen is only ever seen by someone who has an account to sign in with.
- *
- * The idle animation is the left column on a wide screen. A phone has no room
- * for a column, so rather than drop it the animation becomes a backdrop behind
- * the card: held back to a wash so it reads as texture and never as something
- * to look at, with the card opaque over it.
+ * The sign-in screen: on a wide screen the story and the floating orbs sit on
+ * the left, and a white card holds the one Microsoft button on the right. On a
+ * phone the same two blocks stack, story first.
  *
  * This is not a password form. Sign-in goes through the existing MSAL redirect;
  * the demo-account list from the prototype becomes a dev-only role switcher.
@@ -48,119 +43,164 @@ export default function SignInScreen({ onLogin }: SignInScreenProps) {
     setDevRole(next);
   };
 
+  const currentRole = DEV_ROLE_OPTIONS.find((option) => option.role === devRole) ?? null;
+
   return (
-    <Box
-      sx={{
-        position: "relative",
-        minHeight: "100dvh",
-        display: "grid",
-        gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(0, 1fr)" },
-        background: editorial.panel,
-        color: editorial.ink,
-      }}
-    >
-      {/* Phone only: the same animation, dimmed to a backdrop rather than lost. */}
+    <Box sx={{ ...authPageSx, display: "block", minHeight: "100dvh", p: 0 }}>
       <Box
-        aria-hidden
+        component="main"
         sx={{
-          display: { xs: "flex", md: "none" },
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          opacity: 0.42,
-          zIndex: 0,
-        }}
-      >
-        <IdleAnimationPanel sx={{ my: 0 }} />
-      </Box>
-
-      <Box
-        sx={{
-          p: { xs: 3, md: 5 },
-          display: { xs: "none", md: "flex" },
-          flexDirection: "column",
-          justifyContent: "space-between",
-          borderRight: editorialHairline,
-        }}
-      >
-        <Box>
-          <Typography sx={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>PMW OSHES</Typography>
-          <Typography
-            sx={{
-              fontSize: 10,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: editorial.muted,
-              fontWeight: 700,
-            }}
-          >
-            Occupational Safety · Health · Environmental Services
-          </Typography>
-        </Box>
-
-        <IdleAnimationPanel />
-
-        <Typography sx={{ fontSize: 11, color: editorial.muted }}>
-          {OSHES_APP.name} · sign in with your Microsoft 365 work account
-        </Typography>
-      </Box>
-
-      <Box
-        sx={{
-          position: "relative",
-          zIndex: 1,
-          display: "flex",
+          minHeight: "100dvh",
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) minmax(0, 440px)" },
           alignItems: "center",
-          justifyContent: "center",
-          p: { xs: 3, md: 5 },
+          gap: { xs: 4, md: 6 },
+          maxWidth: 1200,
+          mx: "auto",
+          px: { xs: 2.5, md: 5 },
+          py: { xs: 4, md: 6 },
         }}
       >
-        <Box
-          sx={{
-            ...panelSx,
-            width: "100%",
-            maxWidth: 420,
-            p: { xs: 3, sm: 4 },
-            textAlign: "center",
-            // Only the phone needs the lift: there the card floats over the
-            // animation, and a hairline alone leaves it sitting in the texture.
-            boxShadow: {
-              xs: `0 24px 60px color-mix(in srgb, ${editorial.ink} 18%, transparent)`,
-              md: "none",
-            },
-          }}
-        >
-          <Stack spacing={2} sx={{ alignItems: "center" }}>
-            <Logo size={48} />
-
-            <Box>
-              <Typography component="h1" sx={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>
+        <Stack spacing={{ xs: 3, md: 3.5 }} sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            <Logo size={44} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontFamily: AUTH_FONT, fontSize: 18, fontWeight: 800, lineHeight: 1.2 }}>
                 {OSHES_APP.name}
               </Typography>
-              <Typography variant="body2" sx={{ mt: 1, color: editorial.muted }}>
-                Sign in to reach your submissions, approvals, and the forms assigned to you.
+              <Typography sx={{ fontFamily: AUTH_FONT, fontSize: 15, color: authSoft.muted, lineHeight: 1.4 }}>
+                Occupational safety, health &amp; environmental services
               </Typography>
             </Box>
-
-            <Button
-              variant="contained"
-              onClick={onLogin}
-              startIcon={<MicrosoftMark />}
-              sx={{ minHeight: 48, width: "100%" }}
-            >
-              Continue with Microsoft 365
-            </Button>
           </Stack>
 
+          <Box>
+            <Typography
+              component="h1"
+              sx={{
+                fontFamily: AUTH_FONT,
+                fontSize: { xs: 40, md: 56 },
+                fontWeight: 800,
+                lineHeight: 1.04,
+                letterSpacing: "-0.025em",
+                m: 0,
+              }}
+            >
+              Report it, sign it,
+              <br />
+              see it through.
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: AUTH_FONT,
+                fontSize: 19,
+                lineHeight: 1.55,
+                color: authSoft.muted,
+                mt: 2.5,
+                maxWidth: 480,
+              }}
+            >
+              Every safety form at PMW in one place. File a permit in a minute, approve from your phone, and always know
+              where a record stands.
+            </Typography>
+          </Box>
+
+          <IdleAnimationPanel />
+        </Stack>
+
+        <Box
+          sx={{
+            width: "100%",
+            maxWidth: 440,
+            justifySelf: { xs: "stretch", md: "end" },
+            backgroundColor: authSoft.surface,
+            borderRadius: "32px",
+            p: { xs: 3.5, sm: 4.5 },
+            boxShadow: authSoft.cardShadow,
+            fontFamily: AUTH_FONT,
+            animation: `${fadeInUp} 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+          }}
+        >
+          <Box
+            sx={{
+              width: 64,
+              height: 64,
+              borderRadius: 999,
+              overflow: "hidden",
+              mb: 2.5,
+            }}
+          >
+            <Logo size={64} />
+          </Box>
+
+          <Typography component="h2" sx={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1.2, m: 0, mb: 1 }}>
+            Welcome back
+          </Typography>
+          <Typography sx={{ fontSize: 16, lineHeight: 1.5, color: authSoft.muted, mb: 3.25 }}>
+            Sign in with your PMW work account to see your forms, approvals and records.
+          </Typography>
+
+          <Box
+            component="button"
+            type="button"
+            onClick={onLogin}
+            sx={{
+              ...authPill.filled,
+              width: "100%",
+              minHeight: 56,
+              fontSize: 17,
+              border: 0,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1.5,
+            }}
+          >
+            <Box
+              component="span"
+              sx={{
+                width: 30,
+                height: 30,
+                borderRadius: 999,
+                backgroundColor: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <MicrosoftMark />
+            </Box>
+            Continue with Microsoft 365
+          </Box>
+
           {showDevRoles && (
-            <Stack spacing={1.5} sx={{ mt: 2.5, textAlign: "left" }}>
-              <Divider sx={{ borderColor: editorial.border }} />
-              <Typography
-                sx={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.12em", color: editorial.muted, fontWeight: 800 }}
+            <Box sx={{ mt: 3.5, p: 2.25, borderRadius: "24px", backgroundColor: authSoft.soft, textAlign: "left" }}>
+              <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Preview as</Typography>
+                <Box
+                  component="span"
+                  sx={{
+                    px: 1.25,
+                    py: 0.4,
+                    borderRadius: 999,
+                    backgroundColor: authSoft.amberContainer,
+                    color: authSoft.onAmberContainer,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  Dev only
+                </Box>
+              </Stack>
+
+              <Stack
+                component="div"
+                direction="row"
+                useFlexGap
+                sx={{ flexWrap: "wrap", gap: 1 }}
               >
-                Dev only — preview a role view
-              </Typography>
-              <Stack>
                 {DEV_ROLE_OPTIONS.map((option) => {
                   const active = devRole === option.role;
                   return (
@@ -168,44 +208,69 @@ export default function SignInScreen({ onLogin }: SignInScreenProps) {
                       key={option.role}
                       component="button"
                       type="button"
+                      aria-pressed={active}
+                      title={option.description}
                       onClick={() => pickDevRole(option.role)}
                       sx={{
-                        minHeight: 44,
-                        display: "flex",
+                        height: 40,
+                        pl: 0.75,
+                        pr: 1.75,
+                        border: 0,
+                        borderRadius: 999,
+                        display: "inline-flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 2,
-                        px: 1.5,
-                        py: 1,
-                        textAlign: "left",
+                        gap: 1,
                         cursor: "pointer",
-                        border: "none",
-                        borderTop: editorialHairline,
-                        background: active ? editorial.blueWash : "transparent",
-                        color: "inherit",
-                        font: "inherit",
-                        "&:hover": { background: editorial.blueWash },
+                        fontFamily: AUTH_FONT,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        backgroundColor: active ? authSoft.primary : authSoft.surface,
+                        color: active ? "#FFFFFF" : authSoft.ink,
+                        transition: "background-color 0.15s ease, transform 0.12s ease",
+                        "&:hover": { backgroundColor: active ? authSoft.primaryHover : "#E6ECF6" },
+                        "&:active": { transform: "scale(0.97)" },
+                        "&:focus-visible": { outline: `3px solid ${authSoft.focus}`, outlineOffset: 2 },
                       }}
                     >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{option.label}</Typography>
-                        <Typography sx={{ fontSize: 11, color: editorial.muted }}>{option.description}</Typography>
+                      <Box
+                        component="span"
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 999,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 800,
+                          backgroundColor: active ? "#FFFFFF" : authSoft.ground,
+                          color: active ? authSoft.primary : authSoft.bodyStrong,
+                        }}
+                      >
+                        {active ? <CheckIcon size={14} strokeWidth={3} /> : option.label.charAt(0)}
                       </Box>
-                      <Typography sx={{ fontSize: 11, fontWeight: 800, color: active ? editorial.pmwBlueDark : editorial.softMuted }}>
-                        {active ? "Active" : "Preview"}
-                      </Typography>
+                      {option.label}
                     </Box>
                   );
                 })}
               </Stack>
-            </Stack>
+
+              <Typography sx={{ fontSize: 13.5, lineHeight: 1.5, color: authSoft.muted, mt: 1.5 }}>
+                {currentRole
+                  ? `${currentRole.label} sees: ${currentRole.description.toLowerCase()}. Sign in to open it.`
+                  : "Pick a role to preview it. Sign in to open the real view."}
+              </Typography>
+            </Box>
           )}
 
-          <Divider sx={{ mt: 3, mb: 2, borderColor: editorial.border }} />
-          <Typography sx={{ fontSize: 12, lineHeight: 1.6, color: editorial.muted }}>
+          <Typography sx={{ fontSize: 13, lineHeight: 1.5, color: authSoft.muted, mt: 3, textAlign: "center" }}>
             Only PMW Microsoft 365 work accounts can sign in.{" "}
-            <Box component="a" href="/privacy" sx={{ color: editorial.ink, fontWeight: 800, textDecoration: "underline" }}>
-              Privacy Notice
+            <Box
+              component="a"
+              href="/privacy"
+              sx={{ color: authSoft.primary, textDecoration: "none", "&:hover": { textDecoration: "underline" } }}
+            >
+              Privacy notice
             </Box>
           </Typography>
         </Box>

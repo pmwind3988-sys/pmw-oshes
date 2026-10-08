@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import { editorial, editorialHairline } from "../../theme/editorial";
-import { radius } from "../../theme/surfaces";
 import { DataCell, DataRow, DataTable, Widget, WidgetEmpty } from "../Widget";
 import { Check as ResolveIcon, History as HistoryIcon, Pencil as EditIcon, Trash2 as DeleteIcon } from "../ui/Icons";
 import { effectiveFlag } from "../../utils/smoking/adminData";
@@ -14,22 +13,19 @@ const PILL_BASE = {
   display: "inline-flex",
   alignItems: "center",
   lineHeight: 1.35,
-  fontSize: 10,
-  fontWeight: 800,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  px: 0.9,
+  fontSize: 12,
+  fontWeight: 700,
+  px: 1.25,
   py: 0.4,
-  borderRadius: "8px",
-  border: "1px solid transparent",
+  borderRadius: "999px",
 } as const;
 
-/** A flag reads as a warning pill; a resolved one, quieter, with its note on hover. */
+/** A flag reads as an amber pill; a resolved one, quieter, with its note on hover. */
 function FlagCell({ b, now }: { b: SmokingBreak; now: Date }) {
   const flag = effectiveFlag(b, now);
   if (flag) {
     return (
-      <Box component="span" sx={{ ...PILL_BASE, color: editorial.error, backgroundColor: editorial.errorWash, borderColor: editorial.error }}>
+      <Box component="span" sx={{ ...PILL_BASE, color: editorial.warning, backgroundColor: editorial.warningWash }}>
         {flag}
       </Box>
     );
@@ -37,7 +33,7 @@ function FlagCell({ b, now }: { b: SmokingBreak; now: Date }) {
   if (b.resolvedAt) {
     return (
       <Tooltip title={b.resolutionNote || "Resolved"}>
-        <Box component="span" sx={{ ...PILL_BASE, color: editorial.muted, backgroundColor: editorial.neutralWash, borderColor: editorial.border }}>
+        <Box component="span" sx={{ ...PILL_BASE, color: editorial.muted, backgroundColor: editorial.neutralWash }}>
           Resolved
         </Box>
       </Tooltip>
@@ -61,7 +57,7 @@ function HistoryButton({ entries }: { entries: AuditEntry[] }) {
         onClose={() => setAnchor(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
-        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 340, borderRadius: radius.md } } }}
+        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 340, borderRadius: "16px", boxShadow: "0 16px 40px rgba(22,27,36,.18)" } } }}
       >
         {entries.length === 0 ? (
           <Typography sx={{ fontSize: 12.5, color: editorial.muted, p: 0.5 }}>No history yet.</Typography>
@@ -219,7 +215,21 @@ export default function SmokingLogTable({
               <DataCell muted nowrap>{b.timeOut ? stamp(b.timeOut) : "—"}</DataCell>
               <DataCell align="right" muted>{duration(b)}</DataCell>
               <DataCell align="right">
-                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.25 }}>{actions(b)}</Box>
+                {/* Icons appear when the row is hovered, and stay for keyboard users who tab into them. */}
+                <Box
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.25,
+                    opacity: 0,
+                    transition: "opacity 0.16s ease",
+                    "tr:hover &, &:focus-within": { opacity: 1 },
+                    "@media (hover: none)": { opacity: 1 },
+                    "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+                  }}
+                >
+                  {actions(b)}
+                </Box>
               </DataCell>
             </DataRow>
           ))}

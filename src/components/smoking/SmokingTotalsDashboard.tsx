@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Box, Stack, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { panelSx, radius } from "../../theme/surfaces";
+import { editorial } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 import { SectionLabel, Widget, WidgetGrid } from "../Widget";
 import { BarRows, IntakeChart, StatTile, StatTileRow, type BarRow } from "../portal/PortalStats";
 import SmokingHeatmap, { type HeatMetric } from "./SmokingHeatmap";
@@ -30,8 +30,8 @@ function Segmented<T extends string>({
   onChange: (next: T) => void;
 }) {
   return (
-    <Stack role="group" aria-label={label} direction="row" sx={{ display: "inline-flex", border: editorialHairline, borderRadius: radius.sm, overflow: "hidden", flexWrap: "wrap" }}>
-      {options.map((o, i) => {
+    <Stack role="group" aria-label={label} direction="row" sx={{ display: "inline-flex", gap: 0.5, flexWrap: "wrap" }}>
+      {options.map((o) => {
         const on = o.value === value;
         return (
           <Box
@@ -41,18 +41,20 @@ function Segmented<T extends string>({
             aria-pressed={on}
             onClick={() => onChange(o.value)}
             sx={{
-              minHeight: 30,
-              px: 1.25,
+              minHeight: 32,
+              px: 1.5,
               border: "none",
-              borderLeft: i === 0 ? "none" : editorialHairline,
-              backgroundColor: on ? editorial.blueWash : editorial.panel,
+              borderRadius: radius.full,
+              backgroundColor: on ? editorial.pmwBlueSoft : editorial.neutralWash,
               color: on ? editorial.pmwBlueDark : editorial.muted,
               font: "inherit",
               fontSize: 12,
-              fontWeight: 800,
+              fontWeight: 700,
               whiteSpace: "nowrap",
               cursor: "pointer",
+              transition: "background-color 0.16s ease, color 0.16s ease",
               "&:hover": { color: editorial.pmwBlueDark },
+              "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
             }}
           >
             {o.label}
@@ -66,7 +68,7 @@ function Segmented<T extends string>({
 /** The five figures as one short strip, for a phone, where five tiles fill the screen. */
 function SummaryStrip({ items }: { items: Array<{ value: string | number; label: string; alert?: boolean }> }) {
   return (
-    <Box sx={{ ...panelSx, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", rowGap: 1.25, columnGap: 1, p: 1.5 }}>
+    <Box sx={{ backgroundColor: editorial.paper, borderRadius: "24px", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", rowGap: 1.25, columnGap: 1, p: 2 }}>
       {items.map((item) => (
         <Box key={item.label} sx={{ minWidth: 0 }}>
           <Typography sx={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: item.alert ? editorial.error : editorial.ink, fontVariantNumeric: "tabular-nums" }}>

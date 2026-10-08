@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { ArrowLeft as ArrowBackIcon, ClipboardClock as PendingActionsOutlinedIcon } from "../../components/ui/Icons";
 import { editorial } from "../../theme/editorial";
-import { liftSx, panelSx } from "../../theme/surfaces";
+import { radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
 import { IconTile, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
@@ -58,59 +58,116 @@ export default function QueueScreen() {
           <WidgetEmpty>Signed items move on to the next layer immediately.</WidgetEmpty>
         </Widget>
       ) : (
-        <Stack spacing={1.75}>
+        <Stack spacing={0.5}>
           {rows.map((record) => (
-            <Stack
+            // The whole row is the target: one button, so keyboard and screen
+            // reader users get one stop per item and the row opens the record.
+            <Box
               key={recordKey(record)}
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.75}
+              component="button"
+              type="button"
+              onClick={() => openDrawer(recordKey(record))}
               sx={{
-                ...panelSx,
-                ...liftSx,
+                display: "flex",
+                alignItems: { xs: "flex-start", sm: "center" },
+                flexDirection: { xs: "column", sm: "row" },
+                gap: 1.75,
+                width: "100%",
                 p: 1.75,
-                alignItems: { sm: "center" },
-                justifyContent: "space-between",
-                borderColor: record.overdue ? editorial.error : editorial.border,
+                border: "none",
+                borderRadius: "20px",
+                backgroundColor: editorial.panel,
+                font: "inherit",
+                color: "inherit",
+                textAlign: "left",
+                cursor: "pointer",
+                transition: "background-color 0.16s ease, transform 0.12s ease",
+                "&:hover": { backgroundColor: editorial.blueSoft },
+                "&:active": { transform: "scale(0.995)" },
+                "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
               }}
             >
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", minWidth: 0 }}>
-                <IconTile tone={record.overdue ? "alert" : "ink"}>
-                  <PendingActionsOutlinedIcon />
-                </IconTile>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", minWidth: 0, flex: 1 }}>
+                <Box sx={{ position: "relative", flex: "none" }}>
+                  <IconTile tone={record.overdue ? "alert" : "ink"}>
+                    <PendingActionsOutlinedIcon />
+                  </IconTile>
+                  {record.overdue && (
+                    <Box
+                      aria-hidden="true"
+                      sx={{
+                        position: "absolute",
+                        top: -2,
+                        right: -2,
+                        width: 10,
+                        height: 10,
+                        borderRadius: radius.full,
+                        backgroundColor: editorial.errorFill,
+                        boxShadow: `0 0 0 2px ${editorial.panel}`,
+                      }}
+                    />
+                  )}
+                </Box>
                 <Box sx={{ minWidth: 0 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, flexWrap: "wrap" }}>
                     <ReferenceTag value={record.reference} />
-                    <Typography sx={{ fontSize: 11, color: editorial.muted, fontWeight: 700 }}>
+                    <Typography sx={{ fontSize: 12, color: editorial.muted, fontWeight: 700 }}>
                       {record.formName}
                     </Typography>
                     <SeverityPill label={record.severity} tone={record.tone} />
+                    {record.overdue && (
+                      <Box
+                        component="span"
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.6,
+                          px: 1,
+                          py: 0.25,
+                          borderRadius: radius.full,
+                          backgroundColor: editorial.errorWash,
+                          color: editorial.error,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        <Box
+                          aria-hidden="true"
+                          sx={{ width: 6, height: 6, borderRadius: radius.full, backgroundColor: editorial.errorFill }}
+                        />
+                        Overdue
+                      </Box>
+                    )}
                   </Stack>
-                  <Typography sx={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
+                  <Typography sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.25 }}>{record.subject}</Typography>
                   <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 0.25 }}>
                     {record.location || "Location not given"} · filed {record.filedLabel}
                   </Typography>
                   {/* The wait line reports the SLA where the form set one, and
                       how long it has actually sat where it did not. */}
-                  <Typography
-                    sx={{
-                      fontSize: 11,
-                      mt: 0.75,
-                      color: record.overdue ? editorial.error : editorial.muted,
-                      fontWeight: record.overdue ? 800 : 400,
-                    }}
-                  >
+                  <Typography sx={{ fontSize: 11.5, mt: 0.5, color: editorial.muted }}>
                     {record.waitNote ? `${record.layerLabel} · ${record.waitNote}` : record.layerLabel}
                   </Typography>
                 </Box>
               </Stack>
-              <Button
-                variant="contained"
-                onClick={() => openDrawer(recordKey(record))}
-                sx={{ flex: "none", minHeight: 44 }}
+              <Box
+                component="span"
+                sx={{
+                  flex: "none",
+                  alignSelf: { xs: "flex-end", sm: "center" },
+                  px: 2,
+                  py: 0.875,
+                  borderRadius: radius.full,
+                  backgroundColor: editorial.pmwBlueSoft,
+                  color: editorial.pmwBlueDark,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
               >
-                Open and sign
-              </Button>
-            </Stack>
+                Review
+              </Box>
+            </Box>
           ))}
         </Stack>
       )}

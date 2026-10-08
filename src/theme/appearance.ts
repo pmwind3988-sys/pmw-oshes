@@ -148,17 +148,17 @@ export const CONTRAST_THEMES: ContrastTheme[] = [
     label: "Ink on Paper",
     note: "Near-black on white, blue-tinted ground",
     dark: false,
-    ink: "#101010",
-    muted: "#5F646D",
-    softMuted: "#747B86",
+    ink: "#161B24",
+    muted: "#586174",
+    softMuted: "#6B7385",
     panel: "#FFFFFF",
-    canvas: "#F6F9FC",
-    sunken: "#F1F3F6",
-    paper: "#F8FAFC",
-    paperSoft: "#F9FBFD",
-    border: "#DDE4EC",
-    borderStrong: "#111111",
-    ground: "linear-gradient(180deg, #EAF5FC 0%, #F7FAFD 48%, #FFFFFF 100%)",
+    canvas: "#EEF2F8",
+    sunken: "#EDF0F5",
+    paper: "#F5F7FB",
+    paperSoft: "#F9FAFC",
+    border: "#E3E8F0",
+    borderStrong: "#161B24",
+    ground: "#EEF2F8",
   },
   {
     id: "mono",
@@ -278,9 +278,9 @@ export const COLOR_THEMES: ColorTheme[] = [
     id: "pmw",
     label: "PMW Blue",
     note: "The house palette",
-    main: "#0078D4",
-    dark: "#005A9E",
-    light: "#2F96DD",
+    main: "#1A5FD0",
+    dark: "#174FB0",
+    light: "#4A7FE0",
     accent: "#6264A7",
     accentDark: "#4B4D89",
   },
@@ -368,6 +368,15 @@ export interface FontTheme {
 
 export const FONT_THEMES: FontTheme[] = [
   {
+    id: "figtree",
+    label: "Figtree",
+    note: "Rounded geometric sans, one family for every weight",
+    heading: `"Figtree", ${SYSTEM_TAIL}`,
+    body: `"Figtree", ${SYSTEM_TAIL}`,
+    mono: `"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace`,
+    families: ["Figtree:wght@400;500;600;700;800", "JetBrains+Mono:wght@400;500;600"],
+  },
+  {
     id: "inter",
     label: "Inter",
     note: "One family, weight does the work",
@@ -425,7 +434,7 @@ export interface AppearanceSetting {
 export const DEFAULT_APPEARANCE: AppearanceSetting = {
   colorThemeId: "pmw",
   contrastThemeId: "paper",
-  fontThemeId: "inter",
+  fontThemeId: "figtree",
 };
 
 export function findColorTheme(id: string): ColorTheme {
@@ -458,9 +467,9 @@ export function normalizeAppearance(value: unknown): AppearanceSetting {
 
 /** Status hues are fixed across every theme — only their washes are derived. */
 const STATUS = {
-  success: "#107C10",
-  warning: "#B15C00",
-  error: "#C62828",
+  success: "#2E9D6A",
+  warning: "#B7791F",
+  error: "#B3261E",
   /** The signal yellow, used as a flat fill on the privacy and guest screens. */
   yellow: "#FFF546",
 } as const;
@@ -802,21 +811,17 @@ export function resolveAppearance(setting: AppearanceSetting): ResolvedAppearanc
     inverseSurface: ink,
     inverseInk: panel,
 
-    // Depth is a hairline plus a tinted shadow, per DESIGN.md. On a dark ground
-    // a black shadow is invisible, so the shadow darkens toward true black and
-    // leans on the ring layer instead.
+    // Depth is a fill, not a line, per the soft UI spec. Cards sit flat at rest;
+    // `shadow` is the hover lift and `shadowHover` is the floating menu/dialog.
+    // On a dark ground a black shadow is invisible, so it darkens toward true
+    // black and leans on the ring layer instead.
     shadow: dark
       ? `0 0 0 1px ${withAlpha("#000000", 0.5)}, 0 1px 2px -1px ${withAlpha("#000000", 0.6)}, 0 14px 36px ${withAlpha("#000000", 0.45)}`
-      : // The card shadow is the SI maintenance portal's: two flat slate layers
-        // rather than a wide tinted bloom. At the densities these screens run
-        // at — tables of records, grids of form cards — the tinted 36px blur
-        // pooled between neighbouring panels and read as a gradient on the
-        // page rather than as lift on each card.
-        `0 0 0 1px ${withAlpha("#000000", 0.06)}, 0 1px 2px ${withAlpha("#0F172A", 0.04)}, 0 4px 12px ${withAlpha("#0F172A", 0.05)}`,
+      : `0 1px 3px ${withAlpha("#161B24", 0.08)}`,
     shadowHover: dark
       ? `0 0 0 1px ${withAlpha("#000000", 0.6)}, 0 2px 6px -2px ${withAlpha("#000000", 0.7)}, 0 18px 42px ${withAlpha("#000000", 0.55)}`
-      : `0 0 0 1px ${withAlpha("#000000", 0.08)}, 0 2px 6px -2px ${withAlpha("#000000", 0.1)}, 0 18px 42px ${withAlpha(color.dark, 0.12)}`,
-    ring: `0 0 0 3px ${withAlpha(color.main, dark ? 0.4 : 0.22)}`,
+      : `0 16px 40px ${withAlpha("#161B24", 0.18)}`,
+    ring: dark ? `0 0 0 3px ${withAlpha(color.main, 0.4)}` : "0 0 0 3px #9DBDF5",
 
     fontHeading: font.heading,
     fontBody: font.body,

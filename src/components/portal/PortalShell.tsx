@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
+import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, Plus as PlusIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
 import type { IconComponent } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
@@ -12,21 +12,20 @@ import type { PortalScreen } from "../../types";
 import "../../styles/shell.css";
 
 /**
- * The shell: a branded column of labelled destinations, a sticky bar over the
- * content, and the canvas the screens sit on.
+ * The shell: a narrow icon rail of destinations on the page ground, a white
+ * sheet holding the search bar and the screen, and an account pill in the bar.
  *
- * The layout is pmw-it's, so the two internal portals read as one product. It
- * replaced an icon-only rail plus a drawer, which had the labels and the
- * destinations in two different places — you clicked a glyph you had to
- * remember, or opened a drawer to read the word and then clicked again. One
- * column carrying both costs 236px on a desktop and nothing on a phone, where
- * it is the same element as an off-canvas drawer.
+ * On a desktop the rail is always visible: each destination is a pill holding
+ * its glyph with the word under it, so the label and the target stay together.
+ * Below 1024px the same element is an off-canvas drawer behind a hamburger —
+ * switched by CSS in shell.css rather than by a width check here, so first
+ * paint is never the wrong layout.
  *
- * Below 1024px the column IS that drawer, switched by CSS in shell.css rather
- * than by a width check here, so first paint is never the wrong layout.
+ * The footer links (Form builder, Privacy notice) and sign-out live in the
+ * account menu, not in the rail.
  */
 
-/** One glyph per screen. The column carries the word too — this is not a memory test. */
+/** One glyph per screen. The rail carries the word too — this is not a memory test. */
 const SCREEN_ICON: Partial<Record<PortalScreen, IconComponent>> = {
   home: HomeOutlinedIcon,
   today: TodayOutlinedIcon,
@@ -49,6 +48,13 @@ function initialsOf(name: string, email: string): string {
   return (email.trim()[0] ?? "?").toUpperCase();
 }
 
+/** True when a keystroke is already going somewhere that takes text. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+}
+
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const {
     access,
@@ -68,6 +74,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpen] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<HTMLElement | null>(null);
   const [draftQuery, setDraftQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const builder = builderUrl();
   const profileOpen = Boolean(profileAnchor);
@@ -81,6 +88,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     catalogue: catalogue.length,
     audit: audit.length,
   });
+
+  // A form's own workspace has no rail item of its own; it is the "file" area
+  // it was reached from, so that is the destination that stays lit.
+  const activeScreen: PortalScreen = screen === "form" ? "file" : screen;
 
   // While the drawer is over the page the page behind it must not scroll — on a
   // phone a scrolling backdrop reads as the drawer itself failing to scroll.
@@ -98,6 +109,21 @@ export default function PortalShell({ children }: { children: React.ReactNode })
       document.body.style.overflow = previousOverflow;
     };
   }, [navOpen]);
+
+  // "/" moves the cursor to the search box, as the key hint in it says — unless
+  // the person is already typing somewhere, or the search box is not on screen.
+  useEffect(() => {
+    const onSlash = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTypingTarget(event.target)) return;
+      const input = searchRef.current;
+      if (!input || input.offsetParent === null) return;
+      event.preventDefault();
+      input.focus();
+    };
+    document.addEventListener("keydown", onSlash);
+    return () => document.removeEventListener("keydown", onSlash);
+  }, []);
 
   const pick = (next: PortalScreen) => {
     setScreen(next);
@@ -133,17 +159,16 @@ export default function PortalShell({ children }: { children: React.ReactNode })
       <aside
         id="portal-nav"
         aria-label="Portal sections"
-        className={`shell-nav oshes-brand-surface${navOpen ? " open" : ""}`}
+        className={`shell-nav${navOpen ? " open" : ""}`}
       >
         <div className="shell-brand">
-          {/* The wordmark is the way back Home, which is the screen that shows
-              every other one — so the shortest route out of anywhere is a click
-              on the name of the app. */}
+          {/* The logo is the way back Home, which is the screen that shows every
+              other one — so the shortest route out of anywhere is a click on it. */}
           <button type="button" className="shell-brand-link" onClick={() => pick("home")}>
             <span className="shell-logo-chip">
-              <Logo size={24} />
+              <Logo size={22} />
             </span>
-            <span>
+            <span className="shell-brand-words">
               <span className="shell-brand-name">{OSHES_APP.department}</span>
               <span className="shell-brand-sub">Forms Portal</span>
             </span>
@@ -158,24 +183,44 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           </button>
         </div>
 
+        {access.canFile && (
+          <button
+            type="button"
+            className="shell-newbtn"
+            onClick={() => pick("file")}
+            aria-label="File a form"
+            title="File a form"
+          >
+            <PlusIcon />
+          </button>
+        )}
+
         <nav className="shell-navlist">
           {sections.map((section) => (
-            <div key={section.id}>
-              {section.label && <div className="shell-navsection">{section.label}</div>}
+            <div key={section.id} className="shell-navgroup">
               {section.items.map((item) => {
                 const Icon = SCREEN_ICON[item.screen];
-                const active = screen === item.screen;
+                const active = activeScreen === item.screen;
+                // On a desktop the "+" button above is the way in to filing, so
+                // this row would only repeat it. The row stays for the drawer.
+                const className = [
+                  "shell-navitem",
+                  active ? "active" : "",
+                  item.screen === "file" ? "shell-navitem-file" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
                 return (
                   <button
                     key={item.screen}
                     type="button"
-                    className={`shell-navitem${active ? " active" : ""}`}
+                    className={className}
                     onClick={() => pick(item.screen)}
                     aria-current={active ? "page" : undefined}
                     title={item.hint}
                   >
-                    {Icon && <Icon fontSize="small" />}
-                    <span>{item.label}</span>
+                    <span className="shell-navpill">{Icon && <Icon fontSize="small" />}</span>
+                    <span className="shell-navlabel">{item.label}</span>
                     {item.count !== null && item.count > 0 && item.screen === "queue" && (
                       <span className="shell-navcount">{item.count}</span>
                     )}
@@ -185,32 +230,6 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             </div>
           ))}
         </nav>
-
-        <div className="shell-navfoot">
-          <div className="shell-navuser">
-            <div className="shell-avatar">{initials}</div>
-            <div className="shell-navuser-text">
-              <div className="shell-navuser-name">{displayed}</div>
-              <div className="shell-navuser-role">{access.readOnly ? "Read only" : roleLabel(role)}</div>
-            </div>
-          </div>
-
-          {/* Authoring lives in pmw-hrform. The link is only rendered when
-              VITE_BUILDER_URL is set, and it carries ?site=oshes so the operator
-              lands on THIS site's forms rather than HR's. */}
-          {builder && access.canManageCatalogue && (
-            <a className="shell-navlink" href={builder} target="_blank" rel="noopener noreferrer">
-              <BuildOutlinedIcon fontSize="small" /> Form builder
-              <OpenInNewIcon sx={{ fontSize: 12 }} />
-            </a>
-          )}
-          <a className="shell-navlink" href="/privacy" target="_blank" rel="noopener noreferrer">
-            <HelpOutlineIcon fontSize="small" /> Privacy notice
-          </a>
-          <button type="button" className="shell-signout" onClick={onSignOut}>
-            <LogoutIcon fontSize="small" /> Sign out
-          </button>
-        </div>
       </aside>
 
       <div className="shell-main">
@@ -227,8 +246,8 @@ export default function PortalShell({ children }: { children: React.ReactNode })
               <MenuIcon />
             </button>
 
-            {/* The column's brand mark is behind the drawer on a phone, so the
-                bar carries one of its own. */}
+            {/* The rail's brand mark is behind the drawer on a phone, so the bar
+                carries one of its own. */}
             <button type="button" className="shell-headerbrand" onClick={() => pick("home")}>
               <Logo size={22} />
               <span>{OSHES_APP.department}</span>
@@ -237,11 +256,13 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             <form className="shell-search" onSubmit={onSearchSubmit} role="search">
               <SearchIcon />
               <input
+                ref={searchRef}
                 value={draftQuery}
                 onChange={(event) => setDraftQuery(event.target.value)}
                 placeholder="Search records…"
                 aria-label="Search records"
               />
+              <kbd className="shell-searchkey" aria-hidden="true">/</kbd>
             </form>
 
             <div className="shell-headeractions">
@@ -249,7 +270,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 <Tooltip title="File a form" enterDelay={400}>
                   <button
                     type="button"
-                    className="shell-iconbtn"
+                    className="shell-iconbtn shell-headerfile"
                     onClick={() => pick("file")}
                     aria-label="File a form"
                   >
@@ -272,22 +293,24 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   alignItems: "center",
                   gap: 1,
                   maxWidth: 240,
+                  height: 46,
                   pl: 0.5,
-                  pr: { xs: 0.5, sm: 1 },
-                  py: 0.5,
-                  border: editorialHairline,
+                  pr: { xs: 0.5, lg: 1.5 },
+                  border: 0,
                   borderRadius: radius.full,
-                  background: profileOpen ? editorial.neutralWash : "transparent",
+                  background: profileOpen ? editorial.blueWash : editorial.neutralWash,
                   font: "inherit",
                   color: "inherit",
                   cursor: "pointer",
-                  transition: "background-color 0.16s ease",
-                  "&:hover": { background: editorial.neutralWash },
+                  transition: "background-color 0.16s ease, transform 0.12s ease",
+                  "&:hover": { background: editorial.blueWash },
+                  "&:active": { transform: "scale(0.97)" },
+                  "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
                 }}
               >
-                <Avatar sx={{ ...avatarSx, width: 28, height: 28, fontSize: 11.5 }}>{initials}</Avatar>
+                <Avatar sx={{ ...avatarSx, width: 36, height: 36, fontSize: 12.5 }}>{initials}</Avatar>
                 <Box sx={{ display: { xs: "none", lg: "block" }, minWidth: 0, textAlign: "left" }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25 }} noWrap>
+                  <Typography sx={{ fontSize: 13, fontWeight: 800, lineHeight: 1.25 }} noWrap>
                     {displayed}
                   </Typography>
                   <Typography sx={{ fontSize: 11, lineHeight: 1.25, color: editorial.muted }} noWrap>
@@ -311,7 +334,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           onClose={() => setProfileAnchor(null)}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340 } } }}
+          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340, borderRadius: "16px" } } }}
         >
           {/* The identity is stated once, in full, before any action — so signing
               out is never done from a guess about which account this is. */}
@@ -347,6 +370,35 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           <MenuItem onClick={() => pick("settings")} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}>
             <SettingsOutlinedIcon sx={{ fontSize: 18, color: editorial.muted }} />
             Settings
+          </MenuItem>
+          <Divider />
+          {/* Authoring lives in pmw-hrform. The link is only offered when
+              VITE_BUILDER_URL is set, and it carries ?site=oshes so the operator
+              lands on THIS site's forms rather than HR's. */}
+          {builder && access.canManageCatalogue && (
+            <MenuItem
+              component="a"
+              href={builder}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setProfileAnchor(null)}
+              sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}
+            >
+              <BuildOutlinedIcon fontSize="small" />
+              Form builder
+              <OpenInNewIcon sx={{ fontSize: 12, ml: "auto" }} />
+            </MenuItem>
+          )}
+          <MenuItem
+            component="a"
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setProfileAnchor(null)}
+            sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}
+          >
+            <HelpOutlineIcon fontSize="small" />
+            Privacy notice
           </MenuItem>
           <Divider />
           <MenuItem onClick={onSignOut} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700, color: editorial.error }}>

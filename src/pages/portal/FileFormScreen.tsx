@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { Box, Stack, Typography } from "@mui/material";
 import { ArrowRight as ArrowForwardIcon, FileText as DescriptionOutlinedIcon } from "../../components/ui/Icons";
-import { editorial, editorialHairline } from "../../theme/editorial";
-import { panelSx, radius } from "../../theme/surfaces";
+import { editorial } from "../../theme/editorial";
+import { radius } from "../../theme/surfaces";
 import { IconTile, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import ReferenceTag from "../../components/ReferenceTag";
@@ -45,8 +45,9 @@ export default function FileFormScreen() {
           </WidgetEmpty>
         </Widget>
       ) : (
-        <Box sx={{ ...panelSx, overflow: "hidden" }}>
-          {catalogue.map((entry, index) => {
+        // A stack of soft rows, separated by space rather than rules.
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+          {catalogue.map((entry) => {
             const canOpen = openable(entry);
             return (
               <Box
@@ -66,13 +67,13 @@ export default function FileFormScreen() {
                   textAlign: "left",
                   cursor: canOpen ? "pointer" : "default",
                   border: "none",
-                  borderTop: index === 0 ? "none" : editorialHairline,
+                  borderRadius: "20px",
                   background: "transparent",
                   color: "inherit",
                   font: "inherit",
                   opacity: canOpen ? 1 : 0.6,
                   transition: "background-color 0.16s ease",
-                  "&:hover": canOpen ? { background: editorial.blueWash } : undefined,
+                  "&:hover": canOpen ? { background: editorial.blueSoft } : undefined,
                   "&:hover .file-form-arrow": canOpen ? { color: editorial.pmwBlueDark, transform: "translateX(3px)" } : undefined,
                   "@media (prefers-reduced-motion: reduce)": {
                     "&:hover .file-form-arrow": { transform: "none" },
@@ -91,14 +92,12 @@ export default function FileFormScreen() {
                       <Box
                         component="span"
                         sx={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          px: 0.8,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          px: 1,
                           py: 0.25,
                           borderRadius: radius.full,
-                          border: editorialHairline,
+                          backgroundColor: editorial.neutralWash,
                           color: editorial.muted,
                         }}
                       >

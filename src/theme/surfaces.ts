@@ -1,5 +1,5 @@
 import type { SxProps, Theme } from "@mui/material";
-import { editorial, editorialHairline } from "./editorial";
+import { editorial } from "./editorial";
 
 /* ---------------------------------------------------------------------------
    Surface geometry — the radii and card recipes the widget language is built on.
@@ -15,25 +15,30 @@ import { editorial, editorialHairline } from "./editorial";
    value, and the scale stays one thing.
 --------------------------------------------------------------------------- */
 
-/** The radius scale from DESIGN.md. Nothing should type a pixel radius by hand. */
+/**
+ * The radius scale from DESIGN.md (16 / 24 / 32 / 999). Nothing should type a
+ * pixel radius by hand.
+ */
 export const radius = {
   /** MUI buttons, and anywhere a deliberate hard corner is wanted. */
   none: "0",
-  /** Small surfaces: reference tags, icon tiles, menu items. */
-  sm: "8px",
-  /** Slightly larger small surfaces: chips, inline swatches. */
-  md: "10px",
-  /** Inputs, menus, nested panels. */
-  base: "12px",
-  /** Structural cards — the widget. 12px, matching the SI maintenance portal,
-   *  so a card in either app is the same object. */
-  lg: "12px",
-  /** Pills, bars, avatars. */
+  /** Rows, menu items, small tiles. */
+  sm: "16px",
+  /** Multi-line fields and recessed wells. */
+  md: "16px",
+  /** Nested panels inside a card. */
+  base: "24px",
+  /** Structural cards — the widget. */
+  lg: "24px",
+  /** Sheets and dialogs. */
+  xl: "32px",
+  /** Pills: buttons, chips, single-line inputs, avatars, badges. */
   full: "999px",
 } as const;
 
 /**
- * The widget surface: a white panel, a hairline, and a card radius.
+ * The widget surface: a white card with a 24px radius, no border and no shadow
+ * at rest. Depth appears on hover, not before.
  *
  * Written as a plain object rather than a styled component because roughly forty
  * call sites spread it into an existing `sx` alongside their own padding and
@@ -41,15 +46,15 @@ export const radius = {
  */
 export const panelSx = {
   backgroundColor: editorial.panel,
-  border: editorialHairline,
+  border: "none",
   borderRadius: radius.lg,
 } as const satisfies SxProps<Theme>;
 
 /** A recessed area *inside* a panel — a chart well, a table head, an empty state. */
 export const sunkenSx = {
   backgroundColor: editorial.paper,
-  border: editorialHairline,
-  borderRadius: radius.base,
+  border: "none",
+  borderRadius: radius.md,
 } as const satisfies SxProps<Theme>;
 
 /**
@@ -60,11 +65,10 @@ export const sunkenSx = {
  * remembered thirty times.
  */
 export const liftSx = {
-  transition: "border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease",
+  transition: "transform 0.16s ease, box-shadow 0.16s ease",
   "&:hover": {
-    borderColor: editorial.pmwBlue,
     transform: "translateY(-2px)",
-    boxShadow: `0 10px 26px color-mix(in srgb, ${editorial.pmwBlueDark} 14%, transparent)`,
+    boxShadow: "0 1px 3px rgba(22, 27, 36, 0.08)",
   },
   "&:active": { transform: "translateY(0)" },
   "@media (prefers-reduced-motion: reduce)": {

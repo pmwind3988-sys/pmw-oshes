@@ -1,5 +1,8 @@
-import { Box, Stack, TextField, Tooltip, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+import { Info as InfoOutlinedIcon } from "../../components/ui/Icons";
+import { editorial } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { Callout, DataCell, DataRow, DataTable, PageHeader } from "../../components/Widget";
 import ReferenceTag from "../../components/ReferenceTag";
@@ -14,7 +17,6 @@ const CHIP_SX = {
   px: 0.9,
   py: 0.3,
   borderRadius: radius.full,
-  border: editorialHairline,
 } as const;
 
 /** The chain, or an explicit statement that there is none — silence reads as "unknown". */
@@ -80,6 +82,11 @@ export default function CatalogueScreen() {
 
   const unset = catalogue.filter((entry) => entry.visibility.unset);
   const mismatched = catalogue.filter((entry) => entry.visibility.mismatch);
+
+  /** The stepper buttons write through the same path as typing: one number, one save. */
+  const nudgeSla = (entry: CatalogueEntry, delta: number) => {
+    setSla(entry, String(Math.max(0, entry.slaDays + delta)));
+  };
 
   const setSla = (entry: CatalogueEntry, raw: string) => {
     const digits = raw.replace(/[^0-9]/g, "");
@@ -151,15 +158,49 @@ export default function CatalogueScreen() {
               {/* A form with no layers has nothing to be late for, so it is
                   not offered an SLA it could never breach. */}
               {entry.hasWorkflow ? (
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                  <TextField
+                <Stack
+                  direction="row"
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.25,
+                    p: 0.25,
+                    borderRadius: radius.full,
+                    backgroundColor: editorial.neutralWash,
+                  }}
+                >
+                  <IconButton
                     size="small"
+                    aria-label={`Fewer days for ${entry.name}`}
+                    onClick={() => nudgeSla(entry, -1)}
+                    disabled={!entry.slaDays}
+                    sx={{ width: 30, height: 30, color: editorial.ink }}
+                  >
+                    <RemoveIcon fontSize="small" />
+                  </IconButton>
+                  <TextField
+                    variant="standard"
                     value={entry.slaDays || ""}
                     onChange={(event) => setSla(entry, event.target.value)}
-                    sx={{ width: 52, "& input": { textAlign: "center", fontVariantNumeric: "tabular-nums" } }}
-                    slotProps={{ htmlInput: { inputMode: "numeric", "aria-label": `SLA days for ${entry.name}` } }}
+                    placeholder="0"
+                    slotProps={{
+                      input: { disableUnderline: true },
+                      htmlInput: { inputMode: "numeric", "aria-label": `SLA days for ${entry.name}` },
+                    }}
+                    sx={{
+                      width: 36,
+                      "& input": { textAlign: "center", fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+                    }}
                   />
-                  <Typography sx={{ fontSize: 12, color: editorial.muted }}>days</Typography>
+                  <IconButton
+                    size="small"
+                    aria-label={`More days for ${entry.name}`}
+                    onClick={() => nudgeSla(entry, 1)}
+                    sx={{ width: 30, height: 30, color: editorial.ink }}
+                  >
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                  <Typography sx={{ fontSize: 12, color: editorial.muted, pl: 0.5, pr: 1 }}>days</Typography>
                 </Stack>
               ) : (
                 <Typography sx={{ fontSize: 12, color: editorial.muted }}>—</Typography>
@@ -198,24 +239,43 @@ export default function CatalogueScreen() {
         ))}
       </DataTable>
 
-      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 3, maxWidth: "62ch" }}>
-        An SLA is opt-in. Leave the box empty and that form has no deadline at all: it is never “past SLA”, and no
-        screen shows it an SLA badge, target or breach. There is no global default — one used to apply three working
-        days to every form, which meant forms nobody had ever given a deadline still turned red on day four. Forms
-        with no approval step are never offered one, because there is nothing for them to be waiting on.
-      </Typography>
-
-      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>
-        “Who can reach it” is read-only. It reports what an anonymous visitor actually gets on the form link, which
-        the IsPublic column decides at request time — not what the catalogue happens to have stored. A form nobody has
-        set is shown as open, because that is what it is. It is changed where it is authored: the PMW form builder.
-      </Typography>
-
-      <Typography sx={{ fontSize: 12, color: editorial.muted, mt: 1.5, maxWidth: "62ch" }}>
-        New form types are built in the PMW form builder, which is the single place any form is authored — including
-        whether its link is public. Once a form is published there it appears here, and the SLA is the one setting this
-        screen writes.
-      </Typography>
+      {/* The three explanations used to sit under the table in full. One muted
+          line says what matters; the (i) holds the rest for anyone who wants it. */}
+      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mt: 2.5 }}>
+        <Typography sx={{ fontSize: 12, color: editorial.muted }}>
+          SLA is opt-in. Who can reach a form is read-only, and set in the PMW form builder.
+        </Typography>
+        <Tooltip
+          enterDelay={200}
+          placement="top-start"
+          title={
+            <Stack spacing={1} sx={{ p: 0.5, maxWidth: 380 }}>
+              <Typography sx={{ fontSize: 12 }}>
+                An SLA is opt-in. Leave the box empty and that form has no deadline at all: it is never “past SLA”, and
+                no screen shows it an SLA badge, target or breach. There is no global default — one used to apply three
+                working days to every form, which meant forms nobody had ever given a deadline still turned red on day
+                four. Forms with no approval step are never offered one, because there is nothing for them to be waiting
+                on.
+              </Typography>
+              <Typography sx={{ fontSize: 12 }}>
+                “Who can reach it” is read-only. It reports what an anonymous visitor actually gets on the form link, which
+                the IsPublic column decides at request time — not what the catalogue happens to have stored. A form nobody
+                has set is shown as open, because that is what it is. It is changed where it is authored: the PMW form
+                builder.
+              </Typography>
+              <Typography sx={{ fontSize: 12 }}>
+                New form types are built in the PMW form builder, which is the single place any form is authored — including
+                whether its link is public. Once a form is published there it appears here, and the SLA is the one setting
+                this screen writes.
+              </Typography>
+            </Stack>
+          }
+        >
+          <IconButton size="small" aria-label="More about the catalogue" sx={{ color: editorial.muted }}>
+            <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
     </Box>
   );
 }

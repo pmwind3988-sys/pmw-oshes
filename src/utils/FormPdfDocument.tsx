@@ -45,6 +45,8 @@ export interface PdfFormData {
    * attachments" download. Each link then says where its file was added.
    */
   attachmentsAppended?: boolean;
+  /** QR image (data URL) linking to the live record; used by the soft style only. */
+  qrDataUrl?: string;
 }
 
 export interface PdfLayerResult {

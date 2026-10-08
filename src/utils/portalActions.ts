@@ -1,6 +1,7 @@
 import type { AuditEntry, HardDeleteSubmissionResult, PortalRecord, SharePointClient, SurveyJson } from "../types";
 import { writeAuditEntry } from "./portalAudit";
 import { regenerateRecordPdf } from "./portalPdf";
+import { DEFAULT_PDF_STYLE, type PdfStyle } from "./pdfStyle";
 import { claimLayerEmail } from "./layerAssignees";
 import { normalizeEmail } from "./portalPeople";
 import { SP_FORM_STATUS, SP_LAYER_STATUS } from "./statusConstants";
@@ -435,8 +436,9 @@ export async function regenerateSubmissionPdf(
   context: PortalActionContext,
   record: PortalRecord,
   surveyJson: SurveyJson | null,
+  style: PdfStyle = DEFAULT_PDF_STYLE,
 ): Promise<PortalActionResult> {
-  const pdfUrl = await regenerateRecordPdf(record, surveyJson, context.spClient);
+  const pdfUrl = await regenerateRecordPdf(record, surveyJson, context.spClient, style);
   const fields = { PdfUrl: pdfUrl };
 
   const audit = await writeAuditEntry(context.spClient, {

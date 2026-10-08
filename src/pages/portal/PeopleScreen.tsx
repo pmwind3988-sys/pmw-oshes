@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Box, Stack, Typography } from "@mui/material";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
@@ -134,8 +134,7 @@ export default function PeopleScreen() {
                     px: 0.9,
                     py: 0.3,
                     borderRadius: radius.full,
-                    border: editorialHairline,
-                    backgroundColor: editorial.blueSoft,
+                    backgroundColor: editorial.neutralWash,
                     whiteSpace: "nowrap",
                   }}
                 >

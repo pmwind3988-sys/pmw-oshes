@@ -39,7 +39,6 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
   const alertSurfaceShadow = a.dark
     ? `0 10px 26px ${withAlpha("#000000", 0.55)}, 0 0 0 1px ${withAlpha("#FFFFFF", 0.08)}`
     : `0 10px 26px ${withAlpha("#101010", 0.12)}, 0 0 0 1px ${withAlpha("#101010", 0.04)}`;
-  const hairline = `1px solid ${a.border}`;
 
   return createTheme({
     palette: {
@@ -163,10 +162,18 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
         lineHeight: 1.55,
         fontWeight: 400,
       },
+      overline: {
+        fontSize: "0.8125rem",
+        lineHeight: 1.5,
+        fontWeight: 700,
+        letterSpacing: "0",
+        textTransform: "none",
+      },
       caption: {
         fontSize: "0.75rem",
         lineHeight: 1.5,
         letterSpacing: "0",
+        textTransform: "none",
         fontWeight: 600,
       },
       button: {
@@ -178,7 +185,7 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
       },
     },
     shape: {
-      borderRadius: 12,
+      borderRadius: 16,
     },
     zIndex: {
       snackbar: 20000,
@@ -233,44 +240,48 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
           },
         },
       },
+      // Pills for every action. The filled primary is the one loud control in a
+      // view; everything else is a tonal or ghost fill with no border.
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: 0,
+            borderRadius: 999,
             textTransform: "none",
+            letterSpacing: "0",
             fontWeight: 700,
-            padding: "10px 18px",
+            minHeight: 40,
+            padding: "10px 20px",
             fontSize: "0.875rem",
-            transition: "background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+            transition: "background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.12s ease",
             boxShadow: "none",
             "&:hover": {
               boxShadow: "none",
-              transform: "translateY(-1px)",
             },
             "&:active": {
-              transform: "scale(0.96)",
+              transform: "scale(0.97)",
+            },
+            "&.Mui-focusVisible": {
+              outline: "none",
+              boxShadow: a.ring,
             },
           },
           contained: {
             backgroundColor: a.brand,
             color: a.onBrand,
-            border: `1px solid ${a.brand}`,
+            border: "none",
             boxShadow: "none",
             "&:hover": {
               backgroundColor: a.brandDark,
-              borderColor: a.brandDark,
               boxShadow: "none",
             },
           },
           outlined: {
             color: a.brandInk,
-            borderColor: a.brand,
-            borderWidth: "1px",
-            backgroundColor: withAlpha(a.panel, 0.72),
+            border: "none",
+            backgroundColor: a.brandSoft,
             "&:hover": {
-              borderWidth: "1px",
+              border: "none",
               backgroundColor: a.brandWash,
-              borderColor: a.brandDark,
             },
           },
           text: {
@@ -280,8 +291,76 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
             },
           },
           sizeLarge: {
-            padding: "12px 24px",
+            minHeight: 52,
+            padding: "12px 28px",
             fontSize: "1rem",
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            transition: "background-color 0.2s ease, color 0.2s ease, transform 0.12s ease",
+            borderRadius: 999,
+            minWidth: 40,
+            minHeight: 40,
+            "&:hover": {
+              backgroundColor: a.brandWash,
+            },
+            "&:active": {
+              transform: "scale(0.97)",
+            },
+            "&.Mui-focusVisible": {
+              outline: "none",
+              boxShadow: a.ring,
+            },
+          },
+        },
+      },
+      // Sentence-case tonal pills. The neutral fill carries the default and
+      // filled variants; nothing draws a border.
+      MuiChip: {
+        styleOverrides: {
+          root: {
+            borderRadius: 999,
+            fontWeight: 700,
+            fontSize: "0.8125rem",
+            height: 28,
+            border: "none",
+            textTransform: "none",
+          },
+          filled: {
+            backgroundColor: a.sunken,
+            color: a.ink,
+          },
+          outlined: {
+            border: "none",
+            backgroundColor: a.sunken,
+            color: a.ink,
+          },
+        },
+      },
+      // Fields are filled wells, not boxed inputs. The notched outline is kept
+      // transparent so the layout does not shift; focus shows as a ring.
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            borderRadius: 999,
+            backgroundColor: a.canvas,
+            transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+            "&:hover": {
+              backgroundColor: a.sunken,
+            },
+            "&.Mui-focused": {
+              backgroundColor: a.panel,
+              boxShadow: a.ring,
+            },
+            "&.MuiInputBase-multiline": {
+              borderRadius: 16,
+            },
+          },
+          notchedOutline: {
+            borderColor: "transparent",
           },
         },
       },
@@ -290,13 +369,12 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
           root: {
             backgroundColor: a.panel,
             backgroundImage: "none",
-            borderRadius: 14,
+            borderRadius: 24,
             boxShadow: "none",
-            border: hairline,
-            transition: "box-shadow 0.2s ease, border-color 0.2s ease",
+            border: "none",
+            transition: "box-shadow 0.2s ease",
             "&:hover": {
               boxShadow: a.shadow,
-              borderColor: withAlpha(a.brand, 0.36),
             },
           },
         },
@@ -307,48 +385,19 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
             backgroundImage: "none",
           },
           rounded: {
-            borderRadius: 14,
+            borderRadius: 24,
           },
           elevation1: {
             boxShadow: "none",
-            border: hairline,
+            border: "none",
           },
           elevation2: {
-            boxShadow: a.shadow,
-            border: hairline,
+            boxShadow: "none",
+            border: "none",
           },
           elevation3: {
-            boxShadow: a.shadowHover,
-          },
-        },
-      },
-      MuiTextField: {
-        styleOverrides: {
-          root: {
-            "& .MuiOutlinedInput-root": {
-              borderRadius: 10,
-              transition: "background-color 0.2s ease, box-shadow 0.2s ease",
-              backgroundColor: a.panel,
-              "&:hover": {
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: a.brand,
-                },
-              },
-              "&.Mui-focused": {
-                boxShadow: a.ring,
-              },
-            },
-          },
-        },
-      },
-      MuiChip: {
-        styleOverrides: {
-          root: {
-            borderRadius: 999,
-            fontWeight: 700,
-            fontSize: "0.8rem",
-            height: 28,
-            border: hairline,
+            boxShadow: "none",
+            border: "none",
           },
         },
       },
@@ -356,9 +405,9 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
         styleOverrides: {
           paper: {
             backgroundColor: a.panel,
-            borderRadius: 14,
+            borderRadius: 32,
             boxShadow: a.shadowHover,
-            border: hairline,
+            border: "none",
           },
         },
       },
@@ -366,24 +415,33 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
         defaultProps: {
           // Modal's scroll lock puts `overflow: hidden` + scrollbar-compensation
           // padding on <body>, which shunts the centered layout sideways every
-          // time a dropdown opens. Dialogs still lock; anchored menus don't need to.
+          // time a dropdown opens. Dialogs still lock; anchored menus do not need to.
           disableScrollLock: true,
         },
         styleOverrides: {
           paper: {
             backgroundColor: a.panel,
-            borderRadius: 12,
-            boxShadow: a.shadow,
-            border: hairline,
+            borderRadius: 20,
+            boxShadow: a.shadowHover,
+            border: "none",
             marginTop: 8,
+          },
+        },
+      },
+      MuiPopover: {
+        styleOverrides: {
+          paper: {
+            borderRadius: 20,
+            boxShadow: a.shadowHover,
+            border: "none",
           },
         },
       },
       MuiMenuItem: {
         styleOverrides: {
           root: {
-            borderRadius: 8,
-            margin: "2px 6px",
+            borderRadius: 14,
+            margin: "0 6px",
             padding: "10px 12px",
             transition: "background-color 0.15s ease, color 0.15s ease",
             "&:hover": {
@@ -398,11 +456,62 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
           },
         },
       },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: {
+            backgroundColor: a.inverseSurface,
+            color: a.inverseInk,
+            fontSize: "0.75rem",
+            fontWeight: 600,
+            borderRadius: 999,
+            padding: "6px 12px",
+            border: "none",
+          },
+          arrow: {
+            color: a.inverseSurface,
+          },
+        },
+      },
+      MuiSwitch: {
+        styleOverrides: {
+          track: {
+            borderRadius: 999,
+          },
+        },
+      },
+      // Tabs are pills: the selected tab fills, and there is no sliding rule.
+      MuiTabs: {
+        styleOverrides: {
+          indicator: {
+            display: "none",
+          },
+          root: {
+            "& .MuiTabs-flexContainer": {
+              gap: 4,
+            },
+          },
+        },
+      },
+      MuiTab: {
+        styleOverrides: {
+          root: {
+            borderRadius: 999,
+            minHeight: 40,
+            textTransform: "none",
+            letterSpacing: "0",
+            fontWeight: 700,
+            "&.Mui-selected": {
+              backgroundColor: a.brandWash,
+              color: a.brandInk,
+            },
+          },
+        },
+      },
       MuiAlert: {
         styleOverrides: {
           root: {
-            border: "1px solid transparent",
-            borderRadius: "8px",
+            border: "none",
+            borderRadius: 24,
             boxShadow: alertSurfaceShadow,
             fontWeight: 700,
             opacity: 1,
@@ -416,22 +525,18 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
             // direction.
             "&.MuiAlert-standardSuccess, &.MuiAlert-outlinedSuccess, &.MuiAlert-colorSuccess.MuiAlert-standard, &.MuiAlert-colorSuccess.MuiAlert-outlined": {
               backgroundColor: a.successWash,
-              borderColor: withAlpha(a.success, 0.38),
               color: a.ink,
             },
             "&.MuiAlert-standardWarning, &.MuiAlert-outlinedWarning, &.MuiAlert-colorWarning.MuiAlert-standard, &.MuiAlert-colorWarning.MuiAlert-outlined": {
               backgroundColor: a.warningWash,
-              borderColor: withAlpha(a.warning, 0.4),
               color: a.ink,
             },
             "&.MuiAlert-standardError, &.MuiAlert-outlinedError, &.MuiAlert-colorError.MuiAlert-standard, &.MuiAlert-colorError.MuiAlert-outlined": {
               backgroundColor: a.errorWash,
-              borderColor: withAlpha(a.error, 0.4),
               color: a.ink,
             },
             "&.MuiAlert-standardInfo, &.MuiAlert-outlinedInfo, &.MuiAlert-colorInfo.MuiAlert-standard, &.MuiAlert-colorInfo.MuiAlert-outlined": {
               backgroundColor: a.brandWashSoft,
-              borderColor: a.brandSoft,
               color: a.ink,
             },
             "&.MuiAlert-filledSuccess, &.MuiAlert-colorSuccess.MuiAlert-filled": {
@@ -475,8 +580,8 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
             "& .MuiAlert-root": {
               alignItems: "center",
               backgroundColor: a.panel,
-              border: `1px solid ${a.brandSoft}`,
-              borderRadius: "8px",
+              border: "none",
+              borderRadius: 24,
               boxShadow: alertSurfaceShadow,
               color: a.ink,
               fontWeight: 700,
@@ -497,18 +602,6 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
               color: a.ink,
               paddingTop: 0,
             },
-            "& .MuiAlert-standardSuccess, & .MuiAlert-filledSuccess, & .MuiAlert-outlinedSuccess": {
-              borderColor: withAlpha(a.success, 0.24),
-            },
-            "& .MuiAlert-standardError, & .MuiAlert-filledError, & .MuiAlert-outlinedError": {
-              borderColor: withAlpha(a.error, 0.28),
-            },
-            "& .MuiAlert-standardWarning, & .MuiAlert-filledWarning, & .MuiAlert-outlinedWarning": {
-              borderColor: withAlpha(a.warning, 0.28),
-            },
-            "& .MuiAlert-standardInfo, & .MuiAlert-filledInfo, & .MuiAlert-outlinedInfo": {
-              borderColor: a.brandSoft,
-            },
           },
         },
       },
@@ -518,7 +611,7 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
             backgroundImage: "none",
             backgroundColor: withAlpha(a.panel, 0.82),
             backdropFilter: "blur(16px)",
-            borderBottom: hairline,
+            borderBottom: "none",
             boxShadow: "none",
             color: a.ink,
           },
@@ -527,12 +620,12 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
       MuiLinearProgress: {
         styleOverrides: {
           root: {
-            borderRadius: 6,
+            borderRadius: 999,
             backgroundColor: a.sunken,
             height: 6,
           },
           bar: {
-            borderRadius: 6,
+            borderRadius: 999,
           },
         },
       },
@@ -543,35 +636,21 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
           },
         },
       },
-      MuiIconButton: {
-        styleOverrides: {
-          root: {
-            transition: "background-color 0.2s ease, color 0.2s ease, transform 0.2s ease",
-            borderRadius: 8,
-            minWidth: 40,
-            minHeight: 40,
-            "&:hover": {
-              backgroundColor: a.brandWash,
-            },
-            "&:active": {
-              transform: "scale(0.96)",
-            },
-          },
-        },
-      },
+      // Rows are borderless; the header is a muted sentence-case label, and body
+      // rows get at most a faint rule.
       MuiTableCell: {
         styleOverrides: {
           head: {
-            backgroundColor: a.brandWashSoft,
-            color: a.ink,
-            fontWeight: 800,
-            fontSize: "0.75rem",
-            textTransform: "uppercase",
+            backgroundColor: "transparent",
+            color: a.muted,
+            fontWeight: 700,
+            fontSize: "0.8125rem",
+            textTransform: "none",
             letterSpacing: "0",
-            borderBottom: hairline,
+            borderBottom: "none",
           },
           body: {
-            borderBottom: hairline,
+            borderBottom: `1px solid ${withAlpha(a.border, 0.6)}`,
             fontVariantNumeric: "tabular-nums",
           },
         },
@@ -581,21 +660,7 @@ export function buildTheme(input: AppearanceSetting | ResolvedAppearance = DEFAU
           paper: {
             backgroundColor: a.panel,
             backgroundImage: "none",
-            borderRight: hairline,
-          },
-        },
-      },
-      MuiTooltip: {
-        styleOverrides: {
-          tooltip: {
-            backgroundColor: a.inverseSurface,
-            color: a.inverseInk,
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            border: `1px solid ${a.border}`,
-          },
-          arrow: {
-            color: a.inverseSurface,
+            borderRight: "none",
           },
         },
       },

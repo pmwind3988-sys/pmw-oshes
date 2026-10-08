@@ -1,81 +1,29 @@
 /* ---------------------------------------------------------------------------
-   Application shell — the branded nav column, the sticky bar, and the canvas
-   the screens sit on.
+   Application shell — the icon rail, the white sheet the screens sit on, and
+   the bar above them.
 
-   The layout is ported from `pmw-it` so the internal portals read as one
-   family: a branded column on the left carrying labelled destinations, a sticky
-   bar above the content, and a canvas the panels sit on. What is NOT ported is
-   pmw-it's palette. That project hard-codes `--it-*` tokens; this one has a
-   live appearance system (`src/theme/appearance.ts`) where the operator picks a
-   colour, a contrast pairing and a font, and every surface follows. So each
-   rule below reads the `--pmw-*` variables that system emits, and the shell
-   re-themes with the rest of the app instead of pinning one blue.
+   Desktop (1024px and up): a narrow rail of destinations on the page ground.
+   Each destination is a pill holding its glyph with the word under it; the
+   selected one takes a blue pill. Beside it, a white sheet with a soft radius
+   carries a pill search bar and the account button, then the screen.
 
-   Two layouts from one tree, switched at 1024px. Below it the column is an
-   off-canvas drawer behind a hamburger; at and above it the same element is a
-   sticky column. The switch is pure CSS rather than a JS width check, so there
-   is no flash of the wrong layout on first paint.
+   Below 1024px the rail is an off-canvas drawer behind a hamburger, styled as a
+   white panel with the same pill rows (glyph and word side by side).
+
+   Colour reads the `--pmw-*` variables the appearance system emits, so the
+   shell re-themes with the rest of the app. The few literal values here are
+   the tokens the redesign pins (selected pill, focus ring) and fall back to
+   those values when a variable is absent.
+
+   Switched at 1024px in CSS, not by a width check in JS, so there is no flash of
+   the wrong layout on first paint.
 --------------------------------------------------------------------------- */
 
 :root {
-  --shell-nav-width: 236px;
-  --shell-radius: 12px;
-  /* Ink *on* the brand column. Fixed white, published by `appearance.ts` as
-     `NAV_INK` — the column is a dark branded surface on every theme, and the
-     gradient stops below are derived to meet this ink rather than the other way
-     round. See the note beside NAV_INK for why it is not `--pmw-on-blue`. */
-  --shell-on-brand: var(--pmw-nav-ink, #fff);
-  /* These four alphas are a contract with `appearance.ts`: `NAV_DIM` and
-     `NAV_ROW_STATES` derive the gradient stops against exactly these numbers,
-     so that every row state clears 4.5:1. Raising any of them lightens the
-     ground under the labels and walks the column back under AA — change them
-     there and here together, and the appearance tests will tell you. */
-  --shell-on-brand-dim: color-mix(in srgb, var(--pmw-nav-ink, #fff) 88%, transparent);
-  --shell-on-brand-hover: color-mix(in srgb, var(--pmw-nav-ink, #fff) 6%, transparent);
-  --shell-on-brand-active: color-mix(in srgb, var(--pmw-nav-ink, #fff) 10%, transparent);
-  --shell-on-brand-rule: color-mix(in srgb, var(--pmw-nav-ink, #fff) 22%, transparent);
-}
-
-/* ---------------------------------------------------------------------------
-   The branded surface.
-
-   A two-stop gradient with a slow sheen drifting over it. The sheen is a
-   separate ::before at z-index -1 so it sits under the nav rows rather than
-   over them — a moving tint across live text is a legibility problem, not a
-   flourish.
---------------------------------------------------------------------------- */
-.oshes-brand-surface {
-  position: relative;
-  isolation: isolate;
-  background: linear-gradient(
-    160deg,
-    var(--pmw-nav-top) 0%,
-    var(--pmw-nav-bottom) 100%
-  );
-}
-
-.oshes-brand-surface::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    radial-gradient(38% 30% at 18% 12%, color-mix(in srgb, var(--pmw-cta) 12%, transparent), transparent 70%),
-    radial-gradient(44% 34% at 84% 84%, color-mix(in srgb, var(--pmw-blue-light) 16%, transparent), transparent 72%);
-  background-repeat: no-repeat;
-  background-size: 170% 170%, 180% 180%;
-  animation: oshesSheenDrift 22s ease-in-out infinite;
-}
-
-@keyframes oshesSheenDrift {
-  0%,
-  100% {
-    background-position: 0% 0%, 100% 100%;
-  }
-  50% {
-    background-position: 34% 24%, 66% 72%;
-  }
+  --shell-nav-width: 92px;
+  --shell-focus-ring: #9dbdf5;
+  --shell-selected-fill: var(--pmw-blue-soft, #c9daf8);
+  --shell-selected-ink: var(--pmw-blue-ink, #0b3b8c);
 }
 
 /* `both` matters: without it the element paints at full opacity for the frame
@@ -96,16 +44,12 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Shell frame.
+   Shell frame. Transparent, so the wallpaper `body` paints (the operator's
+   chosen background) shows around the rail and the sheet.
 --------------------------------------------------------------------------- */
 .shell {
   min-height: 100dvh;
   display: flex;
-  /* Transparent, deliberately. `body` already paints the wallpaper the operator
-     chose — `var(--app-bg, var(--app-bg-fallback))` — and that paint propagates
-     to the viewport canvas. A ground of its own here is full-viewport and opaque,
-     so it covered that wallpaper everywhere inside the portal and left the
-     background picker looking like it did nothing. */
   background: transparent;
   color: var(--pmw-ink);
   font-family: var(--pmw-font-main);
@@ -121,6 +65,9 @@
   cursor: pointer;
 }
 
+/* ---------------------------------------------------------------------------
+   The rail. Off-canvas drawer below 1024px.
+--------------------------------------------------------------------------- */
 .shell-nav {
   position: fixed;
   top: 0;
@@ -129,14 +76,13 @@
   z-index: 1300;
   display: flex;
   flex-direction: column;
-  width: 260px;
-  max-width: 82vw;
-  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
-  /* `hidden`, not `auto`. The whole column used to be the scroll container, so a
-     long section list pushed the brand mark and the account/sign-out block out of
-     view and left a scrollbar track down the middle of the branded surface. The
-     column is now a fixed frame - brand pinned top, account block pinned bottom -
-     and `.shell-navlist` is the only thing in it that scrolls. */
+  width: 280px;
+  max-width: 84vw;
+  padding: calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom)) 16px;
+  background: var(--pmw-panel);
+  border-radius: 0 32px 32px 0;
+  /* `hidden`, not `auto`: the brand is pinned top and the list is the only thing
+     that scrolls, so a long list never pushes the brand out of view. */
   overflow: hidden;
   transform: translateX(-100%);
   transition: transform 200ms ease-out;
@@ -144,7 +90,7 @@
 
 .shell-nav.open {
   transform: translateX(0);
-  box-shadow: 0 24px 60px rgba(2, 8, 20, 0.45);
+  box-shadow: 0 16px 40px rgba(22, 27, 36, 0.18);
 }
 
 .shell-brand {
@@ -152,15 +98,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 22px;
-  padding: 0 4px;
+  margin-bottom: 16px;
+  padding: 0 6px;
 }
 
 .shell-brand-link {
   display: flex;
   align-items: center;
   gap: 10px;
-  text-decoration: none;
   min-width: 0;
   background: none;
   border: 0;
@@ -168,273 +113,204 @@
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  color: inherit;
 }
 
-/* The brand mark is a coloured logo and the column behind it is that same
-   colour — it needs a light chip under it or it disappears into the gradient. */
+/* The brand mark is a coloured logo, so it sits on a white round chip that
+   stays light in every theme. */
 .shell-logo-chip {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
   background: #fff;
+  box-shadow: 0 1px 3px rgba(22, 27, 36, 0.08);
+}
+
+.shell-brand-words {
+  min-width: 0;
 }
 
 .shell-brand-name {
   display: block;
   font-size: 15.5px;
   font-weight: 800;
-  line-height: 1;
-  color: var(--shell-on-brand);
+  line-height: 1.1;
+  color: var(--pmw-ink);
   font-family: var(--pmw-font-heading);
 }
 
 .shell-brand-sub {
   display: block;
-  margin-top: 3px;
-  font-size: 9px;
-  line-height: 1;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--shell-on-brand-dim);
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--pmw-muted);
 }
 
 .shell-navclose {
   background: none;
   border: 0;
-  padding: 4px;
-  color: var(--shell-on-brand-dim);
+  padding: 6px;
+  border-radius: 999px;
+  color: var(--pmw-muted);
   cursor: pointer;
   display: flex;
 }
 
 .shell-navclose:hover {
-  color: var(--shell-on-brand);
+  background: var(--pmw-sunken);
+  color: var(--pmw-ink);
+}
+
+/* "+ File a form". Desktop only: below 1024px the drawer carries the item. */
+.shell-newbtn {
+  display: none;
 }
 
 .shell-navlist {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  /* The one scrolling area in the column. `min-height: 0` is what lets it
-     actually shrink inside the flex column rather than growing past the viewport
-     and taking the footer with it. */
+  /* The one scrolling area in the column. `min-height: 0` is what lets it shrink
+     inside the flex column rather than pushing past the viewport. */
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* A hairline of the column's own ink rather than the platform scrollbar, which
-     paints a light grey track across a dark branded surface. */
   scrollbar-width: thin;
-  scrollbar-color: var(--shell-on-brand-rule) transparent;
-  /* Room for the thumb so it never sits on top of a label. */
-  padding-right: 4px;
-  margin-right: -4px;
+  scrollbar-color: var(--pmw-border) transparent;
+  padding: 2px 4px 4px;
+  margin: 0 -4px;
 }
 
-.shell-navlist::-webkit-scrollbar {
-  width: 6px;
+.shell-navgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.shell-navlist::-webkit-scrollbar-track {
-  background: transparent;
+.shell-navgroup + .shell-navgroup {
+  margin-top: 14px;
 }
 
-.shell-navlist::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: var(--shell-on-brand-rule);
-}
-
-.shell-navsection {
-  margin: 16px 0 5px;
-  padding: 0 10px;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  /* No extra `opacity` here. It used to carry 0.78 on top of the dim, which
-     multiplied out to about 69% ink — and these are 9.5px uppercase labels, the
-     smallest text in the column. The dim is the one place that strength is set,
-     because it is the number `appearance.ts` derives the gradient against. */
-  color: var(--shell-on-brand-dim);
-}
-
+/* One destination. Desktop: a column — pill, then the word beneath it. */
 .shell-navitem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--shell-on-brand-dim);
-  text-decoration: none;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  font-family: inherit;
-  transition: background-color 160ms ease, color 160ms ease;
-}
-
-.shell-navitem:hover {
-  background: var(--shell-on-brand-hover);
-  color: var(--shell-on-brand);
-}
-
-/* The active row's wash is only 10%, because a wash strong enough to read as
-   "selected" unaided forces the whole column several shades darker to keep its
-   labels legible. The rail does that job instead: an accent bar down the left
-   edge, at full strength, plus the heavier weight. Colour is not carrying it
-   alone either — the weight change survives a monochrome display. */
-.shell-navitem.active {
   position: relative;
-  background: var(--shell-on-brand-active);
-  color: var(--shell-on-brand);
-  font-weight: 800;
-}
-
-.shell-navitem.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--pmw-cta);
-}
-
-/* width/height, not font-size: these are inline <svg>s from components/ui/Icons,
-   which carry their own box. font-size only ever sized the Material glyphs that
-   used to be here, and left silently doing nothing after the swap. */
-.shell-navitem svg {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-}
-
-/* The queue count rides its own row rather than the glyph: this column has the
-   width for a number, and a count nobody can read is a count nobody acts on. */
-.shell-navcount {
-  margin-left: auto;
-  flex: none;
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--pmw-cta);
-  color: var(--pmw-on-cta);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 18px;
-  text-align: center;
-}
-
-.shell-navfoot {
-  flex: none;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--shell-on-brand-rule);
-}
-
-.shell-navuser {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  min-width: 0;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: center;
+  color: var(--pmw-muted);
+  cursor: pointer;
+  transition: color 160ms ease;
 }
 
-.shell-avatar {
+.shell-navpill {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
+  width: 56px;
   height: 32px;
   border-radius: 999px;
-  background: var(--pmw-cta);
-  color: var(--pmw-on-cta);
-  font-size: 12.5px;
-  font-weight: 700;
+  color: inherit;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
-.shell-navuser-text {
-  min-width: 0;
+.shell-navpill svg {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
 }
 
-.shell-navuser-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--shell-on-brand);
-  white-space: nowrap;
+.shell-navlabel {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shell-navuser-role {
-  font-size: 10.5px;
-  color: var(--shell-on-brand-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shell-navlink,
-.shell-signout {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: none;
-  border: 0;
-  padding: 6px 8px;
-  margin-left: -8px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.2;
   font-weight: 600;
-  color: var(--shell-on-brand-dim);
-  cursor: pointer;
-  text-decoration: none;
+  color: inherit;
 }
 
-.shell-navlink + .shell-navlink,
-.shell-navlink + .shell-signout {
-  margin-top: 2px;
+.shell-navitem:hover {
+  color: var(--pmw-ink);
 }
 
-.shell-navlink:hover,
-.shell-signout:hover {
-  color: var(--shell-on-brand);
-  background: var(--shell-on-brand-hover);
+.shell-navitem:hover .shell-navpill {
+  background: color-mix(in srgb, var(--pmw-ink) 8%, transparent);
 }
 
-.shell-navlink svg,
-.shell-signout svg {
-  width: 15px;
-  height: 15px;
-  flex: none;
+.shell-navitem:focus-visible .shell-navpill {
+  outline: 3px solid var(--shell-focus-ring);
+  outline-offset: 2px;
 }
 
+.shell-navitem.active {
+  color: var(--pmw-ink);
+}
+
+.shell-navitem.active .shell-navpill {
+  background: var(--shell-selected-fill);
+  color: var(--shell-selected-ink);
+}
+
+.shell-navitem.active .shell-navlabel {
+  font-weight: 800;
+}
+
+/* Count: a small round badge on the glyph's top-right corner. Muted — red is
+   reserved for overdue work, and nothing in the shell's data says that yet. */
+.shell-navcount {
+  position: absolute;
+  top: -2px;
+  left: calc(50% + 14px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--pmw-sunken);
+  color: var(--pmw-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   The sheet: the white surface the header and screen sit on.
+--------------------------------------------------------------------------- */
 .shell-main {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  margin: 8px;
+  min-height: calc(100dvh - 16px);
+  background: var(--pmw-panel);
+  border-radius: 24px;
 }
 
-/* Sticky rather than static: the page itself scrolls (there is no inner scroll
-   container), so the bar has to follow it. */
+/* Sticky, so the search bar stays in reach while the page scrolls. The sheet is
+   the containing block, so it sticks inside the sheet and never leaves it. */
 .shell-header {
   position: sticky;
-  top: 0;
+  top: 8px;
   z-index: 1100;
-  border-bottom: 1px solid var(--pmw-border);
   background: var(--pmw-panel);
+  border-radius: 24px 24px 0 0;
   padding-top: env(safe-area-inset-top);
 }
 
@@ -442,7 +318,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 10px 14px;
 }
 
 .shell-hamburger {
@@ -476,37 +352,54 @@
   font-family: var(--pmw-font-heading);
 }
 
+/* Wide pill search. Hidden on the smallest screens, as before. */
 .shell-search {
   display: none;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
-  max-width: 340px;
-  padding: 7px 12px;
-  border-radius: 8px;
+  min-width: 0;
+  max-width: 560px;
+  height: 50px;
+  padding: 0 10px 0 18px;
+  border-radius: 999px;
   background: var(--pmw-sunken);
-  border: 1px solid transparent;
+  color: var(--pmw-muted);
+  transition: box-shadow 160ms ease;
 }
 
 .shell-search:focus-within {
-  border-color: var(--pmw-blue);
+  box-shadow: inset 0 0 0 2px var(--pmw-blue);
 }
 
 .shell-search svg {
   flex-shrink: 0;
-  color: var(--pmw-muted);
   width: 18px;
   height: 18px;
 }
 
 .shell-search input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   border: 0;
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: 15px;
   color: var(--pmw-ink);
+}
+
+.shell-searchkey {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pmw-panel);
+  color: var(--pmw-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .shell-headeractions {
@@ -517,22 +410,22 @@
   min-width: 0;
 }
 
+/* The mobile "File a form" icon. Hidden on desktop, where the rail carries it. */
 .shell-iconbtn {
   display: flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  border: 1px solid var(--pmw-border);
-  background: var(--pmw-panel);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--pmw-sunken);
   color: var(--pmw-muted);
   cursor: pointer;
 }
 
 .shell-iconbtn:hover {
-  background: var(--pmw-sunken);
   color: var(--pmw-ink);
 }
 
@@ -541,8 +434,9 @@
   width: 100%;
   max-width: 1360px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 12px 14px;
   padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .shell-pagehead {
@@ -555,7 +449,7 @@
 }
 
 .shell-pagehead h1 {
-  font-size: 20px;
+  font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.25;
   color: var(--pmw-ink);
@@ -576,6 +470,50 @@
   flex-wrap: wrap;
 }
 
+/* ---------------------------------------------------------------------------
+   Account pill and the drawer's own rows: below 1024px the drawer lists every
+   destination, so the rail's "File a form" pill is off and its row is on.
+--------------------------------------------------------------------------- */
+@media (max-width: 1023.98px) {
+  .shell-navitem {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 2px 0;
+    font-size: 14px;
+  }
+  .shell-navpill {
+    width: 44px;
+    height: 32px;
+    flex: none;
+  }
+  .shell-navlabel {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--pmw-ink);
+  }
+  .shell-navitem.active .shell-navlabel {
+    font-weight: 800;
+  }
+  .shell-navcount {
+    position: static;
+    margin-left: auto;
+    flex: none;
+  }
+  .shell-navgroup {
+    gap: 2px;
+  }
+  .shell-navitem.active .shell-navpill {
+    background: var(--shell-selected-fill);
+    color: var(--shell-selected-ink);
+  }
+}
+
 @media (min-width: 640px) {
   .shell-search {
     display: flex;
@@ -585,38 +523,134 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Desktop: the rail is a fixed-width column on the ground, the sheet beside it.
+--------------------------------------------------------------------------- */
 @media (min-width: 1024px) {
   .shell-nav {
     position: sticky;
+    top: 0;
     bottom: auto;
     z-index: auto;
     height: 100dvh;
     width: var(--shell-nav-width);
     max-width: none;
     flex-shrink: 0;
+    align-items: center;
+    padding: calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom));
+    background: transparent;
+    border-radius: 0;
     transform: translateX(0);
     box-shadow: none;
   }
+
+  .shell-brand {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    margin: 4px 0 14px;
+    padding: 0;
+  }
+
+  .shell-brand-link {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .shell-brand-words,
+  .shell-navclose,
   .shell-backdrop,
   .shell-hamburger,
-  .shell-navclose,
   .shell-headerbrand {
     display: none;
   }
-  .shell-headerrow {
-    padding: 12px 24px;
+
+  .shell-newbtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 60px;
+    height: 60px;
+    margin: 0 0 18px;
+    border: 0;
+    border-radius: 24px;
+    background: var(--pmw-panel);
+    color: var(--pmw-blue);
+    box-shadow: 0 2px 8px rgba(22, 27, 36, 0.1);
+    cursor: pointer;
+    transition: box-shadow 200ms ease, background-color 200ms ease, transform 120ms ease;
   }
+
+  .shell-newbtn svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .shell-newbtn:hover {
+    box-shadow: 0 8px 20px rgba(22, 27, 36, 0.16);
+    background: var(--pmw-sunken);
+  }
+
+  .shell-newbtn:active {
+    transform: scale(0.97);
+  }
+
+  .shell-newbtn:focus-visible {
+    outline: 3px solid var(--shell-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .shell-navlist {
+    flex: 1 1 auto;
+    align-items: stretch;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    scrollbar-width: none;
+  }
+
+  .shell-navgroup {
+    align-items: center;
+    gap: 6px;
+  }
+
+  .shell-navitem {
+    width: 76px;
+  }
+
+  .shell-navitem-file,
+  .shell-headerfile {
+    display: none;
+  }
+
+  .shell-main {
+    margin: 12px 12px 12px 0;
+    min-height: calc(100dvh - 24px);
+    border-radius: 32px;
+  }
+
+  .shell-header {
+    top: 12px;
+    border-radius: 32px 32px 0 0;
+  }
+
+  .shell-headerrow {
+    padding: 18px 28px 8px;
+  }
+
   .shell-body {
-    padding: 24px;
+    padding: 12px 28px 32px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .oshes-brand-surface::before,
   .oshes-rise {
     animation: none;
   }
-  .shell-nav {
+  .shell-nav,
+  .shell-navpill,
+  .shell-newbtn {
     transition: none;
   }
 }
