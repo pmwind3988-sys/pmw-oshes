@@ -206,10 +206,9 @@ export function SignatureModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: C.white, borderRadius: 16, padding: "24px",
+          background: C.white, borderRadius: 32, padding: "24px",
           maxWidth: Math.max(width + 80, 440), width: "100%",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
-          border: `1px solid ${C.border}`,
+          boxShadow: "0 16px 40px rgba(22,27,36,0.18)",
           display: "flex", flexDirection: "column", gap: 16,
         }}
       >
@@ -219,15 +218,15 @@ export function SignatureModal({
             <div style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>
               {existingDataUrl ? "Edit Signature" : "Draw your signature"}
             </div>
-            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: "#586174", marginTop: 2 }}>
               Use mouse or touch to sign below
             </div>
           </div>
           <button
             onClick={onCancel}
             style={{
-              background: C.offWhite, border: `1px solid ${C.border}`,
-              borderRadius: 8, width: 32, height: 32, cursor: "pointer",
+              background: "#EEF2F8", border: "none",
+              borderRadius: 999, width: 32, height: 32, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 16, color: C.textSecond,
             }}
@@ -239,7 +238,7 @@ export function SignatureModal({
         {/* Canvas */}
         <div
           style={{
-            border: `2px solid ${C.purpleMid}`, borderRadius: 10,
+            borderRadius: 16,
             overflow: "hidden", background: backgroundColor,
             display: "flex", justifyContent: "center",
             touchAction: "none",
@@ -289,10 +288,10 @@ export function SignatureModal({
           <button
             onClick={handleClear}
             style={{
-              height: 34, padding: "0 14px", borderRadius: 8,
-              border: `1px solid ${C.border}`, background: C.offWhite,
-              color: C.textSecond, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              height: 34, padding: "0 14px", borderRadius: 999,
+              border: "none", background: "#EEF2F8",
+              color: "#586174", fontSize: 13, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'Figtree', sans-serif",
             }}
           >
             Clear
@@ -301,10 +300,10 @@ export function SignatureModal({
           <button
             onClick={handleSave}
             style={{
-              height: 34, padding: "0 18px", borderRadius: 8,
-              border: "none", background: `linear-gradient(135deg,${C.purple},${C.purpleDark})`,
-              color: C.white, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              height: 34, padding: "0 18px", borderRadius: 999,
+              border: "none", background: "#1A5FD0",
+              color: C.white, fontSize: 13, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'Figtree', sans-serif",
             }}
           >
             {hasContent || existingDataUrl ? "Save Signature" : "Cancel"}
@@ -328,14 +327,14 @@ export function SignatureCapture({
   return (
     <div>
       {value ? (
-        <div style={{ border: `1px solid ${C.purpleMid}`, borderRadius: 10, padding: 10, background: C.white }}>
+        <div style={{ borderRadius: 16, padding: 10, background: C.white }}>
           <img src={value} alt="Captured signature" style={{ display: "block", width: "100%", maxHeight: 150, objectFit: "contain" }} />
           {!disabled && (
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-              <button type="button" onClick={() => setModalOpen(true)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.purpleMid}`, background: C.white, color: C.purple, cursor: "pointer", fontWeight: 600 }}>
+              <button type="button" onClick={() => setModalOpen(true)} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "#EEF2F8", color: "#1A5FD0", cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "'Figtree', sans-serif" }}>
                 Edit signature
               </button>
-              <button type="button" onClick={() => onChange(null)} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${C.red}`, background: C.white, color: C.red, cursor: "pointer", fontWeight: 600 }}>
+              <button type="button" onClick={() => onChange(null)} style={{ padding: "6px 14px", borderRadius: 999, border: "none", background: "#FADBD8", color: "#8C1D18", cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: "'Figtree', sans-serif" }}>
                 Clear
               </button>
             </div>
@@ -347,9 +346,9 @@ export function SignatureCapture({
           disabled={disabled}
           onClick={() => setModalOpen(true)}
           style={{
-            width: "100%", minHeight: 112, borderRadius: 10, border: `2px dashed ${C.purpleMid}`,
+            width: "100%", minHeight: 112, borderRadius: 20, border: `2px dashed ${C.purpleMid}`,
             background: C.purplePale, color: C.purple, cursor: disabled ? "not-allowed" : "pointer",
-            fontSize: 13, fontWeight: 700,
+            fontSize: 13, fontWeight: 700, fontFamily: "'Figtree', sans-serif",
           }}
         >
           Click to sign

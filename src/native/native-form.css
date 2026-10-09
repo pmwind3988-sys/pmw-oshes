@@ -23,12 +23,19 @@
   --nf-ink-faint: #8b96a5;
 
   /* Surfaces */
-  --nf-canvas: #f4f7fb;
+  --nf-canvas: #f5f7fb;
   --nf-panel: #ffffff;
-  --nf-sunken: #f7f9fc;
+  --nf-sunken: #f5f7fb;
+  /* Filled controls and ghost buttons: inputs sit on a fill, not inside a box. */
+  --nf-fill: #eef2f8;
+  --nf-fill-hover: #e4eaf4;
+  /* Chosen options and the current step: a tonal wash, not an outline. */
+  --nf-tonal: #d9e5fb;
+  --nf-tonal-ink: #0b3b8c;
+  --nf-focus-ring-solid: #9dbdf5;
 
   /* Lines */
-  --nf-line: #e4e9f0;
+  --nf-line: #e3e8f0;
   --nf-line-strong: #cbd5e1;
 
   /* Brand — inherited from the workspace's colour theme, so a form filed from
@@ -37,15 +44,15 @@
      is often rendered outside the app entirely (a public QR route, a builder
      preview, a print) where those variables do not exist. The literals after
      the comma are what render there. */
-  --nf-brand: var(--pmw-hue, #0078d4);
-  --nf-brand-deep: var(--pmw-hue-deep, #005a9e);
+  --nf-brand: var(--pmw-hue, #1a5fd0);
+  --nf-brand-deep: var(--pmw-hue-deep, #174fb0);
   --nf-brand-wash: color-mix(in srgb, var(--nf-brand) 10%, var(--nf-panel));
   /* Text and glyphs that sit *on* `--nf-brand-wash`. Separate from
      `--nf-brand-deep` because the wash inverts in dark mode and the deep blue
      does not: on the dark wash it drops to roughly 1.4:1 and the section
      numbers disappear. This is the only token the two themes disagree about in
      direction rather than in shade. */
-  --nf-brand-ink: var(--pmw-hue-deep, #005a9e);
+  --nf-brand-ink: var(--pmw-hue-deep, #174fb0);
   --nf-accent: var(--pmw-hue-accent, #6264a7);
 
   /* Status */
@@ -57,12 +64,13 @@
   --nf-warn-wash: #fff6e5;
 
   /* Geometry */
-  --nf-radius: 10px;
-  --nf-radius-sm: 8px;
+  --nf-radius: 24px;
+  --nf-radius-sm: 14px;
   --nf-radius-pill: 999px;
-  --nf-control-h: 40px;
-  --nf-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 14px rgba(16, 24, 40, 0.05);
-  --nf-ring: 0 0 0 3px color-mix(in srgb, var(--nf-brand) 16%, transparent);
+  --nf-control-h: 44px;
+  /* Cards are borderless and flat at rest: depth is carried by the fill behind them. */
+  --nf-shadow: none;
+  --nf-ring: 0 0 0 3px #9dbdf5;
 
   /* Type */
   --nf-fs-label: 12.5px;
@@ -71,6 +79,8 @@
   --nf-fs-body: 13px;
 
   color: var(--nf-ink);
+  background: var(--nf-canvas);
+  font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: var(--nf-fs-body);
   line-height: 1.5;
 
@@ -94,6 +104,12 @@
   --nf-sunken: #111b26;
   --nf-line: #2a3646;
   --nf-line-strong: #3b4a5c;
+  --nf-fill: #1d2937;
+  --nf-fill-hover: #243243;
+  --nf-tonal: color-mix(in srgb, var(--nf-brand) 26%, var(--nf-panel));
+  --nf-tonal-ink: #dbe7fb;
+  --nf-focus-ring-solid: color-mix(in srgb, var(--nf-brand) 60%, #ffffff);
+  --nf-ring: 0 0 0 3px color-mix(in srgb, var(--nf-brand) 45%, transparent);
   /* Both derive from the brand hue so they follow the colour theme, and both
      are recomputed here rather than inherited because the wash inverts in dark
      mode and the deep brand does not — see the note on `--nf-brand-ink` above. */
@@ -102,7 +118,7 @@
   --nf-danger-wash: #331314;
   --nf-good-wash: #102814;
   --nf-warn-wash: #2e2003;
-  --nf-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.28);
+  --nf-shadow: none;
 }
 
 .nf *,
@@ -144,7 +160,7 @@
 
 .nf-section {
   background: var(--nf-panel);
-  border: 1px solid var(--nf-line);
+  border: none;
   border-radius: var(--nf-radius);
   box-shadow: var(--nf-shadow);
   overflow: hidden;
@@ -154,9 +170,8 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--nf-line);
-  background: var(--nf-sunken);
+  padding: 20px 22px 0;
+  background: transparent;
 }
 
 .nf-section-head[data-clickable="true"] {
@@ -195,9 +210,10 @@
 
 .nf-section-title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   letter-spacing: -0.01em;
+  line-height: 1.3;
   color: var(--nf-ink);
 }
 
@@ -219,20 +235,21 @@
 }
 
 .nf-section-body {
-  padding: 18px;
+  padding: 18px 22px 22px;
 }
 
 .nf-section[data-tone="nested"] {
   box-shadow: none;
   border-radius: var(--nf-radius-sm);
+  background: var(--nf-sunken);
 }
 
 .nf-section[data-tone="nested"] .nf-section-head {
-  padding: 10px 14px;
+  padding: 12px 14px 0;
 }
 
 .nf-section[data-tone="nested"] .nf-section-body {
-  padding: 14px;
+  padding: 12px 14px 14px;
 }
 
 /* ── Field block ────────────────────────────────────────────────────────── */
@@ -263,7 +280,7 @@
 .nf-label {
   display: block;
   font-size: var(--nf-fs-label);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--nf-ink);
   margin-bottom: 6px;
   line-height: 1.4;
@@ -299,10 +316,10 @@
 .nf-select {
   width: 100%;
   min-height: var(--nf-control-h);
-  padding: 9px 12px;
-  border: 1px solid var(--nf-line-strong);
+  padding: 10px 14px;
+  border: none;
   border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  background: var(--nf-fill);
   color: var(--nf-ink);
   font-family: inherit;
   font-size: var(--nf-fs-control);
@@ -313,6 +330,7 @@
 .nf-textarea {
   resize: vertical;
   min-height: 92px;
+  border-radius: 16px;
 }
 
 .nf-select {
@@ -334,7 +352,6 @@
 .nf-textarea:focus,
 .nf-select:focus {
   outline: none;
-  border-color: var(--nf-brand);
   box-shadow: var(--nf-ring);
 }
 
@@ -349,13 +366,13 @@
 .nf-input[data-invalid="true"],
 .nf-textarea[data-invalid="true"],
 .nf-select[data-invalid="true"] {
-  border-color: var(--nf-danger);
+  box-shadow: inset 0 0 0 1.5px var(--nf-danger);
 }
 
 .nf-input[data-invalid="true"]:focus,
 .nf-textarea[data-invalid="true"]:focus,
 .nf-select[data-invalid="true"]:focus {
-  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.13);
+  box-shadow: inset 0 0 0 1.5px var(--nf-danger), 0 0 0 3px rgba(198, 40, 40, 0.13);
 }
 
 /* Prefix / suffix affixes (currency, units) share the control's border so the
@@ -363,20 +380,19 @@
 .nf-affix {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--nf-line-strong);
+  border: none;
   border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  background: var(--nf-fill);
   overflow: hidden;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
 .nf-affix:focus-within {
-  border-color: var(--nf-brand);
   box-shadow: var(--nf-ring);
 }
 
 .nf-affix[data-invalid="true"] {
-  border-color: var(--nf-danger);
+  box-shadow: inset 0 0 0 1.5px var(--nf-danger);
 }
 
 .nf-affix > .nf-input {
@@ -400,12 +416,8 @@
   white-space: nowrap;
 }
 
-.nf-affix-tag[data-side="start"] {
-  border-right: 1px solid var(--nf-line);
-}
-
-.nf-affix-tag[data-side="end"] {
-  border-left: 1px solid var(--nf-line);
+.nf-affix-tag {
+  color: var(--nf-ink-soft);
 }
 
 /* Read-only computed values are not inputs and should not look like one —
@@ -416,8 +428,8 @@
   justify-content: space-between;
   gap: 10px;
   min-height: var(--nf-control-h);
-  padding: 9px 12px;
-  border: 1px solid var(--nf-line);
+  padding: 10px 14px;
+  border: none;
   border-radius: var(--nf-radius-sm);
   background: var(--nf-sunken);
   font-size: var(--nf-fs-control);
@@ -427,10 +439,8 @@
 }
 
 .nf-readout-tag {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--nf-ink-faint);
 }
 
@@ -443,11 +453,11 @@
 }
 
 .nf-chip {
-  min-height: 38px;
-  padding: 8px 15px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  min-height: 40px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
   color: var(--nf-ink-soft);
   font-family: inherit;
   font-size: var(--nf-fs-control);
@@ -457,15 +467,13 @@
 }
 
 .nf-chip:hover:not(:disabled) {
-  border-color: var(--nf-line-strong);
-  background: var(--nf-sunken);
+  background: var(--nf-fill-hover);
 }
 
 .nf-chip[aria-pressed="true"],
 .nf-chip[data-selected="true"] {
-  border-color: var(--nf-brand);
-  background: var(--nf-brand-wash);
-  color: var(--nf-brand-ink);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-chip:focus-visible {
@@ -505,25 +513,25 @@
 
 .nf-option {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
   font-size: var(--nf-fs-control);
-  line-height: 1.45;
+  line-height: 1.4;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .nf-option:hover {
-  background: var(--nf-sunken);
+  background: var(--nf-fill-hover);
 }
 
 .nf-option[data-selected="true"] {
-  border-color: var(--nf-brand);
-  background: var(--nf-brand-wash);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-option[data-disabled="true"] {
@@ -532,7 +540,7 @@
 }
 
 .nf-option input {
-  margin: 2px 0 0;
+  margin: 0;
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
@@ -549,27 +557,26 @@
    as belonging to that option rather than as the next question. */
 .nf-other {
   margin-top: 8px;
-  padding-left: 12px;
-  border-left: 2px solid var(--nf-brand-wash);
+  padding-left: 14px;
 }
 
 /* ── Boolean ────────────────────────────────────────────────────────────── */
 
 .nf-bool {
   display: inline-flex;
-  padding: 3px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-sunken);
-  gap: 3px;
+  padding: 4px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
+  gap: 4px;
 }
 
 .nf-bool button {
   min-width: 74px;
-  min-height: 32px;
-  padding: 6px 14px;
+  min-height: 36px;
+  padding: 6px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--nf-radius-pill);
   background: transparent;
   color: var(--nf-ink-soft);
   font-family: inherit;
@@ -580,9 +587,8 @@
 }
 
 .nf-bool button[aria-pressed="true"] {
-  background: var(--nf-panel);
-  color: var(--nf-ink);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-bool button:focus-visible {
@@ -605,11 +611,11 @@
   justify-content: center;
   gap: 1px;
   min-width: 40px;
-  min-height: 38px;
-  padding: 0 10px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  min-height: 40px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
   color: var(--nf-ink-soft);
   font-family: inherit;
   font-size: var(--nf-fs-control);
@@ -626,8 +632,9 @@
 .nf-rating[data-labelled] button {
   flex: 1 1 96px;
   max-width: 240px;
-  min-height: 54px;
-  padding: 7px 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 20px;
 }
 
 .nf-rating-value {
@@ -652,7 +659,6 @@
 }
 
 .nf-rating button[aria-pressed="true"] {
-  border-color: var(--nf-brand);
   background: var(--nf-brand);
   color: #fff;
 }
@@ -698,10 +704,10 @@
 .nf-slider-value {
   min-width: 58px;
   text-align: center;
-  padding: 5px 8px;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-sunken);
+  padding: 5px 10px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
   font-size: var(--nf-fs-control);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -716,11 +722,11 @@
   justify-content: center;
   gap: 6px;
   width: 100%;
-  min-height: 96px;
+  min-height: 104px;
   padding: 18px;
-  border: 1px dashed var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-sunken);
+  border: none;
+  border-radius: 20px;
+  background: var(--nf-fill);
   color: var(--nf-ink-soft);
   font-family: inherit;
   font-size: var(--nf-fs-control);
@@ -730,9 +736,8 @@
 
 .nf-drop:hover,
 .nf-drop[data-over="true"] {
-  border-color: var(--nf-brand);
-  background: var(--nf-brand-wash);
-  color: var(--nf-brand-ink);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-drop-note {
@@ -751,10 +756,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--nf-line);
+  padding: 8px 12px;
+  border: none;
   border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  background: var(--nf-fill);
   font-size: 12px;
 }
 
@@ -762,9 +767,8 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 6px;
+  border-radius: 10px;
   object-fit: cover;
-  border: 1px solid var(--nf-line);
 }
 
 .nf-file-name {
@@ -784,14 +788,14 @@
 /* ── Signature ──────────────────────────────────────────────────────────── */
 
 .nf-sign {
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  border: none;
+  border-radius: 20px;
+  background: var(--nf-fill);
   overflow: hidden;
 }
 
 .nf-sign[data-invalid="true"] {
-  border-color: var(--nf-danger);
+  box-shadow: inset 0 0 0 1.5px var(--nf-danger);
 }
 
 /* The field itself is a target, not a canvas: nothing drawn here can be
@@ -804,7 +808,7 @@
   min-height: 104px;
   padding: 12px;
   border: none;
-  background: var(--nf-sunken);
+  background: transparent;
   cursor: pointer;
   transition: background 0.15s ease;
 }
@@ -813,10 +817,13 @@
   /* Ink is dark and the stored PNG is transparent, so the plate holding a
      signature stays paper-white in both themes or the signature vanishes. */
   background: #ffffff;
+  border-radius: 16px;
+  margin: 6px;
+  width: calc(100% - 12px);
 }
 
 .nf-sign-plate:hover:not(:disabled) {
-  background: var(--nf-brand-wash);
+  background: var(--nf-fill-hover);
 }
 
 .nf-sign-plate:focus-visible {
@@ -851,9 +858,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 10px;
-  border-top: 1px solid var(--nf-line);
-  background: var(--nf-sunken);
+  padding: 8px 12px;
+  border-top: none;
+  background: transparent;
   font-size: var(--nf-fs-help);
   color: var(--nf-ink-faint);
 }
@@ -887,8 +894,8 @@
   gap: 12px;
   width: 100%;
   max-width: 560px;
-  padding: 18px;
-  border-radius: var(--nf-radius);
+  padding: 22px;
+  border-radius: 32px;
   background: var(--nf-panel);
   box-shadow: 0 24px 60px rgba(16, 24, 40, 0.28);
 }
@@ -896,9 +903,7 @@
 .nf-sign-dialog-eyebrow {
   display: block;
   font-size: var(--nf-fs-help);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--nf-ink-faint);
 }
 
@@ -914,8 +919,8 @@
    produces is composited onto a white page in the PDF. */
 .nf-sign-paper {
   position: relative;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
+  border: none;
+  border-radius: 16px;
   background: #ffffff;
   overflow: hidden;
 }
@@ -934,7 +939,7 @@
   right: 24px;
   bottom: 44px;
   left: 24px;
-  border-bottom: 1px dashed #cbd5e1;
+  border-bottom: 1px solid #e3e8f0;
   pointer-events: none;
 }
 
@@ -976,8 +981,9 @@
 /* ── Table / matrix ─────────────────────────────────────────────────────── */
 
 .nf-table-wrap {
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
+  border: none;
+  border-radius: 20px;
+  background: var(--nf-sunken);
   overflow: hidden;
 }
 
@@ -993,39 +999,29 @@
 }
 
 .nf-table th {
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--nf-line);
-  background: var(--nf-sunken);
+  padding: 10px 12px;
+  background: transparent;
   text-align: left;
   font-size: var(--nf-fs-help);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--nf-ink-soft);
   white-space: nowrap;
 }
 
 .nf-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid var(--nf-line);
   vertical-align: middle;
-}
-
-.nf-table tr:last-child td {
-  border-bottom: none;
 }
 
 .nf-table .nf-input,
 .nf-table .nf-select {
-  min-height: 34px;
-  padding: 6px 10px;
-  border-color: transparent;
-  background: transparent;
+  min-height: 36px;
+  padding: 6px 12px;
+  background: var(--nf-panel);
 }
 
 .nf-table .nf-input:focus,
 .nf-table .nf-select:focus {
-  border-color: var(--nf-brand);
   background: var(--nf-panel);
 }
 
@@ -1042,28 +1038,28 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
-  border-top: 1px solid var(--nf-line);
-  background: var(--nf-sunken);
+  padding: 8px 12px;
+  background: transparent;
 }
 
 .nf-rowbtn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 9px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: 6px;
-  background: var(--nf-panel);
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
+  background: var(--nf-fill);
   color: var(--nf-ink-soft);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .nf-rowbtn:hover:not(:disabled) {
-  border-color: var(--nf-brand);
+  background: var(--nf-fill-hover);
   color: var(--nf-brand-ink);
 }
 
@@ -1073,7 +1069,7 @@
 }
 
 .nf-rowbtn[data-tone="danger"]:hover:not(:disabled) {
-  border-color: var(--nf-danger);
+  background: var(--nf-danger-wash);
   color: var(--nf-danger);
 }
 
@@ -1089,21 +1085,21 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 11px;
-  border: 1px solid var(--nf-line-strong);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
+  padding: 10px 14px;
+  border: none;
+  border-radius: 20px;
+  background: var(--nf-fill);
   font-size: var(--nf-fs-control);
 }
 
 .nf-rank-pos {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
-  border-radius: 6px;
-  background: var(--nf-brand-wash);
+  border-radius: 999px;
+  background: var(--nf-tonal);
   color: var(--nf-brand-ink);
   font-size: 11px;
   font-weight: 700;
@@ -1129,8 +1125,8 @@
 }
 
 .nf-repeat-item {
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
+  border: none;
+  border-radius: 20px;
   background: var(--nf-sunken);
   overflow: hidden;
 }
@@ -1140,19 +1136,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--nf-line);
-  background: var(--nf-panel);
+  padding: 10px 14px 0;
+  background: transparent;
   font-size: var(--nf-fs-help);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--nf-ink-soft);
 }
 
 .nf-repeat-body {
-  padding: 14px;
-  background: var(--nf-panel);
+  padding: 12px 14px 14px;
+  background: transparent;
 }
 
 /* ── Static content ─────────────────────────────────────────────────────── */
@@ -1181,34 +1174,30 @@
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 11px 13px;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
+  padding: 12px 16px;
+  border: none;
+  border-radius: 20px;
   background: var(--nf-sunken);
   font-size: var(--nf-fs-body);
   line-height: 1.55;
 }
 
 .nf-note[data-tone="info"] {
-  border-color: rgba(0, 120, 212, 0.3);
-  background: var(--nf-brand-wash);
-  color: var(--nf-brand-ink);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-note[data-tone="warning"] {
-  border-color: rgba(177, 92, 0, 0.3);
   background: var(--nf-warn-wash);
   color: var(--nf-warn);
 }
 
 .nf-note[data-tone="error"] {
-  border-color: rgba(198, 40, 40, 0.3);
   background: var(--nf-danger-wash);
   color: var(--nf-danger);
 }
 
 .nf-note[data-tone="success"] {
-  border-color: rgba(16, 124, 16, 0.3);
   background: var(--nf-good-wash);
   color: var(--nf-good);
 }
@@ -1232,7 +1221,7 @@
 
 
 .nf-rail-card {
-  border: 1px solid var(--nf-line);
+  border: none;
   border-radius: var(--nf-radius);
   background: var(--nf-panel);
   box-shadow: var(--nf-shadow);
@@ -1240,21 +1229,19 @@
 }
 
 .nf-rail-head {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--nf-line);
+  padding: 18px 20px 16px;
 }
 
 .nf-rail-eyebrow {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--nf-ink-faint);
 }
 
 .nf-rail-count {
   margin-top: 4px;
-  font-size: 19px;
+  font-size: 22px;
+  font-weight: 800;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1267,10 +1254,10 @@
 }
 
 .nf-meter {
-  height: 5px;
-  margin-top: 9px;
+  height: 6px;
+  margin-top: 10px;
   border-radius: var(--nf-radius-pill);
-  background: var(--nf-line);
+  background: var(--nf-fill);
   overflow: hidden;
 }
 
@@ -1294,6 +1281,7 @@
 .nf-rail-list {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   padding: 6px;
   max-height: 40vh;
   overflow-y: auto;
@@ -1303,9 +1291,9 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 7px 9px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: 16px;
   background: transparent;
   color: var(--nf-ink-soft);
   font-family: inherit;
@@ -1352,8 +1340,7 @@
 
 .nf-rail-foot {
   padding: 12px;
-  border-top: 1px solid var(--nf-line);
-  background: var(--nf-sunken);
+  background: transparent;
 }
 
 /* Stacked, the rail is no longer a rail. Left in source order it lands three
@@ -1376,8 +1363,7 @@
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 10px;
-    padding: 11px 14px;
-    border-bottom: none;
+    padding: 14px 18px;
   }
 
   .nf-rail-count {
@@ -1398,15 +1384,19 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 40px;
-  padding: 10px 18px;
-  border: 1px solid transparent;
-  border-radius: var(--nf-radius-sm);
+  min-height: 46px;
+  padding: 11px 22px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
   font-family: inherit;
   font-size: var(--nf-fs-control);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+
+.nf-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .nf-btn[data-variant="primary"] {
@@ -1419,13 +1409,12 @@
 }
 
 .nf-btn[data-variant="ghost"] {
-  border-color: var(--nf-line-strong);
-  background: var(--nf-panel);
+  background: var(--nf-fill);
   color: var(--nf-ink-soft);
 }
 
 .nf-btn[data-variant="ghost"]:hover:not(:disabled) {
-  border-color: var(--nf-ink-faint);
+  background: var(--nf-fill-hover);
   color: var(--nf-ink);
 }
 
@@ -1449,8 +1438,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 13px 15px;
-  border: 1px solid var(--nf-line);
+  padding: 16px 18px;
+  border: none;
   border-radius: var(--nf-radius);
   background: var(--nf-panel);
   box-shadow: var(--nf-shadow);
@@ -1461,7 +1450,7 @@
 }
 
 .nf-consent[data-invalid="true"] {
-  border-color: var(--nf-danger);
+  box-shadow: inset 0 0 0 1.5px var(--nf-danger);
 }
 
 .nf-consent input {
@@ -1492,8 +1481,8 @@
   gap: 10px;
   margin: 4px -20px -40px;
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--nf-line);
-  background: color-mix(in srgb, var(--nf-panel) 92%, transparent);
+  border-top: none;
+  background: color-mix(in srgb, var(--nf-canvas) 92%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -1525,9 +1514,9 @@
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 10px 14px;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius);
+  padding: 8px;
+  border: none;
+  border-radius: var(--nf-radius-pill);
   background: var(--nf-panel);
   box-shadow: var(--nf-shadow);
 }
@@ -1536,20 +1525,20 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 11px;
+  padding: 6px 13px;
   border: none;
   border-radius: var(--nf-radius-pill);
   background: transparent;
   color: var(--nf-ink-faint);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .nf-step[data-state="current"] {
-  background: var(--nf-brand-wash);
-  color: var(--nf-brand-ink);
+  background: var(--nf-tonal);
+  color: var(--nf-tonal-ink);
 }
 
 .nf-step[data-state="done"] {
