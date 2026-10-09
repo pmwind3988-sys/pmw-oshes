@@ -431,12 +431,12 @@ function MediaValue({ source, accessToken, showName = false }: { source: string;
   if (isImageLike(src) && failedSrc !== src) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: "#fff", padding: 10, overflow: "hidden" }}>
+        <div style={{ borderRadius: 14, background: C.softBg, padding: 10, overflow: "hidden" }}>
           <img
             src={src}
             alt={filenameFromUrl(source)}
             onError={() => setFailedSrc(src)}
-            style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", borderRadius: 6 }}
+            style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "contain", borderRadius: 14 }}
           />
         </div>
         {loading && <span style={{ color: C.textMuted, fontSize: 12 }}>Loading secure image...</span>}
@@ -484,12 +484,12 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
   if (rows.length === 0) return <span style={{ color: C.textMuted }}>No rows</span>;
   const columns = matrixColumns(field, rows);
   return (
-    <div style={{ overflowX: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+    <div style={{ overflowX: "auto", borderRadius: 20, background: C.softBg, padding: "6px 4px" }}>
+      <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 14 }}>
         <thead>
-          <tr style={{ background: C.softBg }}>
+          <tr>
             {columns.map((column) => (
-              <th key={column.name} style={{ padding: "8px 10px", textAlign: "left", color: C.textSecond, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>
+              <th key={column.name} style={{ padding: "8px 12px", textAlign: "left", color: C.textSecond, fontSize: 13, fontWeight: 600 }}>
                 {column.title}
               </th>
             ))}
@@ -499,7 +499,7 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
           {rows.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
-                <td key={column.name} style={{ padding: "8px 10px", color: C.textPrimary, borderTop: index === 0 ? "none" : `1px solid ${C.border}` }}>
+                <td key={column.name} style={{ padding: "8px 12px", color: C.textPrimary, verticalAlign: "top" }}>
                   {formatScalarValue(row[column.name], field)}
                 </td>
               ))}
@@ -525,7 +525,7 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
         <span style={{ color: C.textPrimary, fontSize: 15, fontWeight: 800 }}>{rating}</span>
         <span style={{ color: C.textMuted, fontSize: 12 }}>of {max}</span>
       </div>
-      <div style={{ position: "relative", height: 8, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
+      <div style={{ position: "relative", height: 8, borderRadius: 999, background: editorial.neutralWash, overflow: "hidden" }}>
         <div style={{ width: `${percent}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #F7C948, #0078D4)" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", color: C.textMuted, fontSize: 11, gap: 12, textWrap: "pretty" }}>
@@ -536,14 +536,65 @@ function RatingValue({ field, value }: { field: PreviewField; value: unknown }) 
   );
 }
 
-const fieldRowStyle: CSSProperties = {
+// An answer is a soft tile: the question in muted type above its answer, no rule
+// between rows. Tiles sit on the section's own ground, so the page reads as a
+// set of cards rather than as a ledger.
+const fieldTileStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(150px, 0.38fr) minmax(0, 1fr)",
-  gap: 14,
-  padding: "11px 0",
-  borderTop: `1px solid ${C.border}`,
-  alignItems: "start",
+  gap: 4,
+  padding: "12px 16px",
+  borderRadius: 20,
+  background: C.softBg,
+  minWidth: 0,
 };
+
+const fieldLabelStyle: CSSProperties = {
+  color: C.textSecond,
+  fontSize: 13,
+  fontWeight: 600,
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+};
+
+/** The answers a choice question was given, as the labels the respondent saw. */
+function choiceLabelsFor(field: PreviewField, value: unknown): string[] | null {
+  if (!field.choices?.length) return null;
+  const normalized = normalizeMaybeJson(value);
+  const entries = Array.isArray(normalized) ? normalized : [normalized];
+  const labels = entries
+    .filter((entry) => entry !== null && entry !== undefined && entry !== "")
+    .map((entry) => formatScalarValue(entry, field));
+  return labels.length > 0 ? labels : null;
+}
+
+/** Chosen options as tonal pills, with a tick, so a picked answer reads as picked. */
+function ChoicePills({ labels }: { labels: string[] }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {labels.map((label, index) => (
+        <span
+          key={`${label}-${index}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "4px 12px",
+            borderRadius: 999,
+            background: editorial.pmwBlueSoft,
+            color: editorial.pmwBlueDark,
+            fontSize: 13,
+            fontWeight: 700,
+            lineHeight: 1.4,
+            overflowWrap: "anywhere",
+          }}
+        >
+          <span aria-hidden="true">✓</span>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: PreviewField; value: unknown; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]> }) {
   const mediaSources = mediaSourcesForField(field, value, mediaSrcByField);
@@ -562,7 +613,9 @@ function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: Pre
   if (field.type === "rating") {
     return <RatingValue field={field} value={value} />;
   }
-  return <div style={{ color: C.textPrimary, overflowWrap: "anywhere", whiteSpace: field.inputType === "textarea" ? "pre-wrap" : "normal" }}>{formatScalarValue(value, field)}</div>;
+  const labels = choiceLabelsFor(field, value);
+  if (labels) return <ChoicePills labels={labels} />;
+  return <div style={{ color: C.textPrimary, fontSize: 15, overflowWrap: "anywhere", whiteSpace: field.inputType === "textarea" ? "pre-wrap" : "normal" }}>{formatScalarValue(value, field)}</div>;
 }
 
 function fallbackSections(fallbackData: Record<string, unknown> | undefined): PreviewSection[] {
@@ -587,23 +640,18 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
       {displaySections.map((section, sectionIndex) => (
         <section
           key={`${section.title}-${sectionIndex}`}
-          style={{
-            background: compact ? C.cardBg : C.softBg,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: compact ? 12 : 16,
-          }}
+          style={{ display: "grid", gap: 10, minWidth: 0 }}
         >
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.textPrimary, marginBottom: 6 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: C.textPrimary, lineHeight: 1.3, padding: "0 4px" }}>
             {section.title}
           </div>
-          <div>
+          <div style={{ display: "grid", gap: 8 }}>
             {section.fields.map((field) => (
-              <div key={field.name} style={fieldRowStyle}>
-                <div style={{ color: C.textSecond, fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}>
+              <div key={field.name} style={fieldTileStyle}>
+                <div style={fieldLabelStyle}>
                   {field.title}
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0 }}>
+                <div style={{ fontSize: 15, lineHeight: 1.5, minWidth: 0 }}>
                   <FieldValue field={field} value={data?.[field.dataKey]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
                 </div>
               </div>

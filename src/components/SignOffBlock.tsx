@@ -13,6 +13,9 @@
 import { editorial } from "../theme/editorial";
 import type { SignOffVerdict } from "../utils/signOff";
 
+/** A rejection's caption, in the danger ink rather than the red fill. */
+const REJECTED_INK = "#8C1D18";
+
 export default function SignOffBlock({
   verdict,
   label,
@@ -36,27 +39,29 @@ export default function SignOffBlock({
 }) {
   return (
     <div style={{ width: compact ? 260 : 300, maxWidth: "100%", marginLeft: align === "end" ? "auto" : 0 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: verdict === "rejected" ? editorial.error : editorial.muted }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: verdict === "rejected" ? REJECTED_INK : editorial.muted, padding: "0 4px" }}>
         {label}
       </div>
-      {signature ? (
-        <div style={{ height: compact ? 36 : 52, display: "flex", alignItems: "flex-end", marginTop: 4 }}>
-          <img
-            src={signature}
-            alt={`Signature of ${name || "the signer"}`}
-            style={{ maxHeight: compact ? 34 : 50, maxWidth: 220, objectFit: "contain" }}
-          />
-        </div>
-      ) : null}
-      <div style={signature ? { borderTop: `1px solid ${editorial.ink}`, paddingTop: 6 } : { marginTop: 4 }}>
-        <div style={{ fontSize: compact ? 14 : 15, fontWeight: 700, color: editorial.ink, overflowWrap: "anywhere" }}>
-          {name || "—"}
-        </div>
-        {position && (
-          <div style={{ fontSize: 13, color: editorial.muted, marginTop: 2 }}>{position}</div>
-        )}
-        <div style={{ fontSize: 12, color: editorial.softMuted, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
-          Date: {date}
+      <div style={{ marginTop: 6, padding: compact ? "10px 14px" : "12px 16px", borderRadius: 14, background: editorial.panel }}>
+        {signature ? (
+          <div style={{ height: compact ? 36 : 52, display: "flex", alignItems: "flex-end" }}>
+            <img
+              src={signature}
+              alt={`Signature of ${name || "the signer"}`}
+              style={{ maxHeight: compact ? 34 : 50, maxWidth: 220, objectFit: "contain" }}
+            />
+          </div>
+        ) : null}
+        <div style={signature ? { borderTop: `1px solid ${editorial.border}`, paddingTop: 8, marginTop: 4 } : undefined}>
+          <div style={{ fontSize: compact ? 15 : 16, fontWeight: 700, color: editorial.ink, overflowWrap: "anywhere" }}>
+            {name || "—"}
+          </div>
+          {position && (
+            <div style={{ fontSize: 13, color: editorial.muted, marginTop: 2 }}>{position}</div>
+          )}
+          <div style={{ fontSize: 13, color: editorial.softMuted, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+            Date: {date}
+          </div>
         </div>
       </div>
     </div>

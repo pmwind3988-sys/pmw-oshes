@@ -3,7 +3,7 @@
  * Route: /form/:formId
  */
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -30,7 +30,7 @@ import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterR
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
-import { Share as IosShareIcon } from "../components/ui/Icons";
+import { Share as IosShareIcon, Lock as LockIcon, Clock as ClockIcon, CalendarDays as CalendarIcon, Search as SearchIcon, Hourglass as HourglassIcon, RefreshCw as RefreshIcon } from "../components/ui/Icons";
 import Logo from "../components/Logo";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -409,34 +409,47 @@ async function resolveLayerAssignee(
   }
   return { email: resolveLayerEmail(layer, submittedData), name: "" };
 }
-const APP_FONT_FAMILY = "'Inter','Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
+const APP_FONT_FAMILY = "'Figtree',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+const MONO_FONT_FAMILY = "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace";
 
-// Theme tokens
+// Theme tokens. Soft UI palette: ground, white sheets, filled inputs, one blue
+// primary. Dark mode keeps the same roles with its own values.
 const LIGHT = {
-  purple: "#101010", purpleLight: "#333333", purplePale: "#EAF5FC", purpleMid: "#BFDDF4",
-  purpleDark: "#000000", bg: "linear-gradient(180deg,#BFDDF4 0%,#DCECF8 46%,#F7F5EF 100%)", cardBg: "#FFFFFF", offWhite: "#F7F5EF", border: "#D6DCE5",
-  textPrimary: "#101010", textSecond: "#5F646D", textMuted: "#747B86",
-  green: "#107C10", greenPale: "#E3F1E3", greenBorder: "#107C10",
-  red: "#C62828", redPale: "#F8E4E4", amber: "#805800", amberPale: "#FFF7BD",
-  shadow: "none",
-  shadowLg: "0 18px 42px rgba(16,16,16,0.14)", shadowFab: "0 10px 28px rgba(16,16,16,0.10)",
+  purple: "#1A5FD0", purpleLight: "#174FB0", purplePale: "#D9E5FB", purpleMid: "#C9DAF8", purpleDark: "#0B3B8C",
+  onPrimary: "#FFFFFF", focus: "#9DBDF5",
+  bg: "#EEF2F8", cardBg: "#FFFFFF", offWhite: "#F5F7FB", chip: "#EDF0F5", border: "#E3E8F0",
+  textPrimary: "#161B24", textSecond: "#586174", textMuted: "#586174",
+  green: "#2E9D6A", greenPale: "#D5F0E1", greenText: "#0E5233", greenBorder: "#2E9D6A",
+  red: "#B3261E", redPale: "#FADBD8", amber: "#6B4A00", amberPale: "#FCEFC7",
+  shadow: "0 1px 3px rgba(22,27,36,0.08)", shadowLg: "0 10px 40px rgba(22,27,36,0.06)", shadowFab: "0 6px 16px rgba(26,95,208,0.28)",
 };
 
 const DARK = {
-  ...LIGHT, bg: "#101923", cardBg: "#17212B", offWhite: "#111B25", border: "#2F3B47",
+  ...LIGHT, purple: "#7AA7F0", purpleLight: "#9DBDF5", purplePale: "#1B2E4D", purpleMid: "#2F4A75", purpleDark: "#C9DAF8",
+  onPrimary: "#0B1220", focus: "#4F7FD0",
+  bg: "#101923", cardBg: "#17212B", offWhite: "#111B25", chip: "#243140", border: "#2F3B47",
   textPrimary: "#F8FAFC", textSecond: "#CBD5E1", textMuted: "#94A3B8",
-  greenPale: "#052e16", greenBorder: "#166534", redPale: "#3b0707", amberPale: "#2d1b00",
-  shadow: "0 1px 3px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3)",
-  shadowLg: "0 8px 40px rgba(0,0,0,.5)", shadowFab: "0 4px 20px rgba(0,0,0,.4)",
+  green: "#3DBE85", greenPale: "#052e16", greenText: "#86EFAC", greenBorder: "#166534",
+  red: "#F2A29C", redPale: "#3b0707", amber: "#F5C36B", amberPale: "#2d1b00",
+  shadow: "0 1px 3px rgba(0,0,0,.4)", shadowLg: "0 8px 40px rgba(0,0,0,.5)", shadowFab: "0 6px 16px rgba(0,0,0,.4)",
 };
 
 const globalCss = (t: typeof LIGHT) => `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;font-family:${APP_FONT_FAMILY}!important}
   body{font-family:${APP_FONT_FAMILY};background:${t.bg};color:${t.textPrimary};transition:background .3s,color .3s}
+  .dfp-mono{font-family:${MONO_FONT_FAMILY}!important;font-variant-numeric:tabular-nums}
   @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes dfpPop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.06);opacity:1}100%{transform:scale(1)}}
+  .dfp-spin{animation:spin .9s linear infinite}
+  .dfp-pop{animation:dfpPop .5s cubic-bezier(.16,1,.3,1) both}
+  .dfp-pill{transition:background-color .2s ease,filter .2s ease,transform .12s ease;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .dfp-pill:hover{filter:brightness(.96)}
+  .dfp-pill:active{transform:scale(.97)}
+  a.dfp-pill{text-decoration:none}
+  .dfp-link:hover{text-decoration:underline}
+  button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid ${t.focus};outline-offset:2px}
   .dfp-header{flex-wrap:nowrap}
   .dfp-banner-logo img{max-height:48px!important}
   .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
@@ -457,11 +470,11 @@ const globalCss = (t: typeof LIGHT) => `
     .dfp-doc-cell:last-child{border-bottom:none}
   }
   @media(max-width:640px){
-    .dfp-header{padding:0 12px!important;min-height:48px!important}
+    .dfp-header{padding:0 12px!important;min-height:52px!important}
     .dfp-header-left{gap:6px!important}
-    .dfp-title{font-size:13px!important;max-width:140px}
+    .dfp-title{font-size:14px!important;max-width:140px}
     .dfp-user-name{display:none}
-    .dfp-badge{font-size:9px!important;padding:1px 7px!important}
+    .dfp-badge{font-size:11px!important;padding:2px 8px!important}
     .dfp-header-right{gap:6px!important}
     .dfp-version{display:none}
     .dfp-content{padding:20px 16px 72px!important}
@@ -469,17 +482,50 @@ const globalCss = (t: typeof LIGHT) => `
   @media(max-width:480px){
     .dfp-title{max-width:100px}
     .dfp-banner-logo img{max-height:34px!important}
+    .dfp-state-card{padding:32px 22px!important}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .dfp-spin,.dfp-pop{animation:none!important}
+    .dfp-pill{transition:none!important}
   }
   ::-webkit-scrollbar{width:5px}
   ::-webkit-scrollbar-thumb{background:${t.purpleMid};border-radius:10px}
 `;
 
+/** Button looks: one filled per view, the rest tonal or ghost. Pills throughout. */
+const pillBase = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+  minHeight: 52, padding: "0 28px", borderRadius: 999, border: "none",
+  fontFamily: APP_FONT_FAMILY, fontSize: 16, fontWeight: 700, lineHeight: 1.2,
+  whiteSpace: "nowrap" as const, textDecoration: "none",
+};
+const pillFilled = (t: typeof LIGHT) => ({ ...pillBase, background: t.purple, color: t.onPrimary });
+const pillTonal = (t: typeof LIGHT) => ({ ...pillBase, background: t.purplePale, color: t.purple });
+const pillGhost = (t: typeof LIGHT) => ({ ...pillBase, background: t.chip, color: t.textSecond });
+
+/**
+ * Which failure a load error is. Matched on the message the loaders throw:
+ * a closed or expired form has its own honest title; a missing one is not
+ * found; anything else (network, API) is a plain failure to load.
+ */
+export function formErrorKind(message: string): "closed" | "expired" | "notFound" | "failed" {
+  const text = message.toLowerCase();
+  if (text.includes("turned off")) return "closed";
+  if (text.includes("expired")) return "expired";
+  if (text.includes("no form slug") || text.includes("not found") || text.includes("404")) return "notFound";
+  return "failed";
+}
+
+/** A spinning arc in the house ring style. Still for reduced motion users. */
 const Spinner = ({ size = 30, t }: { size?: number; t: typeof LIGHT }) => (
-  <div style={{ width: size, height: size, border: `2.5px solid ${t.purpleMid}`, borderTop: `2.5px solid ${t.purple}`, borderRadius: "50%", animation: "spin .85s linear infinite", flexShrink: 0 }} />
+  <svg className="dfp-spin" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false" style={{ flexShrink: 0, display: "block" }}>
+    <circle cx="12" cy="12" r="9" fill="none" stroke={t.purpleMid} strokeWidth="3" />
+    <circle cx="12" cy="12" r="9" fill="none" stroke={t.purple} strokeWidth="3" strokeLinecap="round" strokeDasharray="14 57" />
+  </svg>
 );
 
-const MsIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+const MsIcon = ({ size = 14 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
     <rect x="1" y="1" width="6.5" height="6.5" fill="#F25022" />
     <rect x="8.5" y="1" width="6.5" height="6.5" fill="#7FBA00" />
     <rect x="1" y="8.5" width="6.5" height="6.5" fill="#00A4EF" />
@@ -499,61 +545,138 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
     return () => window.removeEventListener("scroll", fn);
   }, []);
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 3, zIndex: 9999, pointerEvents: "none" }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg,${t.purple},${t.purpleLight})`, transition: "width .1s linear", borderRadius: "0 2px 2px 0" }} />
+    <div style={{ position: "fixed", top: 4, left: 12, right: 12, height: 4, zIndex: 9999, pointerEvents: "none", borderRadius: 999 }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: t.purple, transition: "width .1s linear", borderRadius: 999 }} />
     </div>
   );
 };
 
-const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay, testRunReview }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string; testRunReview?: { href: string; label: string } | null }) => (
-  <div style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
-    {isTestRun && (
-      <div role="status" style={{ maxWidth: 440, margin: "0 auto 20px", padding: "10px 16px", background: t.red, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 700, lineHeight: 1.5 }}>
-        TEST RUN — this was a rehearsal, not a real submission. Every email it sends goes only to {testEmailDisplay || "the nominated test address"}.
+/** The centred white card every state screen uses: one icon, a title, one sentence, pill actions. */
+function StateCard({
+  t, tone, icon, title, body, actions, role,
+}: {
+  t: typeof LIGHT;
+  tone: "amber" | "neutral" | "primary";
+  icon: ReactNode;
+  title: string;
+  body: ReactNode;
+  actions: ReactNode;
+  role?: "alert";
+}) {
+  const palette = tone === "amber"
+    ? { background: t.amberPale, color: t.amber }
+    : tone === "primary"
+      ? { background: t.purplePale, color: t.purple }
+      : { background: t.chip, color: t.textSecond };
+  return (
+    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: APP_FONT_FAMILY }}>
+      <style>{globalCss(t)}</style>
+      <section
+        role={role}
+        className="dfp-state-card"
+        style={{
+          width: "100%", maxWidth: 480, background: t.cardBg, borderRadius: 32, boxShadow: t.shadowLg,
+          padding: "40px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 24,
+          animation: "fadeUp .3s ease",
+        }}
+      >
+        <div aria-hidden="true" style={{ width: 112, height: 112, borderRadius: 999, background: palette.background, color: palette.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {icon}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.25, color: t.textPrimary, textWrap: "balance" } as CSSProperties}>{title}</h1>
+          <div style={{ fontSize: 16, lineHeight: 1.55, color: t.textSecond, maxWidth: 380, overflowWrap: "anywhere", textWrap: "pretty" } as CSSProperties}>{body}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: "100%" }}>
+          {actions}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BackToHomeLink({ t }: { t: typeof LIGHT }) {
+  return (
+    <a href="/" className="dfp-pill" style={{ ...pillGhost(t), width: "100%" }}>Back to home</a>
+  );
+}
+
+const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay, testRunReview }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string; testRunReview?: { href: string; label: string } | null }) => {
+  const [referenceCopied, setReferenceCopied] = useState(false);
+  useEffect(() => {
+    if (!referenceCopied) return;
+    const timer = window.setTimeout(() => setReferenceCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [referenceCopied]);
+  const copyReference = () => {
+    navigator.clipboard?.writeText(referenceNo).then(() => setReferenceCopied(true)).catch(() => {});
+  };
+
+  return (
+    <div style={{ textAlign: "center", padding: "40px 12px 24px", animation: "fadeUp .3s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {isTestRun && (
+        <div role="status" style={{ maxWidth: 440, width: "100%", margin: "0 auto 24px", padding: "10px 16px", background: t.amberPale, color: t.amber, borderRadius: 16, fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+          Test run: this was a rehearsal, not a real submission. Every email it sends goes only to {testEmailDisplay || "the nominated test address"}.
+        </div>
+      )}
+      <div className="dfp-pop" aria-hidden="true" style={{ width: 112, height: 112, borderRadius: 999, background: t.green, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+        <svg width={56} height={56} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
       </div>
-    )}
-    <div style={{ width: 72, height: 72, borderRadius: "50%", background: t.greenPale, border: `2px solid ${t.greenBorder}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>OK</div>
-    <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary, marginBottom: 10 }}>Submission received</div>
-    <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.8, maxWidth: 420, margin: "0 auto 10px" }}>Your response for <strong>{formTitle}</strong> has been recorded.</p>
-    {referenceNo && (
-      // The reference is what the reporter has to quote when chasing this up,
-      // so it is given room to be read and copied rather than tucked into the
-      // sentence above.
-      <div style={{ maxWidth: 420, margin: "18px auto 22px", padding: "14px 18px", background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8 }}>
-        <div style={{ fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", color: t.textSecond, marginBottom: 6 }}>Reference number</div>
-        {/* Tabular numerals rather than a mono face: DESIGN.md keeps one family
-            throughout and distinguishes by weight, so the ID reads as fixed-width
-            without importing a second typeface. */}
-        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums", color: t.textPrimary, userSelect: "all", wordBreak: "break-all" }}>{referenceNo}</div>
-        <div style={{ fontSize: 12, color: t.textSecond, marginTop: 6 }}>Keep this to track or ask about your report.</div>
-      </div>
-    )}
-    {isTestRun && testRunReview && (
-      <div style={{ margin: "8px auto 18px" }}>
-        <a
-          href={testRunReview.href}
-          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: 44, padding: "0 24px", borderRadius: 8, background: t.purple, color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none" }}
-        >
-          {testRunReview.label}
-        </a>
-        <div style={{ fontSize: 12, color: t.textSecond, marginTop: 8 }}>A signed-in step opens only for whoever it is assigned to.</div>
-      </div>
-    )}
-    <button onClick={onReset} style={{ padding: "11px 30px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardBg, color: t.textSecond, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans'" }}>Submit another response</button>
-  </div>
-);
+      <h1 style={{ fontSize: 28, fontWeight: 800, color: t.textPrimary, marginBottom: 10, lineHeight: 1.2 }}>Submitted</h1>
+      <p style={{ color: t.textSecond, fontSize: 16, lineHeight: 1.6, maxWidth: 420, margin: 0 }}>Your response for <strong style={{ color: t.textPrimary }}>{formTitle}</strong> has been recorded.</p>
+      {referenceNo && (
+        <div style={{ marginTop: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+            <span
+              className="dfp-mono"
+              style={{ background: t.chip, color: t.textPrimary, borderRadius: 999, padding: "12px 22px", fontSize: 20, fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", userSelect: "all" }}
+            >
+              {referenceNo}
+            </span>
+            <button type="button" onClick={copyReference} className="dfp-pill" style={{ ...pillGhost(t), minHeight: 44, padding: "0 18px", fontSize: 14, color: referenceCopied ? t.greenText : t.textSecond, background: referenceCopied ? t.greenPale : t.chip }}>
+              {referenceCopied ? <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>Copied</> : <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>Copy</>}
+            </button>
+          </div>
+          <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.6, maxWidth: 420, margin: 0 }}>Keep this number — you can check progress at /track</p>
+          <a href={`/track?ref=${encodeURIComponent(referenceNo)}`} className="dfp-pill" style={pillTonal(t)}>Track this report</a>
+        </div>
+      )}
+      {isTestRun && testRunReview && (
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+          <a href={testRunReview.href} className="dfp-pill" style={pillFilled(t)}>
+            {testRunReview.label}
+          </a>
+          <div style={{ fontSize: 13, color: t.textSecond }}>A signed-in step opens only for whoever it is assigned to.</div>
+        </div>
+      )}
+      <button type="button" onClick={onReset} className="dfp-pill" style={{ ...pillGhost(t), marginTop: 28 }}>Submit another response</button>
+    </div>
+  );
+};
 
 const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
-  <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-    <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, width: "100%", textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}`, animation: "fadeUp .3s ease" }}>
-      <div style={{ width: 66, height: 66, borderRadius: 18, margin: "0 auto 22px", background: t.purplePale, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>LOCK</div>
-      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 24, color: t.textPrimary, marginBottom: 10 }}>Sign in required</div>
-      <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7, marginBottom: 32 }}><strong>{formTitle || "This form"}</strong> is restricted.</p>
-      <button onClick={onSignIn} style={{ width: "100%", padding: "14px", borderRadius: 8, border: "none", background: `linear-gradient(135deg,${t.purple},${t.purpleLight})`, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-        <MsIcon /> Sign in with Microsoft 365
-      </button>
-    </div>
-  </div>
+  <StateCard
+    t={t}
+    tone="primary"
+    icon={<LockIcon size={48} />}
+    title="Sign in to open this form"
+    body={<><strong style={{ color: t.textPrimary }}>{formTitle || "This form"}</strong> is for PMW staff only. Sign in with your work account to continue.</>}
+    actions={
+      <>
+        <button type="button" onClick={onSignIn} className="dfp-pill" style={{ ...pillFilled(t), width: "100%", minHeight: 56, gap: 12 }}>
+          <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 999, background: "#FFFFFF", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <MsIcon size={15} />
+          </span>
+          Sign in with Microsoft 365
+        </button>
+        <p style={{ margin: "6px 0 0", fontSize: 14, color: t.textMuted, lineHeight: 1.5 }}>
+          Need to report something? <a href="/report" className="dfp-link" style={{ color: t.purple, fontWeight: 700 }}>Report something without signing in</a>
+        </p>
+      </>
+    }
+  />
 );
 
 export default function DynamicFormPage() {
@@ -834,7 +957,7 @@ export default function DynamicFormPage() {
     const baseJson = formData?.surveyJson;
     if (!baseJson) { setEnrichedSurveyJson(null); return; }
 
-    const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Inter" });
+    const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Figtree" });
     const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
       cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
     // When the direct SharePoint reads are unavailable the config already arrived
@@ -1736,7 +1859,7 @@ export default function DynamicFormPage() {
     let cancelled = false;
     import("qrcode")
       .then(({ default: QRCode }) =>
-        QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#1E1B4B", light: "#FFFFFF" } }),
+        QRCode.toDataURL(shareUrl, { width: 280, margin: 2, color: { dark: "#161B24", light: "#FFFFFF" } }),
       )
       .then((dataUrl) => {
         if (!cancelled) setQrDataUrl(dataUrl);
@@ -1750,85 +1873,128 @@ export default function DynamicFormPage() {
   }, [showQr]);
 
   if (loading) return (
-    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+    <div role="status" aria-live="polite" style={{ minHeight: "100dvh", background: t.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 24, fontFamily: APP_FONT_FAMILY }}>
       <style>{globalCss(t)}</style>
-      <Spinner t={t} />
-      <div style={{ fontSize: 13, color: t.textMuted, animation: "pulse 1.5s infinite" }}>Loading form...</div>
+      <Spinner size={64} t={t} />
+      <div style={{ fontSize: 16, fontWeight: 600, color: t.textSecond }}>Opening the form…</div>
     </div>
   );
 
   // A form that loaded without survey content can never be filled in or submitted —
   // say so instead of sitting on a spinner forever.
   if (!error && !formData?.surveyJson) return (
-    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
-        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
-        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form unavailable</div>
-        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>This link has no published form content. Please ask an OSHES Forms Owner to republish the form and share the link again.</p>
-      </div>
-    </div>
+    <StateCard
+      t={t}
+      tone="neutral"
+      role="alert"
+      icon={<HourglassIcon size={48} />}
+      title="This form isn't ready yet"
+      body="This link has no published form content. Please ask an OSHES Forms Owner to republish the form and share the link again."
+      actions={<BackToHomeLink t={t} />}
+    />
   );
 
-  if (error) return (
-    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <style>{globalCss(t)}</style>
-      <div style={{ background: t.cardBg, borderRadius: 8, padding: "56px 44px", maxWidth: 420, textAlign: "center", boxShadow: t.shadowLg, border: `1px solid ${t.border}` }}>
-        <div style={{ fontSize: 44, marginBottom: 18 }}>ERR</div>
-        <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: t.red, marginBottom: 10 }}>Form not found</div>
-        <p style={{ color: t.textSecond, fontSize: 13, lineHeight: 1.7 }}>{error}</p>
-      </div>
-    </div>
-  );
+  if (error) {
+    const kind = formErrorKind(error);
+    if (kind === "closed") return (
+      <StateCard
+        t={t}
+        tone="amber"
+        role="alert"
+        icon={<ClockIcon size={48} />}
+        title="This form is closed"
+        body="It isn't taking responses right now. Ask the OSHES team if you think it should be open."
+        actions={<BackToHomeLink t={t} />}
+      />
+    );
+    if (kind === "expired") return (
+      <StateCard
+        t={t}
+        tone="amber"
+        role="alert"
+        icon={<CalendarIcon size={48} />}
+        title="This form has expired"
+        body="Its publishing period has ended. Ask the OSHES team for a current link."
+        actions={<BackToHomeLink t={t} />}
+      />
+    );
+    if (kind === "notFound") return (
+      <StateCard
+        t={t}
+        tone="neutral"
+        role="alert"
+        icon={<SearchIcon size={48} />}
+        title="We couldn't find this form"
+        body="Check the link, or scan the poster again."
+        actions={<BackToHomeLink t={t} />}
+      />
+    );
+    return (
+      <StateCard
+        t={t}
+        tone="neutral"
+        role="alert"
+        icon={<RefreshIcon size={48} />}
+        title="We couldn't load this form"
+        body={<span style={{ fontSize: 13, color: t.textMuted, overflowWrap: "anywhere" }}>{error}</span>}
+        actions={
+          <>
+            <button type="button" onClick={() => window.location.reload()} className="dfp-pill" style={{ ...pillFilled(t), width: "100%" }}>Try again</button>
+            <BackToHomeLink t={t} />
+          </>
+        }
+      />
+    );
+  }
 
   if (!isPublicForm && !isAuthenticated) return (<><style>{globalCss(t)}</style><PrivateGate formTitle={formTitle} onSignIn={handleSignIn} t={t} /></>);
 
   return (
-    <div style={{ minHeight: "100dvh", background: t.bg }}>
+    <div style={{ minHeight: "100dvh", background: t.bg, fontFamily: APP_FONT_FAMILY }}>
       <style>{globalCss(t)}</style>
       <ScrollProgress t={t} />
       {isTestRun && (
-        <div role="status" style={{ background: t.red, color: "#fff", fontSize: 13, fontWeight: 700, textAlign: "center", padding: "10px 12px", lineHeight: 1.4 }}>
-          TEST RUN — emails go only to {testEmailDisplay || "the nominated test address"}
+        <div role="status" style={{ background: t.amberPale, color: t.amber, fontSize: 13, fontWeight: 700, textAlign: "center", padding: "10px 12px", lineHeight: 1.4 }}>
+          Test run — emails go only to {testEmailDisplay || "the nominated test address"}
         </div>
       )}
       {simulateStep === "blocked" && submitStatus !== "success" && (
-        <div role="alert" style={{ background: t.amberPale, color: t.textPrimary, fontSize: 13, textAlign: "center", padding: "10px 12px", lineHeight: 1.5, borderBottom: `1px solid ${t.border}` }}>
+        <div role="alert" style={{ background: t.amberPale, color: t.amber, fontSize: 13, textAlign: "center", padding: "10px 12px", lineHeight: 1.5 }}>
           <strong>Not submitted yet.</strong> Some questions need a real answer, such as a file upload. Fill the highlighted ones, then press Submit.
         </div>
       )}
       {simulateRequested && simulateStep !== "blocked" && submitStatus === null && (
-        <div role="status" style={{ background: t.purplePale, color: t.textPrimary, fontSize: 13, textAlign: "center", padding: "10px 12px" }}>
+        <div role="status" style={{ background: t.purplePale, color: t.purple, fontSize: 13, fontWeight: 700, textAlign: "center", padding: "10px 12px" }}>
           Filling in sample answers and submitting…
         </div>
       )}
-      <header className="dfp-header" style={{ background: t.cardBg, borderBottom: `1px solid ${t.border}`, minHeight: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", position: "sticky", top: 0, zIndex: 50, gap: 10, boxShadow: "0 1px 2px rgba(17,24,39,0.04)" }}>
-        <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <header className="dfp-header" style={{ background: t.cardBg, minHeight: 60, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px 0 18px", position: "sticky", top: 10, zIndex: 50, gap: 10, margin: "10px 12px 0", borderRadius: 24, boxShadow: t.shadow }}>
+        <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <Logo size={{ xs: 26, sm: 28, md: 32 }} />
-          <span className="dfp-title" style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 15, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
-          {pinVersion && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
-          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 10, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 6, padding: "2px 8px", whiteSpace: "nowrap" }}>Private</span>}
+          <span className="dfp-title" style={{ fontWeight: 800, fontSize: 16, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
+          {pinVersion && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>Private</span>}
         </div>
         <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" style={{ height: 30, width: 30, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, cursor: "pointer", padding: 0, lineHeight: 0 }}><IosShareIcon style={{ fontSize: 15 }} /></button>
+          <button type="button" onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" aria-label="Share this form" className="dfp-pill" style={{ ...pillGhost(t), minHeight: 36, width: 36, padding: 0 }}><IosShareIcon style={{ fontSize: 16 }} /></button>
           {isAuthenticated ? (
             <>
-              <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: t.textSecond }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
+              <div className="dfp-user-badge" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: t.textSecond }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.green, flexShrink: 0 }} />
                 <span className="dfp-user-name">{userEmail?.split("@")[0]}</span>
               </div>
-              <button onClick={handleSignOut} style={{ height: 30, padding: "0 10px", border: `1px solid ${t.border}`, borderRadius: 8, background: "none", color: t.textSecond, fontSize: 11, cursor: "pointer", fontFamily: "'DM Sans'", whiteSpace: "nowrap" }}>Sign out</button>
+              <button type="button" onClick={handleSignOut} className="dfp-pill" style={{ ...pillGhost(t), minHeight: 36, padding: "0 14px", fontSize: 13, whiteSpace: "nowrap" }}>Sign out</button>
             </>
-          ) : (<button onClick={handleSignIn} style={{ height: 30, padding: "0 12px", border: `1px solid ${t.purpleMid}`, borderRadius: 8, background: "none", color: t.purple, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
-          <span className="dfp-version" style={{ fontSize: 10, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
+          ) : (<button type="button" onClick={handleSignIn} className="dfp-pill" style={{ ...pillTonal(t), minHeight: 36, padding: "0 14px", fontSize: 13, gap: 8, whiteSpace: "nowrap" }}><MsIcon /> Sign in</button>)}
+          <span className="dfp-version" style={{ fontSize: 12, color: t.textMuted, whiteSpace: "nowrap" }}>v{formVersion}</span>
         </div>
       </header>
 
       {showHeaderBanner && (
-        <div className="dfp-banner" style={{ borderBottom: `1px solid ${t.border}`, background: t.cardBg }}>
-          <div style={{ background: `linear-gradient(135deg,${t.purpleDark},${t.purple})`, padding: "14px 20px" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0, marginBottom: 3 }}>{isoStandardsText}</div>
-            <div style={{ fontFamily: "'DM Sans',sans-serif", fontWeight: 700, fontSize: 17, color: "#fff" }}>{formTitle}</div>
+        <div className="dfp-banner" style={{ width: "calc(100% - 24px)", maxWidth: 836, margin: "16px auto 0", borderRadius: 24, overflow: "hidden", background: t.cardBg, boxShadow: t.shadow }}>
+          <div style={{ padding: "18px 22px 16px" }}>
+            <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>{isoStandardsText}</div>
+            <div style={{ fontWeight: 800, fontSize: 22, lineHeight: 1.25, color: t.textPrimary }}>{formTitle}</div>
           </div>
           {/* Logo beside the document control block, the way the printed form
               carries them. The company used to sit here, because SurveyJS could
@@ -1862,17 +2028,17 @@ export default function DynamicFormPage() {
         ) : (
           <div>
             {!isPublicForm && isAuthenticated && (
-              <div style={{ background: t.greenPale, border: `1px solid ${t.greenBorder}`, borderRadius: 8, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${t.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
-                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: t.green }}>Submitting as yourself</div><div style={{ fontSize: 11, color: t.textSecond }}>{userEmail}</div></div>
-                <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
+              <div style={{ background: t.greenPale, borderRadius: 24, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
+                <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: "50%", background: t.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: t.greenText }}>Submitting as yourself</div><div style={{ fontSize: 12, color: t.textSecond, overflowWrap: "anywhere" }}>{userEmail}</div></div>
+                <button type="button" onClick={handleSignOut} className="dfp-pill" style={{ ...pillGhost(t), minHeight: 36, padding: "0 14px", fontSize: 13 }}>Sign out</button>
               </div>
             )}
-            {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {formReady ? <div className="dfp-survey-wrap"><NativeFormView runtime={runtime} dark={dark} /></div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner size={40} t={t} /><span>Preparing form…</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {formReady && runtime.isLastPage && (
               <>
-                <div className="dfp-pdpa-consent" style={{ background: t.cardBg, border: `1px solid ${pdpaConsentError ? t.red : t.border}`, borderRadius: 8, padding: "14px 16px", marginTop: 18, boxShadow: t.shadow }}>
-                  <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                <div className="dfp-pdpa-consent" style={{ background: pdpaConsentError ? t.redPale : t.offWhite, borderRadius: 24, padding: "16px 20px", marginTop: 18 }}>
+                  <label style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={pdpaAccepted}
@@ -1880,67 +2046,64 @@ export default function DynamicFormPage() {
                         setPdpaAccepted(e.target.checked);
                         if (e.target.checked) setPdpaConsentError("");
                       }}
-                      style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}
+                      style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0, accentColor: t.purple }}
                     />
-                    <span style={{ fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
+                    <span style={{ fontSize: 13, lineHeight: 1.7, color: t.textSecond }}>
                       <strong style={{ color: t.textPrimary }}>{PDPA_CONSENT_LABEL}</strong><br />
                       {PDPA_SUMMARY}{" "}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: t.purple, fontWeight: 700 }}>
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="dfp-link" style={{ color: t.purple, fontWeight: 700 }}>
                         View Privacy Notice
                       </a>
                     </span>
                   </label>
-                  {pdpaConsentError && <div style={{ color: t.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
+                  {pdpaConsentError && <div style={{ color: t.red, fontSize: 13, fontWeight: 700, marginTop: 8 }}>{pdpaConsentError}</div>}
                 </div>
                 <button
                   type="button"
                   onClick={handleSubmit}
                   disabled={submitStatus === "loading"}
+                  className="dfp-pill"
                   style={{
+                    ...pillFilled(t),
                     width: "100%",
-                    minHeight: 46,
                     marginTop: 14,
-                    border: "none",
-                    borderRadius: 8,
-                    background: submitStatus === "loading" ? t.purpleMid : t.purple,
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 800,
+                    background: submitStatus === "loading" ? t.purplePale : t.purple,
+                    color: submitStatus === "loading" ? t.purple : t.onPrimary,
                     cursor: submitStatus === "loading" ? "wait" : "pointer",
                     boxShadow: t.shadowFab,
                   }}
                 >
-                  {submitStatus === "loading" ? "Submitting..." : "Submit"}
+                  {submitStatus === "loading" ? "Submitting…" : "Submit"}
                 </button>
               </>
             )}
-            {submitStatus === "loading" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.purplePale, border: `1px solid ${t.purpleMid}`, borderRadius: 8, color: t.purple, fontSize: 13, fontWeight: 700 }}><Spinner size={14} t={t} /> Submitting your response...</div>}
-            {submitStatus === "error" && <div style={{ marginTop: 16, padding: "13px 16px", background: t.redPale, border: "1px solid #FCA5A5", borderRadius: 8, color: t.red, fontSize: 13, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
+            {submitStatus === "loading" && <div role="status" style={{ marginTop: 16, padding: "14px 18px", background: t.purplePale, borderRadius: 24, color: t.purple, fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}><Spinner size={18} t={t} /> Submitting your response…</div>}
+            {submitStatus === "error" && <div role="alert" style={{ marginTop: 16, padding: "16px 18px", background: t.redPale, borderRadius: 24, color: t.red, fontSize: 14, fontWeight: 700, display: "flex", flexDirection: "column", gap: 8 }}>
               <div>Submission could not be completed. Your answers are still on this page; review them and try again.</div>
-              {submitError && <div style={{ fontWeight: 400, lineHeight: 1.6, wordBreak: "break-word" }}>{submitError}</div>}
-              <button onClick={handleSubmit} style={{ alignSelf: "flex-start", padding: "8px 18px", border: "none", borderRadius: 8, background: t.red, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans'" }}>Retry submission</button>
+              {submitError && <div style={{ fontWeight: 400, lineHeight: 1.6, wordBreak: "break-word", color: t.textSecond, fontSize: 13 }}>{submitError}</div>}
+              <button type="button" onClick={handleSubmit} className="dfp-pill" style={{ ...pillTonal(t), alignSelf: "flex-start", minHeight: 40, padding: "0 18px", fontSize: 14 }}>Retry submission</button>
             </div>}
           </div>
         )}
-        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: t.textMuted }}>PMW International Berhad OSHES Forms</div>
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 12, color: t.textMuted }}>PMW International Berhad OSHES Forms</div>
       </div>
 
       {showQr && (
-        <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 8, padding: "32px 28px 24px", maxWidth: 320, width: "100%", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-            <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: "#1E1B4B", marginBottom: 4 }}>Share this form</div>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
+        <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(22,27,36,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, animation: "fadeUp .2s ease", backdropFilter: "blur(2px)" }}>
+          <div role="dialog" aria-label="Share this form" onClick={e => e.stopPropagation()} style={{ background: t.cardBg, borderRadius: 32, padding: "32px 28px 24px", maxWidth: 340, width: "100%", textAlign: "center", boxShadow: t.shadowLg, fontFamily: APP_FONT_FAMILY }}>
+            <div style={{ fontWeight: 800, fontSize: 20, color: t.textPrimary, marginBottom: 4 }}>Share this form</div>
+            <div style={{ fontSize: 14, color: t.textSecond, marginBottom: 20, lineHeight: 1.5 }}>Scan the QR code or copy the link below</div>
             {qrDataUrl ? (
-              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 8 }} />
+              <img src={qrDataUrl} alt="QR Code" style={{ width: 200, height: 200, display: "block", margin: "0 auto 16px", borderRadius: 16 }} />
             ) : (
-              <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", fontSize: 12 }}>Generating...</div>
+              <div style={{ width: 200, height: 200, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", color: t.textMuted, fontSize: 13 }}>Generating…</div>
             )}
-            <div style={{ fontSize: 11, color: "#6B7280", wordBreak: "break-all", padding: "10px 12px", background: "#F3F4F6", borderRadius: 8, marginBottom: 18, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: t.textSecond, wordBreak: "break-all", padding: "10px 14px", background: t.offWhite, borderRadius: 16, marginBottom: 18, lineHeight: 1.5 }}>
               {shareUrl}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} style={{ flex: 1, padding: "10px", border: `1px solid ${copied ? "#059669" : "#E5E3F0"}`, borderRadius: 8, background: copied ? "#D1FAE5" : "none", color: copied ? "#059669" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'", transition: "all .2s" }}>{copied ? "Copied!" : "Copy Link"}</button>
-              <button onClick={() => setShowQr(false)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: "linear-gradient(135deg,#005A9E,#0078D4)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>Close</button>
+              <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {}); }} className="dfp-pill" style={{ ...pillGhost(t), flex: 1, minHeight: 46, padding: "0 16px", fontSize: 14, ...(copied ? { background: t.greenPale, color: t.greenText } : {}) }}>{copied ? "Copied" : "Copy link"}</button>
+              <button type="button" onClick={() => setShowQr(false)} className="dfp-pill" style={{ ...pillFilled(t), flex: 1, minHeight: 46, padding: "0 16px", fontSize: 14 }}>Close</button>
             </div>
           </div>
         </div>

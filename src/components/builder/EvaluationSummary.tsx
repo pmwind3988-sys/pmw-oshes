@@ -10,7 +10,7 @@
  */
 import { useState, type ReactNode } from "react";
 import type { EvaluationLayerResult } from "../../types";
-import { editorial, editorialShadow } from "../../theme/editorial";
+import { editorial } from "../../theme/editorial";
 import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, isDisplayDateLike } from "../../utils/displayDateTime";
 import {
   collectDisplayRows,
@@ -187,9 +187,8 @@ function MediaImage({ source }: { source: string }) {
   return (
     <div
       style={{
-        border: `1px solid ${editorial.border}`,
-        borderRadius: 10,
-        background: "#fff",
+        borderRadius: 14,
+        background: editorial.panel,
         padding: 8,
         maxWidth: 280,
         width: "100%",
@@ -199,7 +198,7 @@ function MediaImage({ source }: { source: string }) {
         src={source}
         alt={filenameFromUrl(source)}
         onError={() => setFailed(true)}
-        style={{ display: "block", width: "100%", maxHeight: 160, objectFit: "contain" }}
+        style={{ display: "block", width: "100%", maxHeight: 160, objectFit: "contain", borderRadius: 10 }}
       />
     </div>
   );
@@ -245,21 +244,24 @@ function FieldValue({ field, value }: { field: EvaluationFieldDefinition; value:
   return <span>{formatValue(value, field)}</span>;
 }
 
+// A soft tinted sheet with no rule or shadow; the answers sit in white tiles on it.
 const cardStyle: React.CSSProperties = {
   background: editorial.blueSoft,
-  border: `1px solid ${editorial.border}`,
-  boxShadow: editorialShadow,
-  borderRadius: 14,
-  padding: "16px 18px",
+  borderRadius: 24,
+  padding: 18,
   marginBottom: 12,
 };
 
+const infoTileStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 16,
+  background: editorial.panel,
+};
+
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: 600,
   color: editorial.muted,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
   marginBottom: 4,
 };
 
@@ -278,8 +280,9 @@ const fieldRowStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(120px, 0.42fr) minmax(0, 1fr)",
   gap: 14,
-  padding: "8px 0",
-  borderBottom: `1px solid ${editorial.border}`,
+  padding: "10px 14px",
+  borderRadius: 16,
+  background: editorial.panel,
   alignItems: "start",
 };
 
@@ -311,26 +314,27 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
       <style>{RESPONSIVE_CSS}</style>
 
       {/* Header */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: editorial.pmwBlueDark }}>
+      <div style={{ marginBottom: 12, padding: "0 4px" }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: editorial.pmwBlueDark }}>
           {layerTitle || `Evaluation Layer ${result.layerNumber}`}
         </div>
         {layerDescription && (
-          <div style={{ fontSize: 11, color: editorial.muted, marginTop: 2 }}>{layerDescription}</div>
+          <div style={{ fontSize: 13, color: editorial.muted, marginTop: 2 }}>{layerDescription}</div>
         )}
       </div>
 
       {/* Evaluator info */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${editorial.border}` }}>
-        <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        {/* Each detail sits in its own white tile rather than in a ruled row. */}
+        <div style={{ ...infoTileStyle, minWidth: 0 }}>
           <div style={labelStyle}>Evaluator</div>
           <div style={valueStyle}>{result.email || "Unknown"}</div>
         </div>
-        <div>
+        <div style={infoTileStyle}>
           <div style={labelStyle}>Date</div>
           <div style={valueStyle}>{formatDisplayDateTime(result.confirmedAt)}</div>
         </div>
-        <div>
+        <div style={infoTileStyle}>
           <div style={labelStyle}>Status</div>
           <div style={{ ...valueStyle, color: editorial.success }}>Confirmed</div>
         </div>
@@ -339,10 +343,11 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
       {/* Evaluation fields */}
       {displayRows.length > 0 && (
         <div>
-          <div style={{ ...labelStyle, marginBottom: 8 }}>Evaluation Details</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: editorial.ink, margin: "0 4px 8px" }}>Evaluation details</div>
+          <div style={{ display: "grid", gap: 6 }}>
           {displayRows.map(({ field, value, sharedNameWith }, index) => (
             <div key={`${field.name}-${index}`} className="eval-summary-row" style={fieldRowStyle}>
-              <div style={{ fontSize: 12, color: editorial.muted, overflowWrap: "anywhere" }}>
+              <div style={{ fontSize: 13, color: editorial.muted, overflowWrap: "anywhere" }}>
                 {field.title}
                 {sharedNameWith && (
                   <div style={{ fontSize: 10, color: editorial.warning, marginTop: 2, fontWeight: 600 }}>
@@ -355,12 +360,13 @@ export default function EvaluationSummary({ result, layerTitle, layerDescription
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
 
       {/* Notes */}
       {result.notes && (
-        <div style={{ marginTop: 12, padding: 10, background: editorial.yellowSoft, borderRadius: 8, fontSize: 12 }}>
+        <div style={{ marginTop: 12, padding: "12px 14px", background: editorial.yellowSoft, borderRadius: 16, fontSize: 13 }}>
           <div style={{ fontWeight: 800, color: editorial.warning, marginBottom: 4 }}>Notes</div>
           <div style={{ color: editorial.ink, overflowWrap: "anywhere" }}>{result.notes}</div>
         </div>

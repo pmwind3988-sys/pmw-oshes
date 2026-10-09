@@ -31,9 +31,17 @@ import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import Logo from "../components/Logo";
 import { Box, Button, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
-import { CheckCircle as CheckCircleIcon, Lock as LockIcon, AlertTriangle as WarningIcon } from "../components/ui/Icons";
-import { editorial, editorialShadow } from "../theme/editorial";
-import { WorkspaceNotice } from "../components/builder/WorkspaceLayout";
+import type { SxProps, Theme } from "@mui/material";
+import {
+  AlertTriangle as WarningIcon,
+  Check as CheckIcon,
+  CheckCircle as CheckCircleIcon,
+  Lock as LockIcon,
+  ShieldAlert as ShieldAlertIcon,
+  X as CloseIcon,
+} from "../components/ui/Icons";
+import { editorial } from "../theme/editorial";
+import LoadingScreen, { AUTH_FONT, authCardSx, authPageSx, authPill, authSoft } from "../components/auth/LoadingScreen";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
 import { formatDisplayDateTime } from "../utils/displayDateTime";
@@ -128,53 +136,194 @@ type PublicPreviousLayerSummary = {
 };
 
 // ── Styling ──
-// Drawn from the shared PMW Editorial tokens rather than a private palette, so
-// this page cannot drift from the approval workspace it hands off to. This
-// route is reached from an email link and is often the only screen an approver
-// ever sees, so it stands alone — no sidebar — but wears the same system.
+// Soft UI: one white sheet on the app ground, filled tiles instead of bordered
+// boxes, pills for actions. Surfaces and text come from the shared PMW Editorial
+// tokens so the page follows the appearance theme; the tints for status fills
+// are the house values also used by the auth state screens.
 const COLORS = {
-  purple: editorial.pmwBlue,
-  purpleDark: editorial.pmwBlueDark,
-  purplePale: editorial.blueWash,
-  cardBg: editorial.panel,
-  border: editorial.border,
+  ground: editorial.appSurface,
+  sheet: editorial.panel,
+  tile: editorial.paper,
+  chip: editorial.neutralWash,
+  line: editorial.border,
+  dashed: "#C8D2E1",
   textPrimary: editorial.ink,
   textSecond: editorial.muted,
   textMuted: editorial.softMuted,
+  primary: editorial.pmwBlue,
+  primaryPale: editorial.pmwBlueSoft,
+  primaryInk: editorial.pmwBlueDark,
   green: editorial.success,
-  greenPale: "rgba(16, 124, 16, 0.10)",
+  greenPale: "#D5F0E1",
+  greenInk: "#0E5233",
   red: editorial.error,
-  redPale: "rgba(198, 40, 40, 0.10)",
-  shadow: editorialShadow,
+  redPale: "#FADBD8",
+  redInk: "#8C1D18",
+  amberPale: "#FCEFC7",
+  amberInk: "#6B4A00",
 };
 
-/**
- * The reference number, styled to match `src/components/ReferenceTag.tsx`. This
- * page renders with plain inline styles rather than MUI, so the treatment is
- * repeated here instead of imported — keep the two in step.
- */
-const referenceTag: React.CSSProperties = {
+const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+const NOT_ASSIGNED_MESSAGE = "This approval layer is not assigned to your account.";
+
+/** Tints for the state screens and status pills: a 112px circle plus its glyph. */
+const STATE_TONES = {
+  primary: { bg: COLORS.primaryPale, fg: "#0B3B8C" },
+  neutral: { bg: COLORS.chip, fg: "#3B4352" },
+  success: { bg: COLORS.greenPale, fg: COLORS.greenInk },
+  warning: { bg: COLORS.amberPale, fg: COLORS.amberInk },
+  danger: { bg: COLORS.redPale, fg: COLORS.redInk },
+} as const;
+type StateTone = keyof typeof STATE_TONES;
+
+/** The reference number: a monospace pill that never wraps. */
+const referencePill: React.CSSProperties = {
   display: "inline-block",
-  padding: "3px 10px",
-  borderRadius: 8,
-  background: editorial.blueWash,
-  border: `1px solid ${editorial.pmwBlueSoft}`,
-  color: editorial.pmwBlueDark,
-  fontSize: 15,
-  fontWeight: 800,
-  letterSpacing: "0.02em",
+  padding: "5px 12px",
+  borderRadius: 999,
+  background: COLORS.chip,
+  color: COLORS.textPrimary,
+  fontFamily: MONO_FONT,
+  fontSize: 14,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
   userSelect: "all",
 };
 
-const sectionCard: React.CSSProperties = {
-  background: COLORS.cardBg,
-  border: `1px solid ${COLORS.border}`,
-  borderRadius: 14,
-  padding: 24,
-  marginBottom: 20,
-  boxShadow: COLORS.shadow,
+function statusPillStyle(tone: StateTone): React.CSSProperties {
+  const palette = STATE_TONES[tone];
+  return {
+    display: "inline-block",
+    padding: "6px 14px",
+    borderRadius: 999,
+    background: palette.bg,
+    color: palette.fg,
+    fontSize: 13,
+    fontWeight: 700,
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  };
+}
+
+const sectionHeading: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  color: COLORS.textPrimary,
+  margin: 0,
 };
+
+const tileStyle: React.CSSProperties = {
+  background: COLORS.tile,
+  borderRadius: 20,
+  padding: "14px 16px",
+};
+
+/** Pill buttons for the decision: the filled one is the primary action. */
+const primaryPill: SxProps<Theme> = { ...authPill.filled, px: 3.5 };
+const dangerPill: SxProps<Theme> = {
+  ...authPill.filled,
+  px: 3.5,
+  backgroundColor: COLORS.redPale,
+  color: COLORS.redInk,
+  "&:hover": { backgroundColor: COLORS.redPale, boxShadow: "none", filter: "brightness(0.96)" },
+  "&.Mui-disabled": { backgroundColor: COLORS.tile, color: COLORS.textMuted },
+};
+
+type JourneyKind = "done" | "rejected" | "pending" | "current";
+const JOURNEY_NODE: Record<JourneyKind, React.CSSProperties> = {
+  done: { background: COLORS.green, color: "#FFFFFF" },
+  rejected: { background: COLORS.redPale, color: COLORS.redInk },
+  pending: { background: COLORS.chip, color: COLORS.textSecond },
+  current: { background: COLORS.primary, color: "#FFFFFF", boxShadow: `0 0 0 6px ${COLORS.primaryPale}` },
+};
+
+/** A round step in the approval journey: a check, a cross, or the layer number. */
+function JourneyNode({ kind, layerNumber }: { kind: JourneyKind; layerNumber: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        zIndex: 1,
+        width: 40,
+        height: 40,
+        borderRadius: 999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        fontSize: 14,
+        fontWeight: 800,
+        fontVariantNumeric: "tabular-nums",
+        ...JOURNEY_NODE[kind],
+      }}
+    >
+      {kind === "done" ? <CheckIcon size={20} /> : kind === "rejected" ? <CloseIcon size={18} /> : layerNumber}
+    </span>
+  );
+}
+
+/**
+ * A result screen: a 112px tinted circle with one glyph, a title, one sentence,
+ * and at most one pill action. The same shape as the auth error screen.
+ */
+function StateScreen({
+  tone,
+  icon,
+  title,
+  message,
+  children,
+}: {
+  tone: StateTone;
+  icon: React.ReactNode;
+  title: string;
+  message?: string;
+  children?: React.ReactNode;
+}) {
+  const palette = STATE_TONES[tone];
+  const isAlert = tone === "warning" || tone === "danger";
+  return (
+    <Box sx={authPageSx}>
+      <Stack
+        component="section"
+        role={isAlert ? "alert" : "status"}
+        spacing={3}
+        sx={{ ...authCardSx, maxWidth: 480, alignItems: "center" }}
+      >
+        <Box
+          sx={{
+            width: 112,
+            height: 112,
+            borderRadius: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: palette.bg,
+            color: palette.fg,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </Box>
+        <Stack spacing={1.25} sx={{ alignItems: "center" }}>
+          <Typography
+            component="h1"
+            sx={{ fontFamily: AUTH_FONT, fontSize: 24, fontWeight: 800, lineHeight: 1.2, color: authSoft.ink, textWrap: "balance" }}
+          >
+            {title}
+          </Typography>
+          {message && (
+            <Typography sx={{ fontSize: 16, lineHeight: 1.55, color: authSoft.muted, maxWidth: 380, overflowWrap: "anywhere", textWrap: "pretty" }}>
+              {message}
+            </Typography>
+          )}
+        </Stack>
+        {children && <Stack spacing={1.25} sx={{ width: "100%", alignItems: "center" }}>{children}</Stack>}
+      </Stack>
+    </Box>
+  );
+}
 
 function valueToText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -349,6 +498,8 @@ export default function EvaluationPage() {
     : evalForm !== null && evalRuntime.answered >= evalRuntime.required;
 
   const [actionState, setActionState] = useState<ActionState>("idle");
+  /** The step the signed decision was sent on to; empty when there is none to name. */
+  const [nextStepName, setNextStepName] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checkboxApproved, setCheckboxApproved] = useState(false);
@@ -502,7 +653,7 @@ export default function EvaluationPage() {
           data.currentLayer?.authMode !== "public" &&
           !canActOnLayer(data.currentLayer, data.responseFields[`L${displayLayerNumber}_Email`], userEmail)
         ) {
-          setError("This approval layer is not assigned to your account.");
+          setError(NOT_ASSIGNED_MESSAGE);
           setLoading(false);
           return;
         }
@@ -709,6 +860,8 @@ export default function EvaluationPage() {
         ...(nextReviewLink ? { reviewLink: nextReviewLink } : {}),
       });
 
+      // Only a signed decision names where it went; a rejection just closes the layer.
+      setNextStepName(action !== "reject" && !isFinal ? (nextLayer?.title || "").trim() : "");
       setActionState("success");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to submit this decision.");
@@ -783,35 +936,54 @@ export default function EvaluationPage() {
 
   // ── Render ──
   if (authState === "checking" || loading) {
-    return <WorkspaceNotice title="Loading..." message="Fetching this submission and its workflow layer." />;
+    return <LoadingScreen status="Fetching this submission and its workflow layer." />;
   }
 
   if (authState === "unauthorized") {
     return (
-      <WorkspaceNotice
-        icon={<LockIcon sx={{ fontSize: 28 }} />}
+      <StateScreen
+        tone="primary"
+        icon={<LockIcon size={48} />}
         title="Sign in required"
         message="You need to sign in with your Microsoft 365 account to access this evaluation."
-        action={
-          <Button variant="contained" size="large" onClick={() => instance.loginRedirect({ ...loginRequest })}>
-            Sign in with Microsoft 365
-          </Button>
-        }
-      />
+      >
+        <Button
+          variant="contained"
+          onClick={() => instance.loginRedirect({ ...loginRequest })}
+          sx={{ ...primaryPill, width: "100%" }}
+        >
+          Sign in with Microsoft 365
+        </Button>
+      </StateScreen>
     );
   }
 
   if (error) {
+    if (error === NOT_ASSIGNED_MESSAGE) {
+      return (
+        <StateScreen tone="neutral" icon={<ShieldAlertIcon size={48} />} title="This layer isn't yours" message={error} />
+      );
+    }
     return (
-      <WorkspaceNotice tone="error" icon={<WarningIcon sx={{ fontSize: 28 }} />} title="Error" message={error} />
+      <StateScreen
+        tone="warning"
+        icon={<WarningIcon size={48} />}
+        title={isPublic ? "This link can't be used" : "Something went wrong"}
+        message={error}
+      >
+        <Button variant="contained" onClick={() => window.location.reload()} sx={{ ...primaryPill, width: "100%" }}>
+          Try again
+        </Button>
+      </StateScreen>
     );
   }
 
   if (actionState === "success") {
     return (
-      <WorkspaceNotice
-        icon={<CheckCircleIcon sx={{ fontSize: 28, color: editorial.success }} />}
-        title="Submitted successfully"
+      <StateScreen
+        tone="success"
+        icon={<CheckCircleIcon size={52} />}
+        title={nextStepName ? `Signed — sent to ${nextStepName}` : "Your decision is recorded"}
         message="Your response has been recorded. You may close this page."
       />
     );
@@ -845,316 +1017,415 @@ export default function EvaluationPage() {
       responseData[`L${effectiveLayerNumber}_ActedBy`] || responseData[`L${effectiveLayerNumber}_Email`],
     )
     : "";
+  const referenceNo = responseData && responseData[REFERENCE_NO_FIELD] ? String(responseData[REFERENCE_NO_FIELD]) : "";
+  const layerStateTone: StateTone = isLayerAlreadyComplete
+    ? (recordedVerdict === "rejected" ? "danger" : "success")
+    : "primary";
+  const metaTiles: { label: string; value: string }[] = [
+    { label: "Form ID", value: String(responseData?.FormID || responseData?.formId || "—") },
+    ...(selectedCompany ? [{ label: "Company", value: selectedCompany }] : []),
+    { label: "Submitted", value: formatDateTime(responseData?.SubmittedAt) },
+    { label: "Version", value: String(responseData?.FormVersion || responseData?.formVersion || "—") },
+  ];
 
   return (
-    <div className="eval-page" style={{ minHeight: "100dvh", padding: "clamp(16px, 3vw, 32px) 16px" }}>
+    <div
+      className="eval-page"
+      style={{
+        minHeight: "100dvh",
+        background: COLORS.ground,
+        padding: "clamp(12px, 3vw, 28px) 16px",
+        boxSizing: "border-box",
+        fontFamily: AUTH_FONT,
+        color: COLORS.textPrimary,
+      }}
+    >
       <style>{`
         .eval-page { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
         .eval-page h1, .eval-page h2, .eval-page h3 { text-wrap: balance; }
         .eval-page p, .eval-page li, .eval-page span { text-wrap: pretty; }
+        .eval-page button:focus-visible, .eval-page input:focus-visible, .eval-page textarea:focus-visible {
+          outline: 3px solid ${authSoft.focus}; outline-offset: 2px;
+        }
         @media (max-width: 640px) {
           .eval-meta-grid { grid-template-columns: 1fr !important; }
-          .eval-header { grid-template-columns: 1fr !important; }
+          .eval-sheet { padding: 22px 18px !important; border-radius: 28px !important; }
         }
       `}</style>
       <div style={{ maxWidth: 880, margin: "0 auto" }}>
-
-        {/* Header */}
-        <div className="eval-header" style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: 18, alignItems: "center", background: COLORS.cardBg, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "18px 20px", marginBottom: 20, boxShadow: COLORS.shadow }}>
-          <div style={{ width: 64, height: 64, borderRadius: 12, background: COLORS.purplePale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="Company logo" style={{ maxWidth: 54, maxHeight: 54, objectFit: "contain", outline: "1px solid rgba(0, 0, 0, 0.1)", outlineOffset: -1 }} />
-            ) : (
-              <Logo size={54} alt="PMW Logo" />
-            )}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.purpleDark, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-              {isEvaluation ? "Evaluation Review" : "Approval Review"}
+        <div
+          className="eval-sheet"
+          style={{
+            background: COLORS.sheet,
+            borderRadius: 32,
+            padding: "clamp(22px, 4vw, 36px)",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 28,
+          }}
+        >
+          {/* Header */}
+          <header style={{ display: "flex", gap: 18, alignItems: "center" }}>
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 999,
+                background: COLORS.tile,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                flexShrink: 0,
+              }}
+            >
+              {logoUrl ? (
+                <img src={logoUrl} alt="Company logo" style={{ width: 40, height: 40, objectFit: "contain" }} />
+              ) : (
+                <Logo size={40} alt="PMW Logo" />
+              )}
             </div>
-            <h1 style={{ fontSize: "clamp(22px, 3vw, 32px)", lineHeight: 1.15, fontWeight: 800, color: COLORS.textPrimary, margin: 0 }}>
-              {currentLayer?.title || formTitle || (isEvaluation ? "Evaluation" : "Approval")}
-            </h1>
-            <div style={{ fontSize: 13, color: COLORS.textSecond, marginTop: 8 }}>
-              {formTitle || "Form"} / Layer {effectiveLayerNumber}
-              {currentLayer?.description && <div style={{ marginTop: 4 }}>{currentLayer.description}</div>}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecond }}>
+                {isEvaluation ? "Evaluation review" : "Approval review"}
+              </div>
+              <h1
+                style={{
+                  fontSize: "clamp(26px, 3.4vw, 30px)",
+                  lineHeight: 1.15,
+                  fontWeight: 800,
+                  color: COLORS.textPrimary,
+                  margin: "4px 0 0",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {formTitle || currentLayer?.title || (isEvaluation ? "Evaluation" : "Approval")}
+              </h1>
+              <div style={{ fontSize: 14, color: COLORS.textSecond, marginTop: 6 }}>
+                {currentLayer?.title ? `${currentLayer.title} · ` : ""}Layer {effectiveLayerNumber}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 12 }}>
+                {referenceNo && <span style={referencePill}>{referenceNo}</span>}
+                <span style={statusPillStyle(isLayerAlreadyComplete ? "success" : "primary")}>{currentLayerLabel}</span>
+              </div>
             </div>
-          </div>
-          <span style={{
-            justifySelf: "start",
-            fontSize: 12,
-            fontWeight: 800,
-            padding: "7px 12px",
-            borderRadius: 999,
-            color: isLayerAlreadyComplete ? COLORS.green : COLORS.purpleDark,
-            background: isLayerAlreadyComplete ? COLORS.greenPale : COLORS.purplePale,
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            {currentLayerLabel}
-          </span>
-        </div>
+          </header>
 
-        {/* Previous Layer Results */}
-        {previousResults.length > 0 && (
-          <div style={sectionCard}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textSecond, textTransform: "uppercase", letterSpacing: 0, marginBottom: 12 }}>
-              Previous Layers
+          {currentLayer?.description && (
+            <div style={{ fontSize: 15, lineHeight: 1.55, color: COLORS.textSecond, marginTop: -12 }}>
+              {currentLayer.description}
             </div>
-            {previousResults.map((pr, i) => {
-              const evalData = pr.evaluationData as EvaluationDataEntry | undefined;
-              const previousLayerNumber = Number(pr.layerNumber);
-              const publicSummary = publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === previousLayerNumber);
-              const previousSurveyElements = publicSummary?.surveyElements || surveyElementsForLayer(layerSequence, previousLayerNumber);
-              const previousTitle = publicSummary?.title || valueToText(pr.title) || `Layer ${previousLayerNumber}`;
-              const previousVerdict = signOffVerdictFromStatus(pr.status);
-              const previousSignerName = signOffName(
-                pr.actedByName || evalData?.confirmerName,
-                pr.actedBy || evalData?.confirmerEmail || pr.email,
-              );
-              const previousSignOff = previousVerdict && previousSignerName ? (
-                <div style={{ marginTop: 12 }}>
-                  <SignOffBlock
-                    compact
-                    align="start"
-                    verdict={previousVerdict}
-                    label={signOffLabel(previousVerdict)}
-                    name={previousSignerName}
-                    position={signOffPosition(pr.actedByPosition, previousTitle)}
-                    date={formatDateTime(pr.signedAt || evalData?.confirmedAt)}
-                  />
-                </div>
-              ) : null;
-              if (evalData?.status === "confirmed") {
-                return (
-                  <EvaluationSummary
-                    key={i}
-                    result={{
-                      layerNumber: previousLayerNumber,
-                      type: "evaluation",
-                      status: "confirmed",
-                      email: evalData.confirmerEmail || null,
-                      confirmedAt: evalData.confirmedAt || null,
-                      fields: evalData.fields || {},
-                      notes: evalData.notes,
-                    }}
-                    layerTitle={previousTitle}
-                    layerDescription={publicSummary?.description}
-                    surveyElements={previousSurveyElements}
-                    footer={previousSignOff}
-                  />
-                );
-              }
-              return (
-                <div key={i} style={{ background: COLORS.purplePale, borderRadius: 8, padding: "12px 16px", marginBottom: 10, fontSize: 13, color: COLORS.textPrimary }}>
-                  {previousTitle}: <strong>{String(pr.status || "Completed")}</strong>
-                  {previousSignOff ?? (pr.signedAt ? <span style={{ color: COLORS.textMuted, marginLeft: 8 }}>- {formatDateTime(pr.signedAt)}</span> : null)}
-                </div>
-              );
-            })}
-          </div>
-        )}
+          )}
 
-        {/* Submission Data Preview */}
-        {responseData && (
-          <div style={sectionCard}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
+          {/* Previous layers: the approval journey as joined round steps */}
+          {previousResults.length > 0 && (
+            <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <h2 style={sectionHeading}>Previous layers</h2>
+              <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {previousResults.map((pr, i) => {
+                  const evalData = pr.evaluationData as EvaluationDataEntry | undefined;
+                  const previousLayerNumber = Number(pr.layerNumber);
+                  const publicSummary = publicPreviousLayerSummaries.find((summary) => Number(summary.layerNumber) === previousLayerNumber);
+                  const previousSurveyElements = publicSummary?.surveyElements || surveyElementsForLayer(layerSequence, previousLayerNumber);
+                  const previousTitle = publicSummary?.title || valueToText(pr.title) || `Layer ${previousLayerNumber}`;
+                  const previousVerdict = signOffVerdictFromStatus(pr.status);
+                  const previousSignerName = signOffName(
+                    pr.actedByName || evalData?.confirmerName,
+                    pr.actedBy || evalData?.confirmerEmail || pr.email,
+                  );
+                  const previousSignOff = previousVerdict && previousSignerName ? (
+                    <div style={{ marginTop: 12 }}>
+                      <SignOffBlock
+                        compact
+                        align="start"
+                        verdict={previousVerdict}
+                        label={signOffLabel(previousVerdict)}
+                        name={previousSignerName}
+                        position={signOffPosition(pr.actedByPosition, previousTitle)}
+                        date={formatDateTime(pr.signedAt || evalData?.confirmedAt)}
+                      />
+                    </div>
+                  ) : null;
+                  const kind: JourneyKind = previousVerdict === "rejected"
+                    ? "rejected"
+                    : (previousVerdict || isTerminalLayerStatus(pr.status))
+                      ? "done"
+                      : "pending";
+                  return (
+                    <li
+                      key={i}
+                      style={{ display: "grid", gridTemplateColumns: "40px minmax(0, 1fr)", gap: 14, paddingBottom: 18 }}
+                    >
+                      <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            position: "absolute",
+                            top: 46,
+                            bottom: -18,
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            width: 4,
+                            borderRadius: 999,
+                            background: kind === "done" ? COLORS.green : COLORS.line,
+                          }}
+                        />
+                        <JourneyNode kind={kind} layerNumber={previousLayerNumber} />
+                      </div>
+                      <div style={{ minWidth: 0, paddingTop: 8 }}>
+                        {evalData?.status === "confirmed" ? (
+                          <EvaluationSummary
+                            result={{
+                              layerNumber: previousLayerNumber,
+                              type: "evaluation",
+                              status: "confirmed",
+                              email: evalData.confirmerEmail || null,
+                              confirmedAt: evalData.confirmedAt || null,
+                              fields: evalData.fields || {},
+                              notes: evalData.notes,
+                            }}
+                            layerTitle={previousTitle}
+                            layerDescription={publicSummary?.description}
+                            surveyElements={previousSurveyElements}
+                            footer={previousSignOff}
+                          />
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>{previousTitle}</div>
+                            <div style={{ fontSize: 14, color: COLORS.textSecond, marginTop: 2 }}>
+                              {String(pr.status || "Completed")}
+                              {pr.signedAt && !previousSignOff ? ` · ${formatDateTime(pr.signedAt)}` : ""}
+                            </div>
+                            {previousSignOff}
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+                <li style={{ display: "grid", gridTemplateColumns: "40px minmax(0, 1fr)", gap: 14 }}>
+                  <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+                    <JourneyNode kind="current" layerNumber={effectiveLayerNumber} />
+                  </div>
+                  <div style={{ minWidth: 0, paddingTop: 8 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>
+                      {currentLayer?.title || `Layer ${effectiveLayerNumber}`}
+                    </div>
+                    <div style={{ fontSize: 14, color: COLORS.textSecond, marginTop: 2 }}>
+                      {isLayerAlreadyComplete ? currentLayerLabel : "Waiting for your decision"}
+                    </div>
+                  </div>
+                </li>
+              </ol>
+            </section>
+          )}
+
+          {/* Submission details: soft tiles, no bordered tables */}
+          {responseData && (
+            <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 4 }}>
-                  Submission Details
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textSecond }}>
+                <h2 style={sectionHeading}>Submission details</h2>
+                <div style={{ fontSize: 14, color: COLORS.textSecond, marginTop: 4 }}>
                   Review the submitted data before completing this layer.
                 </div>
               </div>
-            </div>
-            {!!responseData[REFERENCE_NO_FIELD] && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-                <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800, color: COLORS.textSecond }}>
-                  Reference no.
-                </span>
-                <span style={referenceTag}>{String(responseData[REFERENCE_NO_FIELD])}</span>
-              </div>
-            )}
-            <div className="eval-meta-grid" style={{ fontSize: 13, color: COLORS.textSecond, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
-              <div>Form ID: {String(responseData.FormID || responseData.formId || "—")}</div>
-              {selectedCompany && <div>Company: {selectedCompany}</div>}
-              <div>Submitted: {formatDateTime(responseData.SubmittedAt)}</div>
-              <div>Version: {String(responseData.FormVersion || responseData.formVersion || "—")}</div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
-              <ReadOnlySubmissionPreview
-                surveyJson={surveyJson}
-                data={getSubmissionPreviewData(responseData)}
-                accessToken={token}
-                mediaSrcByField={mediaSrcByField}
-                fallbackData={getSubmissionPreviewData(responseData)}
-              />
-            </div>
-
-            {/* Matrix Tables — from child lists */}
-            {!surveyJson && Object.keys(matrixTables).length > 0 && (
-              <div style={{ marginTop: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.purple, marginBottom: 12 }}>
-                  Matrix Tables
-                </div>
-                {Object.entries(matrixTables).map(([fieldName, entry]) => (
-                  <div key={fieldName} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textMuted, marginBottom: 4 }}>
-                      {entry.columns[0]?.title || fieldName}
-                    </div>
-                    <div
-                      style={{ overflow: "auto", border: `1px solid ${COLORS.border}`, borderRadius: 8 }}
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
-                    />
-                    <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 4 }}>
-                      {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
+              <div
+                className="eval-meta-grid"
+                style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, fontVariantNumeric: "tabular-nums" }}
+              >
+                {metaTiles.map((tile) => (
+                  <div key={tile.label} style={tileStyle}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecond }}>{tile.label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginTop: 2, overflowWrap: "anywhere" }}>
+                      {tile.value}
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+              <div style={{ background: COLORS.tile, borderRadius: 24, padding: 18 }}>
+                <ReadOnlySubmissionPreview
+                  surveyJson={surveyJson}
+                  data={getSubmissionPreviewData(responseData)}
+                  accessToken={token}
+                  mediaSrcByField={mediaSrcByField}
+                  fallbackData={getSubmissionPreviewData(responseData)}
+                />
+              </div>
 
-        {/* Current Layer Action */}
-        <div style={sectionCard}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 16 }}>
-            {isEvaluation ? "Your Evaluation" : "Your Decision"}
-          </div>
-
-          {isLayerAlreadyComplete ? (
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", p: 1.75, borderRadius: "10px", backgroundColor: COLORS.greenPale }}>
-              <LockIcon sx={{ fontSize: 20, color: COLORS.green, mt: "1px" }} />
-              <Box>
-                <Typography sx={{ fontSize: 14, fontWeight: 800 }}>This layer is already completed</Typography>
-                <Typography sx={{ fontSize: 13, color: COLORS.textSecond, mt: 0.25 }}>
-                  The submission cannot be approved, rejected, or evaluated again from this link.
-                </Typography>
-              </Box>
-            </Stack>
-          ) : null}
-          {isLayerAlreadyComplete && recordedVerdict && recordedSignerName && responseData && (
-            <div style={{ marginTop: 20 }}>
-              <SignOffBlock
-                verdict={recordedVerdict}
-                label={signOffLabel(recordedVerdict, customSignOffLabel)}
-                name={recordedSignerName}
-                position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
-                date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
-              />
-            </div>
+              {/* Matrix tables — from child lists */}
+              {!surveyJson && Object.keys(matrixTables).length > 0 && (
+                <div style={{ background: COLORS.tile, borderRadius: 24, padding: 18, display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.primaryInk }}>Matrix tables</div>
+                  {Object.entries(matrixTables).map(([fieldName, entry]) => (
+                    <div key={fieldName} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecond }}>
+                        {entry.columns[0]?.title || fieldName}
+                      </div>
+                      <div
+                        style={{ overflow: "auto", background: COLORS.sheet, borderRadius: 16, padding: 4 }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.html) }}
+                      />
+                      <div style={{ fontSize: 13, color: COLORS.textMuted }}>
+                        {entry.rows.length} row{entry.rows.length !== 1 ? "s" : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
-          {!isLayerAlreadyComplete && (
-            <>
-              {isEvaluation && (
-                <div style={{ marginBottom: 16 }}>
-                  {evalForm ? (
+
+          {/* Decision */}
+          <section style={{ background: COLORS.tile, borderRadius: 24, padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
+            <h2 style={sectionHeading}>{isEvaluation ? "Your evaluation" : "Your decision"}</h2>
+
+            {isLayerAlreadyComplete ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 14 }}>
+                <div
+                  style={{
+                    width: 112,
+                    height: 112,
+                    borderRadius: 999,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: STATE_TONES[layerStateTone].bg,
+                    color: STATE_TONES[layerStateTone].fg,
+                  }}
+                >
+                  {layerStateTone === "danger" ? <CloseIcon size={48} /> : layerStateTone === "success" ? <CheckIcon size={48} /> : <LockIcon size={48} />}
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2, color: COLORS.textPrimary }}>
+                  This layer is already completed
+                </div>
+                <div style={{ fontSize: 16, lineHeight: 1.55, color: COLORS.textSecond, maxWidth: 420 }}>
+                  The submission cannot be approved, rejected, or evaluated again from this link.
+                </div>
+                {recordedVerdict && recordedSignerName && responseData && (
+                  <div style={{ width: "100%", background: COLORS.sheet, borderRadius: 18, padding: 18, boxSizing: "border-box" }}>
+                    <SignOffBlock
+                      verdict={recordedVerdict}
+                      label={signOffLabel(recordedVerdict, customSignOffLabel)}
+                      name={recordedSignerName}
+                      position={signOffPosition(responseData[`L${effectiveLayerNumber}_ActedByPosition`], approverRoleLabel)}
+                      date={formatDateTime(responseData[`L${effectiveLayerNumber}_SignedAt`])}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {isEvaluation && (
+                  evalForm ? (
                     <NativeFormView runtime={evalRuntime} />
                   ) : (
-                    <div style={{ fontSize: 13, color: COLORS.red, background: COLORS.redPale, borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontSize: 14, lineHeight: 1.55, color: COLORS.redInk, background: COLORS.redPale, borderRadius: 16, padding: 14 }}>
                       This evaluation layer has no configured fields. Ask a form builder superuser to update the layer configuration.
                     </div>
-                  )}
-                </div>
-              )}
+                  )
+                )}
 
-              {isSignatureRequired && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6 }}>
-                    Signature
+                {isSignatureRequired && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecond }}>Signature</div>
+                    <div style={{ background: COLORS.sheet, border: `2px dashed ${COLORS.dashed}`, borderRadius: 18, padding: 12, boxSizing: "border-box" }}>
+                      <SignatureCapture value={signatureData} onChange={setSignatureData} disabled={actionState === "submitting"} />
+                    </div>
                   </div>
-                  <SignatureCapture value={signatureData} onChange={setSignatureData} disabled={actionState === "submitting"} />
-                </div>
-              )}
+                )}
 
-              {isCheckboxMode && (
-                <FormControlLabel
-                  sx={{ mb: 2, minHeight: 44 }}
-                  control={
-                    <Checkbox checked={checkboxApproved} onChange={(e) => setCheckboxApproved(e.target.checked)} />
-                  }
-                  label={<Typography sx={{ fontSize: 14 }}>I approve this submission</Typography>}
-                />
-              )}
-
-              {/* Rejection reason (always available for approval layers) */}
-              {!isEvaluation && (
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  label="Rejection reason (optional)"
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Enter reason if rejecting..."
-                  sx={{ mb: 2 }}
-                />
-              )}
-
-              {/* Who is signing, the way the foot of a paper form reads. A
-                  rejection goes on record under the same name and post, as
-                  "Rejected By". */}
-              {signerName && (
-                <div style={{ marginBottom: 20 }}>
-                  <SignOffBlock
-                    verdict={pendingVerdict}
-                    label={signOffLabel(pendingVerdict, customSignOffLabel)}
-                    name={signerName}
-                    position={signerPosition}
-                    date={todayLabel()}
-                    signature={isSignatureRequired ? signatureData : null}
+                {isCheckboxMode && (
+                  <FormControlLabel
+                    sx={{ minHeight: 44, m: 0 }}
+                    control={
+                      <Checkbox checked={checkboxApproved} onChange={(e) => setCheckboxApproved(e.target.checked)} />
+                    }
+                    label={<Typography sx={{ fontSize: 15 }}>I approve this submission</Typography>}
                   />
-                </div>
-              )}
+                )}
 
-              {/* Action buttons */}
-              <Stack direction="row" spacing={1.5} sx={{ flexWrap: "wrap", rowGap: 1.5 }}>
-                {isEvaluation ? (
-                  <Button
-                    variant="contained"
-                    size="large"
-                    onClick={() => handleSubmit("confirm")}
-                    disabled={actionState === "submitting" || !evalForm || !evalValid}
-                    sx={{ minHeight: 44 }}
-                  >
-                    {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit evaluation"}
-                  </Button>
-                ) : (
-                  <>
+                {/* Rejection reason (always available for approval layers) */}
+                {!isEvaluation && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label htmlFor="eval-rejection-reason" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecond }}>
+                      Rejection reason (optional)
+                    </label>
+                    <TextField
+                      id="eval-rejection-reason"
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Enter reason if rejecting..."
+                      sx={{
+                        "& .MuiOutlinedInput-root": { backgroundColor: COLORS.sheet, borderRadius: "16px", fontSize: 15 },
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" },
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Who is signing, the way the foot of a paper form reads. A
+                    rejection goes on record under the same name and post, as
+                    "Rejected By". */}
+                {signerName && (
+                  <div style={{ background: COLORS.sheet, borderRadius: 18, padding: 18, boxSizing: "border-box" }}>
+                    <SignOffBlock
+                      verdict={pendingVerdict}
+                      label={signOffLabel(pendingVerdict, customSignOffLabel)}
+                      name={signerName}
+                      position={signerPosition}
+                      date={todayLabel()}
+                      signature={isSignatureRequired ? signatureData : null}
+                    />
+                  </div>
+                )}
+
+                {/* Action pills */}
+                <Stack direction="row" spacing={1.25} sx={{ flexWrap: "wrap", rowGap: 1.25 }}>
+                  {isEvaluation ? (
                     <Button
                       variant="contained"
-                      size="large"
-                      onClick={() => handleSubmit("approve")}
-                      disabled={
-                        actionState === "submitting" ||
-                        (isCheckboxMode && !checkboxApproved) ||
-                        (isSignatureRequired && !signatureData)
-                      }
-                      sx={{ minHeight: 44 }}
+                      onClick={() => handleSubmit("confirm")}
+                      disabled={actionState === "submitting" || !evalForm || !evalValid}
+                      sx={primaryPill}
                     >
-                      {actionState === "submitting"
-                        ? "Submitting..."
-                        : isSignatureRequired && !signatureData
-                          ? "Signature required"
-                          : "Approve"}
+                      {actionState === "submitting" ? "Submitting..." : !evalValid ? "Fill required fields" : "Submit evaluation"}
                     </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="large"
-                      onClick={() => handleSubmit("reject")}
-                      disabled={actionState === "submitting"}
-                      sx={{ minHeight: 44 }}
-                    >
-                      Reject
-                    </Button>
-                  </>
-                )}
-              </Stack>
-            </>
-          )}
+                  ) : (
+                    <>
+                      <Button
+                        variant="contained"
+                        onClick={() => handleSubmit("approve")}
+                        disabled={
+                          actionState === "submitting" ||
+                          (isCheckboxMode && !checkboxApproved) ||
+                          (isSignatureRequired && !signatureData)
+                        }
+                        sx={primaryPill}
+                      >
+                        {actionState === "submitting"
+                          ? "Submitting..."
+                          : isSignatureRequired && !signatureData
+                            ? "Signature required"
+                            : "Approve"}
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={() => handleSubmit("reject")}
+                        disabled={actionState === "submitting"}
+                        sx={dangerPill}
+                      >
+                        Reject
+                      </Button>
+                    </>
+                  )}
+                </Stack>
+              </>
+            )}
+          </section>
         </div>
       </div>
     </div>
