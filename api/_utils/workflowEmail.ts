@@ -262,7 +262,13 @@ export async function sendGraphEmail(
             })),
           } : {}),
         },
-        saveToSentItems: false,
+        // A layer handled on paper is addressed to the sending mailbox itself.
+        // With no Sent Items copy, a message a mailbox sends to itself can
+        // leave nothing behind for the owners who watch it, so that one case
+        // keeps its copy. Mail to anyone else still leaves none.
+        saveToSentItems: recipients.some(
+          (recipient) => recipient.trim().toLowerCase() === fromAddress.toLowerCase(),
+        ),
       }),
     },
   );
