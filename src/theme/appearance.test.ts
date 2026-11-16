@@ -26,6 +26,8 @@ describe("the default look", () => {
     expect(a.panel).toBe("#FFFFFF");
     expect(a.muted).toBe("#5B6577");
     expect(a.border).toBe("#E3E8F0");
+    expect(a.success).toBe("#17794B");
+    expect(a.error).toBe("#C8372D");
   });
 });
 

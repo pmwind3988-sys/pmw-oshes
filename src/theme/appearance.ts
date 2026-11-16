@@ -476,9 +476,9 @@ export function normalizeAppearance(value: unknown): AppearanceSetting {
 
 /** Status hues are fixed across every theme — only their washes are derived. */
 const STATUS = {
-  success: "#2E9D6A",
+  success: "#17794B",
   warning: "#B7791F",
-  error: "#B3261E",
+  error: "#C8372D",
   /** The signal yellow, used as a flat fill on the privacy and guest screens. */
   yellow: "#FFF546",
 } as const;
