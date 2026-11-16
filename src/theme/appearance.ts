@@ -146,19 +146,19 @@ export const CONTRAST_THEMES: ContrastTheme[] = [
   {
     id: "paper",
     label: "Ink on Paper",
-    note: "Near-black on white, blue-tinted ground",
+    note: "Navy ink on white, cool grey-blue ground",
     dark: false,
-    ink: "#161B24",
-    muted: "#586174",
+    ink: "#1B2540",
+    muted: "#5B6577",
     softMuted: "#6B7385",
     panel: "#FFFFFF",
-    canvas: "#EEF2F8",
+    canvas: "#F4F6FA",
     sunken: "#EDF0F5",
     paper: "#F5F7FB",
     paperSoft: "#F9FAFC",
     border: "#E3E8F0",
-    borderStrong: "#161B24",
-    ground: "#EEF2F8",
+    borderStrong: "#1B2540",
+    ground: "#F4F6FA",
   },
   {
     id: "mono",
@@ -278,7 +278,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     id: "pmw",
     label: "PMW Blue",
     note: "The house palette",
-    main: "#1A5FD0",
+    main: "#1F5FD0",
     dark: "#174FB0",
     light: "#4A7FE0",
     accent: "#6264A7",
@@ -368,6 +368,15 @@ export interface FontTheme {
 
 export const FONT_THEMES: FontTheme[] = [
   {
+    id: "jakarta",
+    label: "Plus Jakarta Sans",
+    note: "Geometric sans with open forms, the default look",
+    heading: `'Plus Jakarta Sans', system-ui, sans-serif`,
+    body: `'Plus Jakarta Sans', system-ui, sans-serif`,
+    mono: `"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace`,
+    families: ["Plus+Jakarta+Sans:wght@500;600;700;800", "JetBrains+Mono:wght@400;500;600"],
+  },
+  {
     id: "figtree",
     label: "Figtree",
     note: "Rounded geometric sans, one family for every weight",
@@ -434,7 +443,7 @@ export interface AppearanceSetting {
 export const DEFAULT_APPEARANCE: AppearanceSetting = {
   colorThemeId: "pmw",
   contrastThemeId: "paper",
-  fontThemeId: "figtree",
+  fontThemeId: "jakarta",
 };
 
 export function findColorTheme(id: string): ColorTheme {
