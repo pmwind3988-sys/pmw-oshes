@@ -146,7 +146,7 @@ describe("navigation", () => {
   it("offers the needs-me framing only to accounts that sign or evaluate", () => {
     expect(subsScopes(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my" })))).toEqual(["all", "mine", "needs"]);
     expect(subsScopes(derivePortalAccess(input({ userEmail: "nurul@pmw.gov.my" })))).toContain("needs");
-    expect(subsScopes(derivePortalAccess(input({ userEmail: "aud@pmw.gov.my", isAuditor: true })))).not.toContain("needs");
+    expect(subsScopes({ ...derivePortalAccess(input({ userEmail: "nurul@pmw.gov.my", isAuditor: true })), isAssignee: true })).not.toContain("needs");
     expect(subsScopes(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).toEqual(["all", "mine"]);
   });
 

@@ -141,7 +141,6 @@ export function canDeleteRecord(access: PortalAccess): boolean {
   return !access.readOnly && access.isAdmin;
 }
 
-
 /**
  * The three top-level destinations, in the order the navigation shows them.
  * Manage appears only for an account that reaches one of its pages.
