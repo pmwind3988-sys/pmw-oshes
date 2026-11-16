@@ -229,6 +229,7 @@ export function fixtureContext(role: PortalRole, overrides: Partial<PortalContex
     setScreen: () => {},
     focusForm: null,
     focusStatus: null,
+    focusSubsScope: null,
     searchSeed: "",
     searchSeedAt: 0,
     submitSearch: () => {},

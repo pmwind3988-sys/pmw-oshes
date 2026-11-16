@@ -8,9 +8,8 @@ import {
   derivePortalRole,
   isReadOnlyRole,
   portalHome,
-  portalNav,
-  portalSections,
-  type PortalNavCounts,
+  portalTabs,
+  subsScopes,
   type PortalRoleInput,
 } from "./portalRole";
 import type { CatalogueEntry, LayerConfigItem, PortalRecord } from "../types";
@@ -120,96 +119,62 @@ describe("derivePortalAccess", () => {
 });
 
 describe("navigation", () => {
-  const counts: PortalNavCounts = { queue: 4, allRecords: 12, myRecords: 3, catalogue: 10, audit: 9 };
-  const labels = (roleInput: PortalRoleInput, override: Partial<PortalNavCounts> = {}) =>
-    portalNav(derivePortalAccess(roleInput), { ...counts, ...override }).map((item) => item.label);
+  const tabLabels = (roleInput: PortalRoleInput, needsCount = 0) =>
+    portalTabs(derivePortalAccess(roleInput), needsCount).map((tab) => tab.label);
 
-  it("gives everyone Home, their own work and settings", () => {
-    // Nothing is assigned to this account, so its queue is empty and every
-    // record it can see is one it filed.
-    expect(labels(input({ userEmail: "sazali@marinekita.com" }), { queue: 0, allRecords: 3 })).toEqual([
-      "Home",
-      "My submissions",
-      "File a form",
-      "Settings",
-    ]);
+  it("gives everyone Home and Submissions, and nothing else", () => {
+    expect(tabLabels(input({ userEmail: "sazali@marinekita.com" }))).toEqual(["Home", "Submissions"]);
   });
 
-  it("gives an approver the records they are on, not just the ones they filed", () => {
-    // Without this an approver loses sight of everything the moment they sign
-    // it: it leaves their queue, and their own filings never contained it.
-    const approver = labels(input({ userEmail: "faizal@pmw.gov.my" }));
-    expect(approver).toContain("Records you are on");
-    expect(approver).not.toContain("Form catalogue");
+  it("adds Manage for an administrator", () => {
+    expect(tabLabels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toEqual(["Home", "Submissions", "Manage"]);
   });
 
-  it("gives an administrator oversight without taking their own work away", () => {
-    expect(labels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toEqual([
-      "Home",
-      "To approve",
-      "My submissions",
-      "File a form",
-      "Today",
-      "All submissions",
-      "Form catalogue",
-      "People & roles",
-      "Audit trail",
-      "Smoking log",
-      "Settings",
-    ]);
+  it("shows the number waiting on the Submissions tab", () => {
+    const tabs = portalTabs(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my" })), 4);
+    expect(tabs.find((tab) => tab.screen === "subs")?.badge).toBe(4);
+    expect(tabs.find((tab) => tab.screen === "home")?.badge).toBe(0);
   });
 
-  it("names the queue for what the account does on it", () => {
-    expect(labels(input({ userEmail: "nurul@pmw.gov.my" }))).toContain("To evaluate");
-    expect(labels(input({ userEmail: "faizal@pmw.gov.my" }))).toContain("To approve");
+  it("opens Manage to an auditor, who sees the audit trail and smoking log but not people", () => {
+    expect(tabLabels(input({ userEmail: "aud@pmw.gov.my", isAuditor: true }))).toContain("Manage");
+    const screens = allowedScreens(derivePortalAccess(input({ userEmail: "aud@pmw.gov.my", isAuditor: true })));
+    expect(screens).toEqual(expect.arrayContaining(["manage", "audit", "smoking"]));
+    expect(screens).not.toContain("people");
   });
 
-  it("leaves an audit account with no queue and no way to file, even when a layer names it", () => {
-    // nurul is an evaluation-layer assignee, and read-only still wins.
-    const audit = labels(input({ userEmail: "nurul@pmw.gov.my", isAuditor: true }));
-    expect(audit).not.toContain("To approve");
-    expect(audit).not.toContain("File a form");
-    expect(audit).toEqual(["Home", "My submissions", "Today", "Records", "Audit trail", "Smoking log", "Settings"]);
+  it("offers the needs-me framing only to accounts that sign or evaluate", () => {
+    expect(subsScopes(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my" })))).toEqual(["all", "mine", "needs"]);
+    expect(subsScopes(derivePortalAccess(input({ userEmail: "nurul@pmw.gov.my" })))).toContain("needs");
+    expect(subsScopes(derivePortalAccess(input({ userEmail: "aud@pmw.gov.my", isAuditor: true })))).not.toContain("needs");
+    expect(subsScopes(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).toEqual(["all", "mine"]);
   });
 
-  it("counts each item against its own set", () => {
-    const nav = portalNav(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true })), counts);
-    expect(nav.find((item) => item.label === "To approve")?.count).toBe(4);
-    expect(nav.find((item) => item.label === "My submissions")?.count).toBe(3);
-    expect(nav.find((item) => item.label === "All submissions")?.count).toBe(12);
+  it("lets a fresh account reach Submissions even before anything is assigned to it", () => {
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).toEqual(
+      expect.arrayContaining(["home", "subs", "settings"]),
+    );
   });
 
-  it("groups the nav so oversight never sits inside your own work", () => {
-    const sections = portalSections(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true })), counts);
-    expect(sections.map((section) => section.id)).toEqual(["start", "yours", "oversight", "account"]);
-  });
-
-  it("lands everyone on the page that shows all the others", () => {
-    expect(portalHome()).toBe("home");
-  });
-
-  it("keeps an account out of screens it has no nav item for", () => {
+  it("keeps an account out of the pages it has no way to open", () => {
     const approver = allowedScreens(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my" })));
-    expect(approver).not.toContain("cat");
+    expect(approver).not.toContain("people");
     expect(approver).not.toContain("audit");
-    expect(approver).toContain("queue");
+    expect(approver).not.toContain("manage");
 
     const admin = allowedScreens(derivePortalAccess(input({ userEmail: "aisyah@pmw.gov.my", isAdmin: true })));
     expect(admin).toContain("people");
   });
 
-  it("still reaches the queue when a reassignment arrives mid-session", () => {
-    // Nothing is assigned to this account yet, so the queue carries no nav item —
-    // but a reassignment can land at any time and must not bounce back to Home.
-    const fresh = allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })));
-    expect(fresh).toContain("queue");
+  it("shows the smoking log to admins and auditors only", () => {
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true })))).toContain("smoking");
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "aud@pmw.gov.my", isAuditor: true })))).toContain("smoking");
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "nurul@pmw.gov.my" })))).not.toContain("smoking");
+    expect(allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).not.toContain("smoking");
   });
 
-  it("shows the smoking log to admins and auditors only", () => {
-    expect(labels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toContain("Smoking log");
-    expect(labels(input({ userEmail: "aud@pmw.gov.my", isAuditor: true }))).toContain("Smoking log");
-    expect(labels(input({ userEmail: "nurul@pmw.gov.my" }))).not.toContain("Smoking log");
-    expect(allowedScreens(derivePortalAccess(input({ userEmail: "sazali@marinekita.com" })))).not.toContain("smoking");
+  it("lands everyone on the page that shows all the others", () => {
+    expect(portalHome()).toBe("home");
   });
 });
 

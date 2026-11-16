@@ -7,8 +7,18 @@ import { usePortal } from "../../contexts/PortalContext";
 import { useAppearance } from "../../contexts/AppearanceContext";
 import AppearancePicker from "../../components/dashboard/AppearancePicker";
 import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
-import { accessSummary, portalNav, roleLabel } from "../../utils/portalRole";
+import { accessSummary, allowedScreens, roleLabel } from "../../utils/portalRole";
 import type { PortalScreen } from "../../types";
+
+/** The name each page goes by in the "Start on" choice. */
+const START_LABELS: Partial<Record<PortalScreen, string>> = {
+  home: "Home",
+  subs: "Submissions",
+  manage: "Manage",
+  people: "People & roles",
+  audit: "Audit trail",
+  smoking: "Smoking log",
+};
 
 /** A tonal pill: the secondary action that is not the one primary on the page. */
 const tonalPillSx = {
@@ -106,8 +116,6 @@ export default function SettingsScreen() {
     prefs,
     setPrefs,
     records,
-    myRecords,
-    queue,
     catalogue,
     audit,
     refresh,
@@ -117,13 +125,9 @@ export default function SettingsScreen() {
   const { setting: appearance, resolved } = useAppearance();
   const [appearanceOpen, setAppearanceOpen] = useState(false);
 
-  const startOptions = portalNav(access, {
-    queue: queue.length,
-    allRecords: records.length,
-    myRecords: myRecords.length,
-    catalogue: catalogue.length,
-    audit: audit.length,
-  }).filter((item) => item.screen !== "settings");
+  const startOptions = allowedScreens(access)
+    .filter((screen) => screen !== "settings")
+    .map((screen) => ({ screen, label: START_LABELS[screen] ?? screen }));
 
   const capabilities: { label: string; granted: boolean; why: string }[] = [
     { label: "File forms", granted: access.canFile, why: "Any signed-in account, unless it is read-only." },

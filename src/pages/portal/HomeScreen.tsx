@@ -26,9 +26,9 @@ import {
 } from "../../components/portal/PortalStats";
 import { recordKey } from "../../utils/portalRecords";
 import { portalStats, scopeToForm } from "../../utils/portalStats";
-import { portalSections } from "../../utils/portalRole";
+import { subsScopes } from "../../utils/portalRole";
 import { formatTodayDate } from "../../utils/portalTime";
-import type { CatalogueEntry, PortalRecord, PortalScreen, StatFilter } from "../../types";
+import type { CatalogueEntry, PortalRecord, StatFilter } from "../../types";
 
 /**
  * A form type as a door into its own workspace.
@@ -299,24 +299,10 @@ export default function HomeScreen() {
     return all.filter((segment) => segment.count > 0);
   }, [stats]);
 
-  const sections = portalSections(access, {
-    queue: queue.length,
-    allRecords: records.length,
-    myRecords: myRecords.length,
-    catalogue: catalogue.length,
-    audit: audit.length,
-  });
-  /**
-   * The two- or three-word caption for a destination.
-   *
-   * Deliberately `caption` and not `hint`: `hint` is the sentence the nav column
-   * shows on hover, and printing it under every card here is what made the
-   * dashboard read as an explanation of itself rather than as a set of numbers.
-   */
-  const caption = (screen: PortalScreen): string =>
-    sections.flatMap((section) => section.items).find((item) => item.screen === screen)?.caption ?? "";
-  const has = (screen: PortalScreen): boolean =>
-    sections.some((section) => section.items.some((item) => item.screen === screen));
+  /** Only accounts that sign or evaluate have a list of things waiting on them. */
+  const hasNeeds = subsScopes(access).includes("needs");
+  /** Whether this account sees anything beyond its own filings, which the all-records charts need. */
+  const seesBeyondOwn = access.canSeeEveryRecord || records.length > myRecords.length;
 
   const greeting = userName ? `Hello, ${userName.split(" ")[0]}` : "Hello";
   const headline = access.readOnly
@@ -326,8 +312,6 @@ export default function HomeScreen() {
       : openMine > 0
         ? `Nothing is waiting on you. ${openMine} of your own ${openMine === 1 ? "filing is" : "filings are"} still moving.`
         : "Nothing is waiting on you.";
-
-  const extras = (["today", "cat", "people", "audit"] as const).filter((screen) => has(screen));
 
   /** The one line under a work row: which form, which step, how long it has sat. */
   const waitLine = (record: PortalRecord): string =>
@@ -340,10 +324,10 @@ export default function HomeScreen() {
         subtitle={headline}
         meta={formatTodayDate()}
         actions={
-          has("file") && access.canFile ? (
+          access.canFile ? (
             <Button
               variant="text"
-              onClick={() => setScreen("file")}
+              onClick={() => setScreen("home")}
               sx={{ minHeight: 40, px: 1.5, fontWeight: 700, color: editorial.pmwBlueDark, borderRadius: radius.full, "&:hover": { backgroundColor: editorial.blueWash } }}
             >
               File a form
@@ -354,18 +338,18 @@ export default function HomeScreen() {
 
       <Box sx={{ mb: 3 }}>
         <StatTileRow>
-          {has("queue") && (
+          {hasNeeds && (
             <StatTile
               value={queue.length}
               label="Waiting on you"
               tone={queue.length > 0 ? "alert" : "ink"}
-              onClick={() => setScreen("queue")}
+              onClick={() => setScreen("subs", null, null, "needs")}
             />
           )}
           <StatTile
             value={myRecords.length}
             label="Filed by you"
-            onClick={() => setScreen("mine", null, "all")}
+            onClick={() => setScreen("subs", null, "all", "mine")}
           />
           {records.length > myRecords.length && (
             <StatTile
@@ -395,15 +379,15 @@ export default function HomeScreen() {
       </Box>
 
       <WidgetGrid min={330} sx={{ mb: 3.5 }}>
-        {has("queue") && (
+        {hasNeeds && (
           <Widget
             title={access.isEvaluator ? "To evaluate" : "To approve"}
-            caption={caption("queue")}
+            caption="On your layer"
             meta={<WidgetCount value={queue.length} tone={queue.length > 0 ? "alert" : "ink"} />}
-            onOpen={() => setScreen("queue")}
+            onOpen={() => setScreen("subs", null, null, "needs")}
             openLabel="Open your queue"
             footer={
-              <QuietButton onClick={() => setScreen("queue")}>Open your queue →</QuietButton>
+              <QuietButton onClick={() => setScreen("subs", null, null, "needs")}>Open your queue →</QuietButton>
             }
           >
             {queue.length === 0 ? (
@@ -445,12 +429,12 @@ export default function HomeScreen() {
 
         <Widget
           title="Your recent filings"
-          caption={caption("mine")}
+          caption="Filed by you"
           meta={<WidgetCount value={myRecords.length} />}
-          onOpen={() => setScreen("mine", null, "all")}
+          onOpen={() => setScreen("subs", null, "all", "mine")}
           openLabel="See everything you filed"
           footer={
-            <QuietButton onClick={() => setScreen("mine", null, "all")}>See everything you filed →</QuietButton>
+            <QuietButton onClick={() => setScreen("subs", null, "all", "mine")}>See everything you filed →</QuietButton>
           }
         >
           {myRecords.length === 0 ? (
@@ -473,7 +457,7 @@ export default function HomeScreen() {
           )}
         </Widget>
 
-        {has("subs") && records.length > 0 && (
+        {seesBeyondOwn && records.length > 0 && (
           <Widget
             title="Where records stand"
             caption="Press a slice to filter"
@@ -529,14 +513,14 @@ export default function HomeScreen() {
                 mine={row.mine}
                 open={row.open}
                 waiting={row.waiting}
-                onOpen={() => setScreen("form", row.entry.listTitle)}
+                onOpen={() => setScreen("subs", row.entry.listTitle)}
               />
             ))}
           </WidgetGrid>
         )}
       </Box>
 
-      {has("subs") && (
+      {seesBeyondOwn && (
         <WidgetGrid min={340} sx={{ mb: 3.5 }}>
           <Widget
             title="Where everything stands"
@@ -559,28 +543,17 @@ export default function HomeScreen() {
         </WidgetGrid>
       )}
 
-      {extras.length > 0 && (
+      {(access.canSeePeople || access.canSeeAudit) && (
         <Box sx={{ mt: 3.5 }}>
           <SectionLabel>{access.canSeeEveryRecord ? "Oversight" : "More"}</SectionLabel>
           <WidgetGrid min={200}>
-            {extras.includes("today") && (
-              <LinkTile label="Today" hint={caption("today")} onOpen={() => setScreen("today")} />
+            {access.canSeePeople && (
+              <LinkTile label="People & roles" hint="Who approves what" onOpen={() => setScreen("people")} />
             )}
-            {extras.includes("cat") && (
-              <LinkTile
-                label="Form catalogue"
-                hint={caption("cat")}
-                count={catalogue.length}
-                onOpen={() => setScreen("cat")}
-              />
+            {access.canSeeAudit && (
+              <LinkTile label="Audit trail" hint="Every action, in order" count={audit.length} onOpen={() => setScreen("audit")} />
             )}
-            {extras.includes("people") && (
-              <LinkTile label="People & roles" hint={caption("people")} onOpen={() => setScreen("people")} />
-            )}
-            {extras.includes("audit") && (
-              <LinkTile label="Audit trail" hint={caption("audit")} count={audit.length} onOpen={() => setScreen("audit")} />
-            )}
-            <LinkTile label="Settings" hint={caption("settings")} onOpen={() => setScreen("settings")} />
+            <LinkTile label="Settings" hint="Your account" onOpen={() => setScreen("settings")} />
           </WidgetGrid>
         </Box>
       )}

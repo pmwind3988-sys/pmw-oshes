@@ -175,7 +175,7 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
         back={
           focusForm && scopedForm ? (
             <Button
-              onClick={() => setScreen("form", focusForm)}
+              onClick={() => setScreen("home")}
               startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
               sx={{ minHeight: 36, px: 0.75, ml: -0.75, mb: 1.5, fontSize: 12.5, color: editorial.muted }}
             >
@@ -189,7 +189,9 @@ export default function RecordsScreen({ scope = "all" }: { scope?: Scope }) {
           records.length > myRecords.length ? (
             <Button
               variant="text"
-              onClick={() => setScreen(mine ? "subs" : "mine", formFilter === "all" ? null : formFilter, statusFilter)}
+              onClick={() =>
+                setScreen("subs", formFilter === "all" ? null : formFilter, statusFilter, mine ? "all" : "mine")
+              }
               sx={ghostPillSx}
             >
               {mine ? "Show everything I can see" : "Show only mine"}

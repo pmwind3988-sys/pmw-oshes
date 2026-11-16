@@ -8,6 +8,7 @@ import type {
   PortalScreen,
   SharePointClient,
   StatFilter,
+  SubsScope,
   SurveyJson,
 } from "../types";
 import type { PeopleDirectory } from "../utils/portalPeople";
@@ -47,11 +48,18 @@ export interface PortalContextValue {
    * click ("All submissions") cannot inherit the form filter left behind by a
    * form hub door ("All Permit to Work").
    */
-  setScreen: (screen: PortalScreen, formScope?: string | null, statusScope?: StatFilter | null) => void;
+  setScreen: (
+    screen: PortalScreen,
+    formScope?: string | null,
+    statusScope?: StatFilter | null,
+    subsScope?: SubsScope | null,
+  ) => void;
   /** List title the current screen is scoped to, or null for every form. */
   focusForm: string | null;
   /** Status the records table should open on — what the pressed statistic counted. */
   focusStatus: StatFilter | null;
+  /** Which framing of the submissions screen is open — everything, mine, or needs me. */
+  focusSubsScope: SubsScope | null;
 
   /**
    * Text the shell's search box was submitted with, which the records table

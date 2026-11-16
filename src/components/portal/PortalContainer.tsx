@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import type {
   AuditEntry,
   CatalogueEntry,
@@ -8,6 +9,7 @@ import type {
   PortalScreen,
   SharePointClient,
   StatFilter,
+  SubsScope,
   Submission,
   SurveyJson,
 } from "../../types";
@@ -16,6 +18,7 @@ import PortalPage from "../../pages/PortalPage";
 import { buildCatalogue, findCatalogueEntry } from "../../utils/portalCatalogue";
 import { recordKey, toPortalRecord, queueFor } from "../../utils/portalRecords";
 import { allowedScreens, derivePortalAccess, portalHome } from "../../utils/portalRole";
+import { readPortalDeepLink } from "../../utils/portalDeepLink";
 import { DEFAULT_PORTAL_PREFS, readPortalPrefs, writePortalPrefs, type PortalPrefs } from "../../utils/portalPrefs";
 import { deriveAuditFromRecords, readAuditTrail, sortAudit } from "../../utils/portalAudit";
 import { applySubmissionPatch } from "../../utils/portalPatch";
@@ -68,11 +71,23 @@ export default function PortalContainer({
   const [storedAudit, setStoredAudit] = useState<AuditEntry[]>([]);
   const [directory, setDirectory] = useState<PeopleDirectory>({});
   const [nudged, setNudged] = useState<Record<string, boolean>>({});
-  const [drawerRef, setDrawerRef] = useState<string | null>(null);
+  // A portal link is read once, when the portal mounts, and its address is then
+  // cleared so a refresh does not repeat it. The page it names opens at once;
+  // the record it names opens in the drawer as soon as that record has loaded.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [deepLink] = useState(() => readPortalDeepLink(location.search));
+  useEffect(() => {
+    if (location.search) navigate({ search: "" }, { replace: true });
+  }, [location.search, navigate]);
+
+  /** Null until the drawer is used; then the reference it shows, or null when closed. */
+  const [drawerChoice, setDrawerChoice] = useState<{ ref: string | null } | null>(null);
   const [toastMessage, setToastMessage] = useState("");
-  const [screen, setScreenState] = useState<PortalScreen | null>(null);
-  const [focusForm, setFocusForm] = useState<string | null>(null);
+  const [screen, setScreenState] = useState<PortalScreen | null>(() => deepLink.screen ?? null);
+  const [focusForm, setFocusForm] = useState<string | null>(() => deepLink.form ?? null);
   const [focusStatus, setFocusStatus] = useState<StatFilter | null>(null);
+  const [focusSubsScope, setFocusSubsScope] = useState<SubsScope | null>(() => deepLink.scope ?? null);
   const [search, setSearch] = useState<{ query: string; at: number }>({ query: "", at: 0 });
   const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
     typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
@@ -187,6 +202,14 @@ export default function PortalContainer({
     return map;
   }, [loadedConfig]);
 
+  // The linked record, once it is in the loaded set. Until the drawer is used,
+  // it is what the drawer shows.
+  const linkedRecord =
+    deepLink.form && deepLink.item
+      ? records.find((item) => item.listTitle === deepLink.form && item.itemId === deepLink.item)
+      : undefined;
+  const drawerRef = drawerChoice ? drawerChoice.ref : (linkedRecord?.reference ?? null);
+
   // A screen this account cannot reach — a stale preference, or a link shared
   // between two different kinds of account — lands on Home instead.
   const permitted = allowedScreens(access);
@@ -217,10 +240,16 @@ export default function PortalContainer({
     surveyJsonByForm,
     refresh: onRefresh,
     screen: activeScreen,
-    setScreen: (next: PortalScreen, formScope: string | null = null, statusScope: StatFilter | null = null) => {
+    setScreen: (
+      next: PortalScreen,
+      formScope: string | null = null,
+      statusScope: StatFilter | null = null,
+      subsScope: SubsScope | null = null,
+    ) => {
       setScreenState(next);
       setFocusForm(formScope);
       setFocusStatus(statusScope);
+      setFocusSubsScope(subsScope);
       // Any deliberate navigation drops the search, for the same reason it drops
       // the form scope: clicking "All submissions" must show all submissions,
       // not the last thing that was typed into the bar.
@@ -230,6 +259,7 @@ export default function PortalContainer({
     // strand the screen on a form this account can no longer see.
     focusForm: focusForm && catalogue.some((entry) => entry.listTitle === focusForm) ? focusForm : null,
     focusStatus,
+    focusSubsScope,
     searchSeed: search.query,
     searchSeedAt: search.at,
     // Searching is a navigation: it takes you to the table that can answer,
@@ -242,12 +272,13 @@ export default function PortalContainer({
       setScreenState("subs");
       setFocusForm(null);
       setFocusStatus(null);
+      setFocusSubsScope(null);
     },
     prefs,
     setPrefs,
     drawerRef,
-    openDrawer: (reference: string) => setDrawerRef(reference),
-    closeDrawer: () => setDrawerRef(null),
+    openDrawer: (reference: string) => setDrawerChoice({ ref: reference }),
+    closeDrawer: () => setDrawerChoice({ ref: null }),
     nudged,
     markNudged: (reference: string) => setNudged((current) => ({ ...current, [reference]: true })),
     applyPatch: (record: PortalRecord, fields: Record<string, unknown>) =>
@@ -263,7 +294,7 @@ export default function PortalContainer({
       setDeleted((current) => ({ ...current, [key]: true }));
       // Nothing is left to show — an open drawer on a deleted record would
       // otherwise sit there rendering a submission that no longer exists.
-      setDrawerRef((current) => (current === key ? null : current));
+      if (drawerRef === key) setDrawerChoice({ ref: null });
     },
     appendAudit: (entry: AuditEntry) => setSessionAudit((current) => [entry, ...current]),
     updateCatalogue: (listTitle: string, changes: Partial<CatalogueEntry>) =>

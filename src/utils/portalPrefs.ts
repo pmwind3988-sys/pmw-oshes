@@ -1,5 +1,8 @@
 import type { PortalScreen } from "../types";
 
+/** Every page a preference may name as its landing page. */
+const PORTAL_SCREENS: readonly PortalScreen[] = ["home", "subs", "manage", "people", "audit", "smoking", "settings"];
+
 /**
  * Per-browser portal preferences.
  *
@@ -33,16 +36,32 @@ function storage(): Storage | null {
   }
 }
 
-export function readPortalPrefs(): PortalPrefs {
+/**
+ * Reads a stored preferences value. A landing page that is no longer a screen
+ * (a page since removed from the portal) falls back to Home, as does anything
+ * unreadable.
+ */
+export function parsePortalPrefs(raw: string | null): PortalPrefs {
+  if (!raw) return DEFAULT_PORTAL_PREFS;
   try {
-    const raw = storage()?.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PORTAL_PREFS;
     const parsed = JSON.parse(raw) as Partial<PortalPrefs>;
+    const startScreen =
+      typeof parsed.startScreen === "string" && (PORTAL_SCREENS as readonly string[]).includes(parsed.startScreen)
+        ? (parsed.startScreen as PortalScreen)
+        : DEFAULT_PORTAL_PREFS.startScreen;
     return {
-      startScreen: typeof parsed.startScreen === "string" ? (parsed.startScreen as PortalScreen) : DEFAULT_PORTAL_PREFS.startScreen,
+      startScreen,
       compactTables: parsed.compactTables === true,
       hideSettled: parsed.hideSettled === true,
     };
+  } catch {
+    return DEFAULT_PORTAL_PREFS;
+  }
+}
+
+export function readPortalPrefs(): PortalPrefs {
+  try {
+    return parsePortalPrefs(storage()?.getItem(STORAGE_KEY) ?? null);
   } catch {
     return DEFAULT_PORTAL_PREFS;
   }

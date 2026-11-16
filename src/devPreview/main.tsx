@@ -9,14 +9,9 @@ import { PortalProvider } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
 import SubmissionDrawer from "../components/portal/SubmissionDrawer";
 import HomeScreen from "../pages/portal/HomeScreen";
-import TodayScreen from "../pages/portal/TodayScreen";
-import QueueScreen from "../pages/portal/QueueScreen";
 import RecordsScreen from "../pages/portal/RecordsScreen";
-import FormHubScreen from "../pages/portal/FormHubScreen";
-import CatalogueScreen from "../pages/portal/CatalogueScreen";
 import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
-import FileFormScreen from "../pages/portal/FileFormScreen";
 import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
 import SmokingLogScreen from "../pages/portal/SmokingLogScreen";
 import SmokingScanPage from "../pages/SmokingScanPage";
@@ -38,17 +33,12 @@ installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).
 
 const SCREENS = {
   home: <HomeScreen />,
-  today: <TodayScreen />,
-  queue: <QueueScreen />,
   records: <RecordsScreen scope="all" />,
   mine: <RecordsScreen scope="mine" />,
-  form: <FormHubScreen />,
-  catalogue: <CatalogueScreen />,
   people: <PeopleScreen />,
   audit: <AuditScreen />,
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
   // MSAL session. Nothing here can stand in for that.
-  file: <FileFormScreen />,
   // The smoking log itself reads SharePoint directly; its Totals dashboard is
   // shown on its own, over a sample week.
   "smoking-log": <SmokingLogScreen />,
@@ -72,8 +62,8 @@ function Harness() {
   applyAppearance(setting);
 
   const value = fixtureContext("admin", {
-    screen: screen === "form" ? "form" : "home",
-    focusForm: screen === "form" ? "Permit To Work" : null,
+    screen: "home",
+    focusForm: null,
     setScreen: (next) => {
       if (next in SCREENS) setScreen(next as ScreenKey);
     },

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, Plus as PlusIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
+import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, Plus as PlusIcon, ExternalLink as OpenInNewIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon } from "../ui/Icons";
 import type { IconComponent } from "../ui/Icons";
 import { editorial, editorialHairline } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
-import { portalSections, roleLabel } from "../../utils/portalRole";
+import { portalTabs, roleLabel } from "../../utils/portalRole";
 import { builderUrl, OSHES_APP } from "../../config/oshes";
 import Logo from "../Logo";
 import type { PortalScreen } from "../../types";
@@ -25,20 +25,19 @@ import "../../styles/shell.css";
  * account menu, not in the rail.
  */
 
-/** One glyph per screen. The rail carries the word too — this is not a memory test. */
+/** One glyph per destination. The rail carries the word too — this is not a memory test. */
 const SCREEN_ICON: Partial<Record<PortalScreen, IconComponent>> = {
   home: HomeOutlinedIcon,
-  today: TodayOutlinedIcon,
-  queue: PendingActionsOutlinedIcon,
   subs: ListAltOutlinedIcon,
-  mine: FolderOutlinedIcon,
-  file: NoteAddOutlinedIcon,
-  cat: CategoryOutlinedIcon,
+  manage: CategoryOutlinedIcon,
   people: GroupOutlinedIcon,
   audit: HistoryOutlinedIcon,
   smoking: SmokingRoomsOutlinedIcon,
   settings: SettingsOutlinedIcon,
 };
+
+/** The pages that sit under the Manage tab, so the tab stays lit while one is open. */
+const MANAGE_SCREENS: PortalScreen[] = ["manage", "people", "audit", "smoking"];
 
 /** Two letters from the display name, or one from the email when there is no name yet. */
 function initialsOf(name: string, email: string): string {
@@ -63,11 +62,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     userEmail,
     screen,
     setScreen,
-    records,
-    myRecords,
     queue,
-    catalogue,
-    audit,
     submitSearch,
     onSignOut,
   } = usePortal();
@@ -81,17 +76,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const displayed = userName || userEmail;
   const initials = initialsOf(userName, userEmail);
 
-  const sections = portalSections(access, {
-    queue: queue.length,
-    allRecords: records.length,
-    myRecords: myRecords.length,
-    catalogue: catalogue.length,
-    audit: audit.length,
-  });
-
-  // A form's own workspace has no rail item of its own; it is the "file" area
-  // it was reached from, so that is the destination that stays lit.
-  const activeScreen: PortalScreen = screen === "form" ? "file" : screen;
+  const tabs = portalTabs(access, queue.length);
 
   // While the drawer is over the page the page behind it must not scroll — on a
   // phone a scrolling backdrop reads as the drawer itself failing to scroll.
@@ -187,7 +172,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           <button
             type="button"
             className="shell-newbtn"
-            onClick={() => pick("file")}
+            onClick={() => pick("home")}
             aria-label="File a form"
             title="File a form"
           >
@@ -196,39 +181,25 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         )}
 
         <nav className="shell-navlist">
-          {sections.map((section) => (
-            <div key={section.id} className="shell-navgroup">
-              {section.items.map((item) => {
-                const Icon = SCREEN_ICON[item.screen];
-                const active = activeScreen === item.screen;
-                // On a desktop the "+" button above is the way in to filing, so
-                // this row would only repeat it. The row stays for the drawer.
-                const className = [
-                  "shell-navitem",
-                  active ? "active" : "",
-                  item.screen === "file" ? "shell-navitem-file" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-                return (
-                  <button
-                    key={item.screen}
-                    type="button"
-                    className={className}
-                    onClick={() => pick(item.screen)}
-                    aria-current={active ? "page" : undefined}
-                    title={item.hint}
-                  >
-                    <span className="shell-navpill">{Icon && <Icon fontSize="small" />}</span>
-                    <span className="shell-navlabel">{item.label}</span>
-                    {item.count !== null && item.count > 0 && item.screen === "queue" && (
-                      <span className="shell-navcount">{item.count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          <div className="shell-navgroup">
+            {tabs.map((tab) => {
+              const Icon = SCREEN_ICON[tab.screen];
+              const active = tab.screen === "manage" ? MANAGE_SCREENS.includes(screen) : screen === tab.screen;
+              return (
+                <button
+                  key={tab.screen}
+                  type="button"
+                  className={active ? "shell-navitem active" : "shell-navitem"}
+                  onClick={() => pick(tab.screen)}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span className="shell-navpill">{Icon && <Icon fontSize="small" />}</span>
+                  <span className="shell-navlabel">{tab.label}</span>
+                  {tab.badge > 0 && <span className="shell-navcount">{tab.badge}</span>}
+                </button>
+              );
+            })}
+          </div>
         </nav>
       </aside>
 
@@ -271,7 +242,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   <button
                     type="button"
                     className="shell-iconbtn shell-headerfile"
-                    onClick={() => pick("file")}
+                    onClick={() => pick("home")}
                     aria-label="File a form"
                   >
                     <NoteAddOutlinedIcon sx={{ fontSize: 18 }} />

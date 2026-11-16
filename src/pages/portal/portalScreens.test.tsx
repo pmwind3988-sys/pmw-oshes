@@ -7,7 +7,6 @@ import { toPortalRecord } from "../../utils/portalRecords";
 import { derivePortalAccess } from "../../utils/portalRole";
 import { DEFAULT_PORTAL_PREFS } from "../../utils/portalPrefs";
 import HomeScreen from "./HomeScreen";
-import FormHubScreen from "./FormHubScreen";
 import RecordsScreen from "./RecordsScreen";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import { OverviewTab } from "../../components/portal/RecordDetail";
@@ -124,6 +123,7 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     setScreen: () => {},
     focusForm: null,
     focusStatus: null,
+    focusSubsScope: null,
     searchSeed: "",
     searchSeedAt: 0,
     submitSearch: () => {},
@@ -175,41 +175,6 @@ describe("HomeScreen", () => {
     const records = [toPortalRecord(submission(), withSla, {}, {}, NOW)];
     const html = render(<HomeScreen />, contextValue({ catalogue: [withSla], records }));
     expect(html).toContain("Past SLA");
-  });
-});
-
-describe("FormHubScreen", () => {
-  it("offers the three doors for the form in focus", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).toContain("New Permit To Work");
-    expect(html).toContain("My Permit To Work");
-    expect(html).toContain("All Permit To Work");
-  });
-
-  it("states what happens after submit", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).toContain("What happens after you submit");
-    expect(html).toContain("Safety Officer");
-  });
-
-  it("advertises no SLA badge for a form that declares none", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).not.toContain("SLA");
-  });
-
-  it("advertises the SLA for a form that declares one", () => {
-    const withSla = entry({ slaDays: 2 });
-    const records = [toPortalRecord(submission(), withSla, {}, {}, NOW)];
-    const html = render(
-      <FormHubScreen />,
-      contextValue({ catalogue: [withSla], records, focusForm: "Permit To Work" }),
-    );
-    expect(html).toContain("2-day SLA per layer");
-  });
-
-  it("falls back to the picker when the form in focus is gone", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Deleted Form" }));
-    expect(html).toContain("not in the catalogue any more");
   });
 });
 
