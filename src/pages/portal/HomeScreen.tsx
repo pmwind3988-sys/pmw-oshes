@@ -4,6 +4,7 @@ import { FileText as DescriptionOutlinedIcon, ClipboardClock as PendingActionsOu
 import { editorial } from "../../theme/editorial";
 import { liftSx, panelSx, radius } from "../../theme/surfaces";
 import ReferenceTag from "../../components/ReferenceTag";
+import FormPickerDialog from "../../components/portal/FormPickerDialog";
 import {
   PageHeader,
   QuietButton,
@@ -238,6 +239,7 @@ export default function HomeScreen() {
   } = usePortal();
 
   const [formQuery, setFormQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const stats = useMemo(() => portalStats({ records, userEmail, catalogue }), [records, userEmail, catalogue]);
   const openMine = useMemo(
@@ -327,8 +329,8 @@ export default function HomeScreen() {
           access.canFile ? (
             <Button
               variant="text"
-              onClick={() => setScreen("home")}
-              sx={{ minHeight: 40, px: 1.5, fontWeight: 700, color: editorial.pmwBlueDark, borderRadius: radius.full, "&:hover": { backgroundColor: editorial.blueWash } }}
+              onClick={() => setPickerOpen(true)}
+              sx={{ minHeight: 44, px: 1.5, fontWeight: 700, color: editorial.pmwBlueDark, borderRadius: radius.full, "&:hover": { backgroundColor: editorial.blueWash } }}
             >
               File a form
             </Button>
@@ -557,6 +559,8 @@ export default function HomeScreen() {
           </WidgetGrid>
         </Box>
       )}
+
+      <FormPickerDialog open={pickerOpen} onClose={() => setPickerOpen(false)} />
     </Box>
   );
 }

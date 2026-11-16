@@ -10,6 +10,8 @@ import HomeScreen from "./HomeScreen";
 import RecordsScreen from "./RecordsScreen";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import { OverviewTab } from "../../components/portal/RecordDetail";
+import PortalShell from "../../components/portal/PortalShell";
+import { FormPickerList } from "../../components/portal/FormPickerDialog";
 import type {
   ApprovalLayerConfig,
   CatalogueEntry,
@@ -223,5 +225,53 @@ describe("SmokingSettingsTab", () => {
     const value = contextValue();
     const html = render(<SmokingSettingsTab />, { ...value, access: { ...value.access, readOnly: true } });
     expect(html).not.toContain(">Save<");
+  });
+});
+
+describe("PortalShell", () => {
+  it("shows Home, Submissions and Manage to an administrator", () => {
+    const html = render(<PortalShell><span /></PortalShell>, contextValue());
+    expect(html).toContain("Home");
+    expect(html).toContain("Submissions");
+    expect(html).toContain("Manage");
+  });
+
+  it("shows no Manage tab to a submitter, but keeps File a form", () => {
+    const catalogue = [entry()];
+    const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: false, catalogue, records });
+    const html = render(
+      <PortalShell><span /></PortalShell>,
+      contextValue({ access, role: access.role, isAdmin: false, catalogue, records }),
+    );
+    expect(html).toContain("Submissions");
+    expect(html).not.toContain("Manage");
+    expect(html).toContain("File a form");
+  });
+
+  it("offers no File a form to a read-only account", () => {
+    const catalogue = [entry()];
+    const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: true, catalogue, records });
+    const html = render(
+      <PortalShell><span /></PortalShell>,
+      contextValue({ access, role: access.role, isAdmin: false, catalogue, records }),
+    );
+    expect(html).not.toContain("File a form");
+  });
+});
+
+describe("FormPickerList", () => {
+  it("lists each published form by name", () => {
+    const catalogue = [entry(), entry({ listTitle: "Hot Work", name: "Hot Work", code: "HW", slug: "hot-work" })];
+    const html = render(<FormPickerList catalogue={catalogue} onPick={() => {}} />, contextValue());
+    expect(html).toContain("Permit To Work");
+    expect(html).toContain("Hot Work");
+  });
+
+  it("says no forms are published when the catalogue is empty", () => {
+    const html = render(<FormPickerList catalogue={[]} onPick={() => {}} />, contextValue());
+    expect(html).toContain("No forms yet");
+    expect(html).toContain("Forms appear here once they are published.");
   });
 });

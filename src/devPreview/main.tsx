@@ -33,16 +33,17 @@ installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).
 
 const SCREENS = {
   home: <HomeScreen />,
-  records: <RecordsScreen scope="all" />,
-  mine: <RecordsScreen scope="mine" />,
+  subs: <RecordsScreen scope="all" />,
+  // Manage opens Home in the portal, which links to the pages inside it.
+  manage: <HomeScreen />,
   people: <PeopleScreen />,
   audit: <AuditScreen />,
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
   // MSAL session. Nothing here can stand in for that.
   // The smoking log itself reads SharePoint directly; its Totals dashboard is
   // shown on its own, over a sample week.
-  "smoking-log": <SmokingLogScreen />,
-  smoking: <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
+  smoking: <SmokingLogScreen />,
+  "smoking-totals": <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
 } as const;
 
 type ScreenKey = keyof typeof SCREENS;
