@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import ErrorBoundary from "../ErrorBoundary";
 import SignInScreen from "./SignInScreen";
 import GuestLanding from "./GuestLanding";
-import LoadingScreen from "./LoadingScreen";
+import LoadingScreen, { LoadingScreenBody, SLOW_AFTER_MS, isLoadSlow } from "./LoadingScreen";
 import ErrorScreen from "./ErrorScreen";
 import RestrictedAccessScreen from "./RestrictedAccessScreen";
 import WrongTenantScreen from "./WrongTenantScreen";
@@ -111,5 +111,27 @@ describe("access screens", () => {
 
   it("sends non-admins to the portal rather than the dashboard", () => {
     expect(ADMIN_REDIRECT_PATH).toBe("/portal");
+  });
+});
+
+describe("slow loading", () => {
+  it("offers a way out only once the load has run long enough", () => {
+    expect(isLoadSlow(SLOW_AFTER_MS - 1)).toBe(false);
+    expect(isLoadSlow(SLOW_AFTER_MS)).toBe(true);
+  });
+
+  it("hides the retry notice until the load is slow", () => {
+    const markup = renderToStaticMarkup(<LoadingScreenBody status="Working" slow={false} />);
+
+    expect(markup).not.toContain("Taking longer than usual.");
+    expect(markup).not.toContain("Try again");
+  });
+
+  it("shows the notice and a retry button when the load is slow", () => {
+    const markup = renderToStaticMarkup(<LoadingScreenBody status="Working" slow={true} />);
+
+    expect(markup).toContain("Taking longer than usual.");
+    expect(markup).toContain("Try again");
+    expect(markup).toContain("Getting things ready");
   });
 });

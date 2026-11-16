@@ -1,5 +1,7 @@
-import { Box, type SxProps, type Theme } from "@mui/material";
+import { useEffect, useState } from "react";
+import { Box, Button, Stack, Typography, type SxProps, type Theme } from "@mui/material";
 import { fadeInUp } from "../../theme";
+import { radius } from "../../theme/surfaces";
 import { LoadingView } from "../simple/LoadingView";
 
 /*
@@ -115,11 +117,48 @@ interface LoadingScreenProps {
   steps?: LoadingStep[]; // no longer shown
 }
 
-/** Shown while the portal loads. Only the status line is displayed; the other props are still accepted. */
-export default function LoadingScreen({ status }: LoadingScreenProps) {
+/** After this long on the loading screen, offer a way out of a stuck load. */
+export const SLOW_AFTER_MS = 10_000;
+
+/** Whether a load has been running long enough to offer "Try again". */
+export function isLoadSlow(elapsedMs: number): boolean {
+  return elapsedMs >= SLOW_AFTER_MS;
+}
+
+/** The "taking longer than usual" line and its retry button, shown under the loading bar. */
+export function SlowLoadNotice() {
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <Stack spacing={1.5} sx={{ alignItems: "center", mt: 2 }}>
+      <Typography sx={{ fontSize: 15, color: "text.secondary", textAlign: "center" }}>Taking longer than usual.</Typography>
+      <Button
+        variant="contained"
+        onClick={() => window.location.reload()}
+        sx={{ minHeight: 44, px: 3, borderRadius: radius.full, textTransform: "none", fontWeight: 600, boxShadow: "none" }}
+      >
+        Try again
+      </Button>
+    </Stack>
+  );
+}
+
+/** The loading view, plus the slow-load notice once `slow` is set. */
+export function LoadingScreenBody({ status, slow }: { status?: string; slow: boolean }) {
+  return (
+    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
       <LoadingView status={status} />
+      {slow && <SlowLoadNotice />}
     </Box>
   );
+}
+
+/** Shown while the portal loads. After SLOW_AFTER_MS it offers a reload, so a stuck load has a way out. */
+export default function LoadingScreen({ status }: LoadingScreenProps) {
+  const [slow, setSlow] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return <LoadingScreenBody status={status} slow={slow} />;
 }
