@@ -564,8 +564,8 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
     return () => window.removeEventListener("scroll", fn);
   }, []);
   return (
-    <div style={{ position: "fixed", top: 4, left: 12, right: 12, height: 4, zIndex: 9999, pointerEvents: "none", borderRadius: 999 }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: t.purple, transition: "width .1s linear", borderRadius: 999 }} />
+    <div style={{ position: "fixed", top: 4, left: 12, right: 12, height: 4, zIndex: 9999, pointerEvents: "none", borderRadius: radius.full }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: t.purple, transition: "width .1s linear", borderRadius: radius.full }} />
     </div>
   );
 };
@@ -1914,8 +1914,8 @@ export default function DynamicFormPage() {
         <div className="dfp-header-left" style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <Logo size={{ xs: 26, sm: 28, md: 32 }} />
           <span className="dfp-title" style={{ fontWeight: 800, fontSize: 16, color: t.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formTitle}</span>
-          {pinVersion && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
-          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>Private</span>}
+          {pinVersion && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.amber, background: t.amberPale, borderRadius: radius.full, padding: "3px 10px", whiteSpace: "nowrap" }}>v{pinVersion}</span>}
+          {!isPublicForm && <span className="dfp-badge" style={{ fontSize: 12, fontWeight: 700, color: t.purple, background: t.purplePale, borderRadius: radius.full, padding: "3px 10px", whiteSpace: "nowrap" }}>Private</span>}
         </div>
         <div className="dfp-header-right" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <button type="button" onClick={() => { setShowQr(true); setCopied(false); }} title="Share this form" aria-label="Share this form" className="dfp-pill" style={{ ...pillGhost(t), minHeight: 36, width: 36, padding: 0 }}><IosShareIcon style={{ fontSize: 16 }} /></button>

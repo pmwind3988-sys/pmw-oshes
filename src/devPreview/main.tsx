@@ -9,12 +9,15 @@ import { PortalProvider } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
 import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "../pages/portal/HomeScreen";
+import ManageScreen from "../pages/portal/ManageScreen";
 import RecordsScreen from "../pages/portal/RecordsScreen";
 import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
 import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
 import SmokingLogScreen from "../pages/portal/SmokingLogScreen";
 import SmokingScanPage from "../pages/SmokingScanPage";
+import type { PortalScreen } from "../types";
+import { DEFAULT_PORTAL_PREFS, type PortalPrefs } from "../utils/portalPrefs";
 import { NOW, fixtureContext } from "./fixtures";
 import { sampleBreaks } from "./smokingFixtures";
 import { installSmokingStub } from "./smokingStub";
@@ -34,8 +37,8 @@ installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).
 const SCREENS = {
   home: <HomeScreen />,
   subs: <RecordsScreen />,
-  // Manage opens Home in the portal, which links to the pages inside it.
-  manage: <HomeScreen />,
+  // The real Manage screen; its sidebar switches the harness to the other pages.
+  manage: <ManageScreen />,
   people: <PeopleScreen />,
   audit: <AuditScreen />,
   record: <RecordPage />,
@@ -49,6 +52,9 @@ const SCREENS = {
 
 type ScreenKey = keyof typeof SCREENS;
 
+/** The portal screen a harness key stands in for, so the shell highlights the right item. */
+const portalScreenOf = (key: ScreenKey): PortalScreen => (key === "smoking-totals" ? "smoking" : (key as PortalScreen));
+
 const param = (name: string, fallback: string) => new URLSearchParams(location.search).get(name) ?? fallback;
 
 function Harness() {
@@ -60,14 +66,24 @@ function Harness() {
   // harness answers "does it read right", never "did it save".
   const [drawerRef, setDrawerRef] = useState<string | null>(() => new URLSearchParams(location.search).get("record"));
 
+  // Prefs live in state, not localStorage, so the harness never writes the real browser's portal prefs.
+  const [prefs, setPrefsState] = useState<PortalPrefs>(DEFAULT_PORTAL_PREFS);
+  const setPrefs = (changes: Partial<PortalPrefs>) => setPrefsState((current) => ({ ...current, ...changes }));
+
   const setting: AppearanceSetting = { ...DEFAULT_APPEARANCE, contrastThemeId: contrast };
   applyAppearance(setting);
 
   const value = fixtureContext("admin", {
-    screen: "home",
+    screen: portalScreenOf(screen),
     focusForm: null,
+    prefs,
+    setPrefs,
     setScreen: (next) => {
-      if (next in SCREENS) setScreen(next as ScreenKey);
+      // "record" is reached through openDrawer, which carries the record it shows.
+      if (next !== "record" && next in SCREENS) {
+        setDrawerRef(null);
+        setScreen(next as ScreenKey);
+      }
     },
     drawerRef,
     openDrawer: (reference) => {

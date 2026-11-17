@@ -7,7 +7,7 @@ switcher for all six contrast themes. Query params work too, so a particular
 combination can be linked or screenshotted directly:
 
 ```
-/preview.html?screen=today&contrast=midnight
+/preview.html?screen=subs&contrast=midnight
 ```
 
 ## Why it exists
