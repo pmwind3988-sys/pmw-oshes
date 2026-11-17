@@ -25,7 +25,7 @@ describe("Mascot", () => {
     const markup = renderToStaticMarkup(<Mascot mood={mood} />);
 
     expect(markup.match(/<svg/g)).toHaveLength(1);
-    expect(markup).toContain('viewBox="0 0 120 120"');
+    expect(markup).toContain('viewBox="0 0 200 200"');
     expect(markup).toContain('aria-hidden="true"');
     expect(markup).toContain('width="120"');
     expect(markup).toContain('height="120"');
@@ -42,6 +42,13 @@ describe("Mascot", () => {
     const markup = renderToStaticMarkup(<Mascot mood="empty" className="hero-art" />);
 
     expect(markup).toContain('class="hero-art"');
+  });
+
+  it.each(MOODS)("draws the %s scene on a backdrop with one figure", (mood) => {
+    const markup = renderToStaticMarkup(<Mascot mood={mood} />);
+
+    expect(markup).toContain('d="M32 104C20 64 52 22 100 20');
+    expect(markup.match(/class="memphis-figure"/g)).toHaveLength(1);
   });
 
   it("draws a different picture for each mood", () => {
