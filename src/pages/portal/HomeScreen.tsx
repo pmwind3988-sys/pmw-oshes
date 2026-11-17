@@ -383,7 +383,7 @@ export default function HomeScreen() {
             <Box sx={{ p: 3 }}>
               <MessageCard
                 fullPage={false}
-                mood={tab === "needs" ? "success" : "hello"}
+                mood={tab === "needs" ? "success" : "empty"}
                 title={copy.title}
                 body={copy.body}
                 primary={

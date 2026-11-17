@@ -65,9 +65,18 @@ export function signOffLabel(count: number): string {
   return `${count} sign-off${count === 1 ? "" : "s"}`;
 }
 
+/** "Good morning" before 12:00, "Good afternoon" until 18:00, then "Good evening". Local time. */
+export function greetingFor(date: Date): string {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 /** The muted line under the page title. The second sentence is dropped when nothing is waiting. */
-export function workGreeting(firstName: string | null, waiting: number): string {
-  const salutation = firstName ? `Good morning, ${firstName}.` : "Good morning.";
+export function workGreeting(firstName: string | null, waiting: number, now: Date = new Date()): string {
+  const greeting = greetingFor(now);
+  const salutation = firstName ? `${greeting}, ${firstName}.` : `${greeting}.`;
   if (waiting === 0) return salutation;
   return `${salutation} ${waiting} ${waiting === 1 ? "form is" : "forms are"} waiting for your signature.`;
 }

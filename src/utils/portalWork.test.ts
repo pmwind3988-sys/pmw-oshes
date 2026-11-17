@@ -3,6 +3,7 @@ import type { PortalRecord, PortalStatus } from "../types";
 import {
   defaultWorkTab,
   emptyWorkCopy,
+  greetingFor,
   pushRecentRef,
   recentlyViewed,
   signOffLabel,
@@ -78,21 +79,46 @@ describe("signOffLabel", () => {
   });
 });
 
+describe("greetingFor", () => {
+  it("says good morning at 09:00", () => {
+    expect(greetingFor(new Date(2026, 10, 17, 9, 0))).toBe("Good morning");
+  });
+
+  it("says good afternoon at 14:00", () => {
+    expect(greetingFor(new Date(2026, 10, 17, 14, 0))).toBe("Good afternoon");
+  });
+
+  it("says good evening at 20:00", () => {
+    expect(greetingFor(new Date(2026, 10, 17, 20, 0))).toBe("Good evening");
+  });
+
+  it("switches to afternoon at 12:00 and to evening at 18:00", () => {
+    expect(greetingFor(new Date(2026, 10, 17, 12, 0))).toBe("Good afternoon");
+    expect(greetingFor(new Date(2026, 10, 17, 18, 0))).toBe("Good evening");
+  });
+});
+
 describe("workGreeting", () => {
+  const morning = new Date(2026, 10, 17, 9, 0);
+
   it("names the person and says how many forms wait", () => {
-    expect(workGreeting("Aina", 2)).toBe("Good morning, Aina. 2 forms are waiting for your signature.");
+    expect(workGreeting("Aina", 2, morning)).toBe("Good morning, Aina. 2 forms are waiting for your signature.");
+  });
+
+  it("uses the time of day for the greeting", () => {
+    expect(workGreeting("Aina", 0, new Date(2026, 10, 17, 14, 0))).toBe("Good afternoon, Aina.");
   });
 
   it("uses the singular for one waiting form", () => {
-    expect(workGreeting("Aina", 1)).toBe("Good morning, Aina. 1 form is waiting for your signature.");
+    expect(workGreeting("Aina", 1, morning)).toBe("Good morning, Aina. 1 form is waiting for your signature.");
   });
 
   it("omits the second sentence when nothing is waiting", () => {
-    expect(workGreeting("Aina", 0)).toBe("Good morning, Aina.");
+    expect(workGreeting("Aina", 0, morning)).toBe("Good morning, Aina.");
   });
 
   it("drops the name cleanly when there is none", () => {
-    expect(workGreeting(null, 0)).toBe("Good morning.");
+    expect(workGreeting(null, 0, morning)).toBe("Good morning.");
   });
 });
 

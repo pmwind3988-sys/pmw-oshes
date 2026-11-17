@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { PortalProvider, type PortalContextValue } from "../../contexts/PortalContext";
+import { greetingFor } from "../../utils/portalWork";
 import { describeWorkflow, resolveFormVisibility } from "../../utils/formWorkflow";
 import { toPortalRecord } from "../../utils/portalRecords";
 import { derivePortalAccess } from "../../utils/portalRole";
@@ -171,7 +172,7 @@ describe("HomeScreen", () => {
 
   it("greets the signed-in person by first name with nothing waiting", () => {
     const html = render(<HomeScreen />, contextValue());
-    expect(html).toContain("Good morning, Sazali.");
+    expect(html).toContain(`${greetingFor(new Date())}, Sazali.`);
     expect(html).not.toContain("waiting for your signature");
   });
 
