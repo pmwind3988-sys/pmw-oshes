@@ -5,14 +5,13 @@ import { buildFormSubmissionSections, type FormSubmissionField } from "../../uti
 import { formatPdfFieldValue } from "../../utils/pdfFieldFormatting";
 import { isPlaceholderDisplayValue } from "../../utils/submissionDisplay";
 import { formatDisplayDayMonthTime } from "../../utils/displayDateTime";
-import FlowStrip, { recordSteps } from "./FlowStrip";
 import type { AuditEntry, PortalRecord, SurveyJson } from "../../types";
 
 /**
  * The parts a record's detail view is made of.
  *
- * Split out of the drawer so the layout is one thing and the actions are
- * another: the drawer decides what this account may *do* with a record, and
+ * Split out of the record page so the layout is one thing and the actions are
+ * another: the page decides what this account may *do* with a record, and
  * this file decides how a record *reads*. That separation is what lets the
  * same detail render for an approver with three buttons and an audit account
  * with none, without either version drifting.
@@ -266,22 +265,29 @@ function AnswerTable({ field }: { field: FormSubmissionField }) {
  * keys where the schema could not be loaded — a readable-but-ugly answer beats
  * an empty tab.
  */
-export function AnswersTab({ record, surveyJson }: { record: PortalRecord; surveyJson: SurveyJson | null }) {
-  const sections = useMemo(
-    () =>
-      buildFormSubmissionSections(surveyJson ?? record.submission.surveyJson ?? null, record.submission.submissionData, {
-        fallbackSectionTitle: "Submitted answers",
-        formatFallbackLabel: (key) => key.replace(/_x[0-9a-f]{4}_/gi, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim(),
-      }),
-    [surveyJson, record],
-  );
-
-  const rendered = sections
+export function recordAnswerSections(record: PortalRecord, surveyJson: SurveyJson | null) {
+  return buildFormSubmissionSections(surveyJson ?? record.submission.surveyJson ?? null, record.submission.submissionData, {
+    fallbackSectionTitle: "Submitted answers",
+    formatFallbackLabel: (key) => key.replace(/_x[0-9a-f]{4}_/gi, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim(),
+  })
     .map((section) => ({
       ...section,
       fields: section.fields.filter(hasAnswerToShow),
     }))
     .filter((section) => section.fields.length > 0);
+}
+
+/** The answer's text as the record reads it; a repeating panel or matrix is counted, not joined. */
+export function answerValueText(field: FormSubmissionField): string {
+  if (field.kind === "matrix") {
+    const count = field.matrixRows?.length ?? 0;
+    return `${count} ${count === 1 ? "entry" : "entries"}`;
+  }
+  return answerText(field);
+}
+
+export function AnswersTab({ record, surveyJson }: { record: PortalRecord; surveyJson: SurveyJson | null }) {
+  const rendered = useMemo(() => recordAnswerSections(record, surveyJson), [record, surveyJson]);
 
   if (rendered.length === 0) {
     return (
@@ -316,85 +322,6 @@ export function AnswersTab({ record, surveyJson }: { record: PortalRecord; surve
           )}
         </Box>
       ))}
-    </Stack>
-  );
-}
-
-/**
- * The approval chain as a timeline.
- *
- * A form with no chain gets a sentence, not an empty timeline — silence there
- * reads as "the approvals have not loaded yet", which is a different and much
- * more alarming claim than "this form needs no signature".
- */
-export function ApprovalsTab({ record, youEmail }: { record: PortalRecord; youEmail: string }) {
-  if (!record.hasWorkflow) {
-    return (
-      <Box>
-        <Typography sx={{ fontSize: 14.5, fontWeight: 700, mb: 0.5 }}>No approval step</Typography>
-        <Typography sx={{ fontSize: 13, color: editorial.muted, lineHeight: 1.55 }}>
-          This form has no approval or evaluation layer. It was filed straight to the record and needs no signature —
-          which is why it shows as “Recorded” rather than waiting on anyone.
-        </Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Stack spacing={3}>
-      <Box>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700, mb: 1.75 }}>
-          {record.workflowKind === "evaluation" ? "Evaluation route" : "Approval route"}
-        </Typography>
-        <FlowStrip steps={recordSteps(record, youEmail)} />
-      </Box>
-
-      <Box>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700, mb: 1.25 }}>Layer by layer</Typography>
-        <Stack>
-          {record.chain.map((step) => (
-            <Box
-              key={`${step.layerNumber}-${step.roleLabel}`}
-              sx={{
-                py: 1.25,
-                borderBottom: editorialHairline,
-                "&:last-of-type": { borderBottom: "none" },
-                backgroundColor: step.state === "current" ? editorial.blueWash : "transparent",
-                borderRadius: step.state === "current" ? "8px" : 0,
-                px: step.state === "current" ? 1.25 : 0,
-                mx: step.state === "current" ? -1.25 : 0,
-              }}
-            >
-              <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", flexWrap: "wrap", rowGap: 0.25 }}>
-                <Typography sx={{ fontSize: 11, fontWeight: 800, color: editorial.softMuted, flex: "none" }}>
-                  {step.layerNumber}
-                </Typography>
-                <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>{step.who}</Typography>
-                <Typography sx={{ fontSize: 11.5, color: editorial.muted }}>{step.roleLabel}</Typography>
-                <Typography
-                  sx={{
-                    fontSize: 11.5,
-                    fontWeight: 800,
-                    ml: "auto",
-                    flex: "none",
-                    color: step.state === "current" ? editorial.pmwBlueDark : editorial.muted,
-                  }}
-                >
-                  {step.statusText}
-                </Typography>
-              </Stack>
-              <Typography sx={{ fontSize: 11.5, color: editorial.muted, mt: 0.2 }}>{step.subText}</Typography>
-              {step.note && (
-                <Typography
-                  sx={{ fontSize: 12.5, mt: 0.75, pl: 1.25, borderLeft: `2px solid ${editorial.border}`, lineHeight: 1.5 }}
-                >
-                  {step.note}
-                </Typography>
-              )}
-            </Box>
-          ))}
-        </Stack>
-      </Box>
     </Stack>
   );
 }

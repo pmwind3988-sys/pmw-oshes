@@ -7,19 +7,17 @@ import { buildTheme } from "../theme";
 import { CONTRAST_THEMES, DEFAULT_APPEARANCE, applyAppearance, type AppearanceSetting } from "../theme/appearance";
 import { PortalProvider } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
-import SubmissionDrawer from "../components/portal/SubmissionDrawer";
+import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "../pages/portal/HomeScreen";
-import TodayScreen from "../pages/portal/TodayScreen";
-import QueueScreen from "../pages/portal/QueueScreen";
+import ManageScreen from "../pages/portal/ManageScreen";
 import RecordsScreen from "../pages/portal/RecordsScreen";
-import FormHubScreen from "../pages/portal/FormHubScreen";
-import CatalogueScreen from "../pages/portal/CatalogueScreen";
 import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
-import FileFormScreen from "../pages/portal/FileFormScreen";
 import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
 import SmokingLogScreen from "../pages/portal/SmokingLogScreen";
 import SmokingScanPage from "../pages/SmokingScanPage";
+import type { PortalScreen } from "../types";
+import { DEFAULT_PORTAL_PREFS, type PortalPrefs } from "../utils/portalPrefs";
 import { NOW, fixtureContext } from "./fixtures";
 import { sampleBreaks } from "./smokingFixtures";
 import { installSmokingStub } from "./smokingStub";
@@ -38,24 +36,24 @@ installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).
 
 const SCREENS = {
   home: <HomeScreen />,
-  today: <TodayScreen />,
-  queue: <QueueScreen />,
-  records: <RecordsScreen scope="all" />,
-  mine: <RecordsScreen scope="mine" />,
-  form: <FormHubScreen />,
-  catalogue: <CatalogueScreen />,
+  subs: <RecordsScreen />,
+  // The real Manage screen; its sidebar switches the harness to the other pages.
+  manage: <ManageScreen />,
   people: <PeopleScreen />,
   audit: <AuditScreen />,
+  record: <RecordPage />,
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
   // MSAL session. Nothing here can stand in for that.
-  file: <FileFormScreen />,
   // The smoking log itself reads SharePoint directly; its Totals dashboard is
   // shown on its own, over a sample week.
-  "smoking-log": <SmokingLogScreen />,
-  smoking: <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
+  smoking: <SmokingLogScreen />,
+  "smoking-totals": <SmokingTotalsDashboard breaks={sampleBreaks(SMOKING_WEEK.from, NOW)} from={SMOKING_WEEK.from} to={SMOKING_WEEK.to} now={NOW} groupByDepartment={false} />,
 } as const;
 
 type ScreenKey = keyof typeof SCREENS;
+
+/** The portal screen a harness key stands in for, so the shell highlights the right item. */
+const portalScreenOf = (key: ScreenKey): PortalScreen => (key === "smoking-totals" ? "smoking" : (key as PortalScreen));
 
 const param = (name: string, fallback: string) => new URLSearchParams(location.search).get(name) ?? fallback;
 
@@ -68,18 +66,34 @@ function Harness() {
   // harness answers "does it read right", never "did it save".
   const [drawerRef, setDrawerRef] = useState<string | null>(() => new URLSearchParams(location.search).get("record"));
 
+  // Prefs live in state, not localStorage, so the harness never writes the real browser's portal prefs.
+  const [prefs, setPrefsState] = useState<PortalPrefs>(DEFAULT_PORTAL_PREFS);
+  const setPrefs = (changes: Partial<PortalPrefs>) => setPrefsState((current) => ({ ...current, ...changes }));
+
   const setting: AppearanceSetting = { ...DEFAULT_APPEARANCE, contrastThemeId: contrast };
   applyAppearance(setting);
 
   const value = fixtureContext("admin", {
-    screen: screen === "form" ? "form" : "home",
-    focusForm: screen === "form" ? "Permit To Work" : null,
+    screen: portalScreenOf(screen),
+    focusForm: null,
+    prefs,
+    setPrefs,
     setScreen: (next) => {
-      if (next in SCREENS) setScreen(next as ScreenKey);
+      // "record" is reached through openDrawer, which carries the record it shows.
+      if (next !== "record" && next in SCREENS) {
+        setDrawerRef(null);
+        setScreen(next as ScreenKey);
+      }
     },
     drawerRef,
-    openDrawer: (reference) => setDrawerRef(reference),
-    closeDrawer: () => setDrawerRef(null),
+    openDrawer: (reference) => {
+      setDrawerRef(reference);
+      setScreen("record");
+    },
+    closeDrawer: () => {
+      setDrawerRef(null);
+      setScreen("home");
+    },
   });
 
   const chip = (on: boolean) => ({
@@ -122,7 +136,6 @@ function Harness() {
       <MemoryRouter>
         <PortalProvider {...value}>
           <PortalShell>{SCREENS[screen]}</PortalShell>
-          <SubmissionDrawer />
         </PortalProvider>
       </MemoryRouter>
     </ThemeProvider>

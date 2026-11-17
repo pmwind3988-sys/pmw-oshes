@@ -1,5 +1,7 @@
 import type { PortalScreen } from "../types";
 
+/** Every page a preference may name as its landing page. */
+
 /**
  * Per-browser portal preferences.
  *
@@ -15,12 +17,23 @@ export interface PortalPrefs {
   compactTables: boolean;
   /** Records tables default to open items rather than everything. */
   hideSettled: boolean;
+  /** Submissions opens as a list or as a board. */
+  subsView: SubsView;
+  /** Rows per page in the submissions list. */
+  pageSize: number;
 }
+
+export type SubsView = "list" | "board";
+
+/** The page sizes the submissions pager offers. */
+export const PAGE_SIZES = [25, 50, 100] as const;
 
 export const DEFAULT_PORTAL_PREFS: PortalPrefs = {
   startScreen: "home",
   compactTables: false,
   hideSettled: false,
+  subsView: "list",
+  pageSize: 25,
 };
 
 const STORAGE_KEY = "pmw_oshes_portal_prefs";
@@ -33,16 +46,40 @@ function storage(): Storage | null {
   }
 }
 
-export function readPortalPrefs(): PortalPrefs {
+/**
+ * Reads a stored preferences value. A landing page that is no longer a screen
+ * (a page since removed from the portal) falls back to Home, as does anything
+ * unreadable.
+ */
+/** The pages an account may open the portal on. Anything else opens on Home. */
+export const START_SCREENS: readonly PortalScreen[] = ["home", "subs"];
+
+/** Keeps a landing page only if it is one of START_SCREENS; anything else (a removed or stale page) is Home. */
+export function startScreenOf(value: unknown): PortalScreen {
+  return (START_SCREENS as readonly unknown[]).includes(value) ? (value as PortalScreen) : "home";
+}
+
+export function parsePortalPrefs(raw: string | null): PortalPrefs {
+  if (!raw) return DEFAULT_PORTAL_PREFS;
   try {
-    const raw = storage()?.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PORTAL_PREFS;
     const parsed = JSON.parse(raw) as Partial<PortalPrefs>;
     return {
-      startScreen: typeof parsed.startScreen === "string" ? (parsed.startScreen as PortalScreen) : DEFAULT_PORTAL_PREFS.startScreen,
+      startScreen: startScreenOf(parsed.startScreen),
       compactTables: parsed.compactTables === true,
       hideSettled: parsed.hideSettled === true,
+      subsView: parsed.subsView === "board" ? "board" : "list",
+      pageSize: (PAGE_SIZES as readonly number[]).includes(parsed.pageSize as number)
+        ? (parsed.pageSize as number)
+        : DEFAULT_PORTAL_PREFS.pageSize,
     };
+  } catch {
+    return DEFAULT_PORTAL_PREFS;
+  }
+}
+
+export function readPortalPrefs(): PortalPrefs {
+  try {
+    return parsePortalPrefs(storage()?.getItem(STORAGE_KEY) ?? null);
   } catch {
     return DEFAULT_PORTAL_PREFS;
   }

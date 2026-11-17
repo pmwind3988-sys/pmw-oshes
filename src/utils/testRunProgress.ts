@@ -14,7 +14,7 @@
  *
  * What still does not reach it: a signed-in SUBMISSION, where the browser
  * writes the response row straight to SharePoint and only calls
- * `stamp-test-run`, and a decision made from `ApprovalDashboard.tsx`, which
+ * `stamp-test-run`, and a decision made from the portal approval flow, which
  * remains browser-driven. So a signed-in run's trail can still be sparse,
  * even though the row itself — `L{n}_Status`, `FormStatus` and friends — is
  * written by every path, always. The row is the true source of truth; the

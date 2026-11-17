@@ -2,17 +2,23 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { PortalProvider, type PortalContextValue } from "../../contexts/PortalContext";
+import { greetingFor } from "../../utils/portalWork";
 import { describeWorkflow, resolveFormVisibility } from "../../utils/formWorkflow";
 import { toPortalRecord } from "../../utils/portalRecords";
 import { derivePortalAccess } from "../../utils/portalRole";
 import { DEFAULT_PORTAL_PREFS } from "../../utils/portalPrefs";
 import HomeScreen from "./HomeScreen";
-import FormHubScreen from "./FormHubScreen";
 import RecordsScreen from "./RecordsScreen";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import { OverviewTab } from "../../components/portal/RecordDetail";
+import PortalShell from "../../components/portal/PortalShell";
+import ManageLayout from "../../components/portal/ManageLayout";
+import ManageScreen from "./ManageScreen";
+import AuditScreen from "./AuditScreen";
+import { FormPickerList } from "../../components/portal/FormPickerDialog";
 import type {
   ApprovalLayerConfig,
+  AuditEntry,
   CatalogueEntry,
   PortalRecord,
   SharePointClient,
@@ -124,6 +130,8 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     setScreen: () => {},
     focusForm: null,
     focusStatus: null,
+    focusSubsScope: null,
+    focusFiled: null,
     searchSeed: "",
     searchSeedAt: 0,
     submitSearch: () => {},
@@ -138,6 +146,11 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     removeRecord: () => {},
     appendAudit: () => {},
     updateCatalogue: () => {},
+    recentRefs: [],
+    canRunTestRuns: false,
+    formSlugs: {},
+    manageView: "overview",
+    setManageView: () => {},
     toast: () => {},
     onSignOut: () => {},
     ...overrides,
@@ -153,78 +166,139 @@ function render(node: React.ReactNode, value: PortalContextValue): string {
 }
 
 describe("HomeScreen", () => {
-  it("lists each form type as a way in", () => {
+  it("offers each form to start, with its sign-off count", () => {
     const html = render(<HomeScreen />, contextValue());
-    expect(html).toContain("Your forms");
+    expect(html).toContain("Start a form");
     expect(html).toContain("Permit To Work");
-    expect(html).toContain("PTW");
+    expect(html).toContain("1 sign-off");
   });
 
-  it("renders for an account with nothing filed and no forms published", () => {
+  it("opens Filed by you with an empty state for an account with nothing filed", () => {
     const html = render(<HomeScreen />, contextValue({ catalogue: [], records: [], myRecords: [] }));
-    expect(html).toContain("No form types are published yet");
+    expect(html).toContain("Nothing here yet");
+    expect(html).not.toContain("Start a form");
   });
 
-  it("shows no SLA statistic when no form declares one", () => {
+  it("greets the signed-in person by first name with nothing waiting", () => {
     const html = render(<HomeScreen />, contextValue());
-    expect(html).not.toContain("Past SLA");
+    expect(html).toContain(`${greetingFor(new Date())}, Sazali.`);
+    expect(html).not.toContain("waiting for your signature");
   });
 
-  it("shows the SLA statistic once a form declares one", () => {
+  it("says how many forms are waiting and opens Needs you when there are some", () => {
+    const queue = [
+      toPortalRecord(submission(), entry(), {}, {}, NOW),
+      toPortalRecord(submission({ id: "143", title: "Second permit" }), entry(), {}, {}, NOW),
+    ];
+    const base = contextValue();
+    const html = render(<HomeScreen />, contextValue({ queue, access: { ...base.access, isAssignee: true } }));
+    expect(html).toContain("2 forms are waiting for your signature.");
+    expect(html).toContain("Review");
+  });
+
+  it("hides Needs you from a read-only account", () => {
+    const base = contextValue();
+    const html = render(<HomeScreen />, contextValue({ access: { ...base.access, readOnly: true } }));
+    expect(html).not.toContain("Needs you");
+    expect(html).toContain("Viewed recently");
+  });
+
+  it("hides Needs you from an account that is named on no layer, even with a queue", () => {
+    const base = contextValue();
+    const queue = [toPortalRecord(submission(), entry(), {}, {}, NOW)];
+    const html = render(
+      <HomeScreen />,
+      contextValue({ queue, access: { ...base.access, readOnly: false, isAssignee: false } }),
+    );
+    expect(html).not.toContain("Needs you");
+    expect(html).not.toContain("waiting for your signature");
+    expect(html).toContain("Filed by you");
+  });
+
+  it("drops the statistics the page used to carry", () => {
     const withSla = entry({ slaDays: 3 });
     const records = [toPortalRecord(submission(), withSla, {}, {}, NOW)];
     const html = render(<HomeScreen />, contextValue({ catalogue: [withSla], records }));
-    expect(html).toContain("Past SLA");
+    expect(html).not.toContain("Where records stand");
+    expect(html).not.toContain("Intake, last 14 days");
   });
 });
 
-describe("FormHubScreen", () => {
-  it("offers the three doors for the form in focus", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).toContain("New Permit To Work");
-    expect(html).toContain("My Permit To Work");
-    expect(html).toContain("All Permit To Work");
-  });
-
-  it("states what happens after submit", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).toContain("What happens after you submit");
-    expect(html).toContain("Safety Officer");
-  });
-
-  it("advertises no SLA badge for a form that declares none", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Permit To Work" }));
-    expect(html).not.toContain("SLA");
-  });
-
-  it("advertises the SLA for a form that declares one", () => {
-    const withSla = entry({ slaDays: 2 });
-    const records = [toPortalRecord(submission(), withSla, {}, {}, NOW)];
-    const html = render(
-      <FormHubScreen />,
-      contextValue({ catalogue: [withSla], records, focusForm: "Permit To Work" }),
-    );
-    expect(html).toContain("2-day SLA per layer");
-  });
-
-  it("falls back to the picker when the form in focus is gone", () => {
-    const html = render(<FormHubScreen />, contextValue({ focusForm: "Deleted Form" }));
-    expect(html).toContain("not in the catalogue any more");
-  });
-});
+/** The page's words, without the markup or the comments React leaves between text pieces. */
+function visibleText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/g, "")
+    .replace(/<!--.*?-->/g, "")
+    .replace(/<[^>]+>/g, "");
+}
 
 describe("RecordsScreen", () => {
-  it("opens pre-filtered to the form and status it was sent with", () => {
+  it("opens pre-filtered to the form it was sent with", () => {
     const html = render(
-      <RecordsScreen scope="all" />,
+      <RecordsScreen />,
       contextValue({ focusForm: "Permit To Work", focusStatus: "open" }),
     );
-    expect(html).toContain("All Permit To Work");
+    expect(html).toContain("Submissions");
+    expect(visibleText(html)).toContain("Permit To Work");
   });
 
   it("drops the Past SLA filter option where no form has an SLA", () => {
-    const html = render(<RecordsScreen scope="all" />, contextValue());
+    const html = render(<RecordsScreen />, contextValue());
     expect(html).not.toContain("Past SLA");
+  });
+
+  it("shows the list as a table with a Reference column", () => {
+    const html = render(<RecordsScreen />, contextValue());
+    expect(html).toContain("<table");
+    expect(html).toContain("Reference");
+    expect(html).toContain("Updated");
+  });
+
+  it("pages 60 records 25 at a time", () => {
+    const many = Array.from({ length: 60 }, (_, index) =>
+      toPortalRecord(submission({ id: String(200 + index), title: `Permit ${index}` }), entry(), {}, {}, NOW),
+    );
+    const html = render(<RecordsScreen />, contextValue({ records: many }));
+    expect(visibleText(html)).toContain("Showing 1–25 of 60");
+  });
+
+  it("hides Needs me from an auditor", () => {
+    const base = contextValue();
+    const auditor = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: true,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const html = render(<RecordsScreen />, contextValue({ access: auditor }));
+    expect(html).not.toContain("Needs me");
+    expect(html).toContain("All");
+    expect(html).toContain("Mine");
+  });
+
+  it("offers Needs me to an account that sits on a layer", () => {
+    const onMyLayer = entry({ layers: [layer(1, ME, "Approver")] });
+    const records = [toPortalRecord(submission(), onMyLayer, {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: false, catalogue: [onMyLayer], records });
+    const html = render(<RecordsScreen />, contextValue({ access, catalogue: [onMyLayer], records, queue: records }));
+    expect(html).toContain("Needs me");
+  });
+
+  it("draws the board with its four columns when the view is set to board", () => {
+    const html = render(
+      <RecordsScreen />,
+      contextValue({ prefs: { ...DEFAULT_PORTAL_PREFS, subsView: "board" } }),
+    );
+    expect(html).not.toContain("<table");
+    for (const title of ["Waiting for you", "In approval", "Returned", "Done"]) {
+      expect(html).toContain(title);
+    }
+  });
+
+  it("says nothing matches when the search finds nothing", () => {
+    const html = render(<RecordsScreen />, contextValue({ searchSeed: "no-such-record-xyz" }));
+    expect(html).toContain("Nothing matches");
   });
 });
 
@@ -258,5 +332,154 @@ describe("SmokingSettingsTab", () => {
     const value = contextValue();
     const html = render(<SmokingSettingsTab />, { ...value, access: { ...value.access, readOnly: true } });
     expect(html).not.toContain(">Save<");
+  });
+});
+
+describe("PortalShell", () => {
+  it("shows Your work, Submissions and Manage with a Create button to an administrator", () => {
+    const html = render(<PortalShell><span /></PortalShell>, contextValue());
+    expect(html).toContain("Your work");
+    expect(html).toContain("Submissions");
+    expect(html).toContain("Manage");
+    expect(html).toContain("Create");
+  });
+
+  it("shows the search box with its placeholder", () => {
+    const html = render(<PortalShell><span /></PortalShell>, contextValue());
+    expect(html).toContain('placeholder="Search forms or PTW-0417"');
+  });
+
+  it("shows no Manage tab to a submitter, but keeps Create", () => {
+    const catalogue = [entry()];
+    const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: false, catalogue, records });
+    const html = render(
+      <PortalShell><span /></PortalShell>,
+      contextValue({ access, role: access.role, isAdmin: false, catalogue, records }),
+    );
+    expect(html).toContain("Submissions");
+    expect(html).not.toContain("Manage");
+    expect(html).toContain("Create");
+  });
+
+  it("offers no Create to a read-only account", () => {
+    const catalogue = [entry()];
+    const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: true, catalogue, records });
+    const html = render(
+      <PortalShell><span /></PortalShell>,
+      contextValue({ access, role: access.role, isAdmin: false, catalogue, records }),
+    );
+    expect(html).not.toContain("Create");
+  });
+});
+
+describe("FormPickerList", () => {
+  it("lists each published form by name", () => {
+    const catalogue = [entry(), entry({ listTitle: "Hot Work", name: "Hot Work", code: "HW", slug: "hot-work" })];
+    const html = render(<FormPickerList catalogue={catalogue} onPick={() => {}} />, contextValue());
+    expect(html).toContain("Permit To Work");
+    expect(html).toContain("Hot Work");
+  });
+
+  it("says no forms are published when the catalogue is empty", () => {
+    const html = render(<FormPickerList catalogue={[]} onPick={() => {}} />, contextValue());
+    expect(html).toContain("No forms yet");
+    expect(html).toContain("Forms appear here once they are published.");
+  });
+});
+
+describe("ManageLayout", () => {
+  it("lists Overview, People and approvers, Smoking log, History and Test runs to an administrator", () => {
+    const html = render(
+      <ManageLayout active="overview"><span /></ManageLayout>,
+      contextValue({ canRunTestRuns: true }),
+    );
+    const text = visibleText(html);
+    for (const item of ["Overview", "People and approvers", "Smoking log", "History", "Test runs"]) {
+      expect(text).toContain(item);
+    }
+  });
+
+  it("links Approval routing to an administrator, but not to someone with only the builder grant", () => {
+    const admin = render(<ManageLayout active="overview"><span /></ManageLayout>, contextValue({ canRunTestRuns: true }));
+    expect(admin).toContain('href="/admin/routing"');
+    const base = contextValue();
+    const notAdmin = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: false,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const builderOnly = render(
+      <ManageLayout active="overview"><span /></ManageLayout>,
+      contextValue({ access: notAdmin, isAdmin: false, canRunTestRuns: true }),
+    );
+    expect(builderOnly).not.toContain('href="/admin/routing"');
+  });
+
+  it("gives an auditor History and the smoking log, but no People or Test runs", () => {
+    const base = contextValue();
+    const auditor = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: true,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const html = render(
+      <ManageLayout active="audit"><span /></ManageLayout>,
+      contextValue({ access: auditor, isAdmin: false, canRunTestRuns: false }),
+    );
+    const text = visibleText(html);
+    expect(text).toContain("History");
+    expect(text).toContain("Smoking log");
+    expect(text).not.toContain("People and approvers");
+    expect(text).not.toContain("Test runs");
+  });
+});
+
+describe("ManageScreen", () => {
+  it("shows the filed, waiting and late counts, with late only where a form has an SLA", () => {
+    const html = render(<ManageScreen />, contextValue());
+    expect(html).toContain("Filed today");
+    expect(html).toContain("Waiting for a signature");
+    expect(html).not.toContain("Waiting too long");
+
+    const sla = entry({ slaDays: 3 });
+    const withSla = render(
+      <ManageScreen />,
+      contextValue({ catalogue: [sla], records: [toPortalRecord(submission(), sla, {}, {}, NOW)] }),
+    );
+    expect(withSla).toContain("Waiting too long");
+  });
+
+  it("offers the test-run tools, picking a form first, when the account holds the grant", () => {
+    const html = render(<ManageScreen />, contextValue({ manageView: "tests", canRunTestRuns: true }));
+    const text = visibleText(html);
+    expect(text).toContain("Test workflow");
+    expect(text).toContain("Test runs");
+    expect(text).toContain("Permit To Work");
+  });
+
+  it("falls back to the overview when test runs are not granted", () => {
+    const html = render(<ManageScreen />, contextValue({ manageView: "tests", canRunTestRuns: false }));
+    expect(html).toContain("Waiting for a signature");
+    expect(html).not.toContain("Test workflow");
+  });
+});
+
+describe("AuditScreen", () => {
+  it("pages a trail of 80 entries 25 at a time", () => {
+    const audit: AuditEntry[] = Array.from({ length: 80 }, (_, index) => ({
+      at: new Date(2026, 6, 29, 9, index % 60).toISOString(),
+      whenLabel: "",
+      reference: `INC-2607-${String(index).padStart(4, "0")}`,
+      who: "Nurul Aziz",
+      event: "Signed",
+    }));
+    const html = render(<AuditScreen />, contextValue({ audit }));
+    expect(visibleText(html)).toContain("Showing 1–25 of 80");
   });
 });

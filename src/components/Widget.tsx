@@ -3,7 +3,7 @@ import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import { ArrowRight as ArrowForwardIcon, CheckCircle as CheckCircleIcon } from "./ui/Icons";
 import { editorial } from "../theme/editorial";
-import { panelSx } from "../theme/surfaces";
+import { panelSx, radius } from "../theme/surfaces";
 
 /* ---------------------------------------------------------------------------
    The widget — one card shape, used by every panel in the portal and the admin
@@ -121,7 +121,7 @@ export function Widget({
                     p: 0,
                     flex: "none",
                     border: "none",
-                    borderRadius: "999px",
+                    borderRadius: radius.full,
                     backgroundColor: editorial.neutralWash,
                     color: editorial.ink,
                     cursor: "pointer",
@@ -170,7 +170,7 @@ export function WidgetCount({ value, tone = "ink" }: { value: number | string; t
         minWidth: 32,
         px: 1.25,
         py: 0.4,
-        borderRadius: "999px",
+        borderRadius: radius.full,
         fontSize: 13,
         fontWeight: 800,
         lineHeight: 1.4,
@@ -380,7 +380,7 @@ export function CtaButton({
         minHeight: size === "small" ? 36 : 44,
         px: size === "small" ? 1.75 : 2.5,
         border: "none",
-        borderRadius: "999px",
+        borderRadius: radius.full,
         backgroundColor: editorial.pmwBlue,
         color: editorial.white,
         font: "inherit",
@@ -750,7 +750,7 @@ export function TaskRow({
               minHeight: 36,
               px: 1.75,
               border: "none",
-              borderRadius: "999px",
+              borderRadius: radius.full,
               boxShadow: "none",
               backgroundColor: editorial.blueWash,
               color: editorial.pmwBlueDark,
@@ -801,7 +801,7 @@ export function QuietButton({
         minHeight: 36,
         px: 1.75,
         border: "none",
-        borderRadius: "999px",
+        borderRadius: radius.full,
         backgroundColor: editorial.neutralWash,
         color: editorial.ink,
         font: "inherit",

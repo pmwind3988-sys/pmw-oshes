@@ -1,30 +1,9 @@
 /* ---------------------------------------------------------------------------
-   Application shell — the icon rail, the white sheet the screens sit on, and
-   the bar above them.
-
-   Desktop (1024px and up): a narrow rail of destinations on the page ground.
-   Each destination is a pill holding its glyph with the word under it; the
-   selected one takes a blue pill. Beside it, a white sheet with a soft radius
-   carries a pill search bar and the account button, then the screen.
-
-   Below 1024px the rail is an off-canvas drawer behind a hamburger, styled as a
-   white panel with the same pill rows (glyph and word side by side).
-
-   Colour reads the `--pmw-*` variables the appearance system emits, so the
-   shell re-themes with the rest of the app. The few literal values here are
-   the tokens the redesign pins (selected pill, focus ring) and fall back to
-   those values when a variable is absent.
-
-   Switched at 1024px in CSS, not by a width check in JS, so there is no flash of
-   the wrong layout on first paint.
+   Application shell layout. The top bar's colours and spacing are set on the
+   MUI theme in PortalShell, so every contrast theme reaches it. What lives here
+   is what CSS does better than sx: the tabs wrapping onto their own row on a
+   narrow screen, the page body's width, and the entrance animation.
 --------------------------------------------------------------------------- */
-
-:root {
-  --shell-nav-width: 92px;
-  --shell-focus-ring: #9dbdf5;
-  --shell-selected-fill: var(--pmw-blue-soft, #c9daf8);
-  --shell-selected-ink: var(--pmw-blue-ink, #0b3b8c);
-}
 
 /* `both` matters: without it the element paints at full opacity for the frame
    before the animation starts, which reads as a flicker, not an entrance. */
@@ -43,614 +22,64 @@
   animation: oshesRiseIn 0.4s ease both;
 }
 
-/* ---------------------------------------------------------------------------
-   Shell frame. Transparent, so the wallpaper `body` paints (the operator's
-   chosen background) shows around the rail and the sheet.
---------------------------------------------------------------------------- */
 .shell {
   min-height: 100dvh;
   display: flex;
-  background: transparent;
-  color: var(--pmw-ink);
-  font-family: var(--pmw-font-main);
-}
-
-.shell-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: rgba(2, 8, 20, 0.5);
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* ---------------------------------------------------------------------------
-   The rail. Off-canvas drawer below 1024px.
---------------------------------------------------------------------------- */
-.shell-nav {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1300;
-  display: flex;
   flex-direction: column;
-  width: 280px;
-  max-width: 84vw;
-  padding: calc(16px + env(safe-area-inset-top)) 14px calc(16px + env(safe-area-inset-bottom)) 16px;
-  background: var(--pmw-panel);
-  border-radius: 0 32px 32px 0;
-  /* `hidden`, not `auto`: the brand is pinned top and the list is the only thing
-     that scrolls, so a long list never pushes the brand out of view. */
-  overflow: hidden;
-  transform: translateX(-100%);
-  transition: transform 200ms ease-out;
 }
 
-.shell-nav.open {
-  transform: translateX(0);
-  box-shadow: 0 16px 40px rgba(22, 27, 36, 0.18);
-}
-
-.shell-brand {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 0 6px;
-}
-
-.shell-brand-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  color: inherit;
-}
-
-/* The brand mark is a coloured logo, so it sits on a white round chip that
-   stays light in every theme. */
-.shell-logo-chip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(22, 27, 36, 0.08);
-}
-
-.shell-brand-words {
-  min-width: 0;
-}
-
-.shell-brand-name {
-  display: block;
-  font-size: 15.5px;
-  font-weight: 800;
-  line-height: 1.1;
-  color: var(--pmw-ink);
-  font-family: var(--pmw-font-heading);
-}
-
-.shell-brand-sub {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.2;
-  color: var(--pmw-muted);
-}
-
-.shell-navclose {
-  background: none;
-  border: 0;
-  padding: 6px;
-  border-radius: 999px;
-  color: var(--pmw-muted);
-  cursor: pointer;
-  display: flex;
-}
-
-.shell-navclose:hover {
-  background: var(--pmw-sunken);
-  color: var(--pmw-ink);
-}
-
-/* "+ File a form". Desktop only: below 1024px the drawer carries the item. */
-.shell-newbtn {
-  display: none;
-}
-
-.shell-navlist {
-  display: flex;
-  flex-direction: column;
-  /* The one scrolling area in the column. `min-height: 0` is what lets it shrink
-     inside the flex column rather than pushing past the viewport. */
+/* Pushes the actions to the right of the brand. */
+.shell-spacer {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--pmw-border) transparent;
-  padding: 2px 4px 4px;
-  margin: 0 -4px;
 }
 
-.shell-navgroup {
+.shell-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.shell-navgroup + .shell-navgroup {
-  margin-top: 14px;
-}
-
-/* One destination. Desktop: a column — pill, then the word beneath it. */
-.shell-navitem {
-  position: relative;
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  text-align: center;
-  color: var(--pmw-muted);
-  cursor: pointer;
-  transition: color 160ms ease;
-}
-
-.shell-navpill {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 32px;
-  border-radius: 999px;
-  color: inherit;
-  transition: background-color 200ms ease, color 200ms ease;
-}
-
-.shell-navpill svg {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-}
-
-.shell-navlabel {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.2;
-  font-weight: 600;
-  color: inherit;
-}
-
-.shell-navitem:hover {
-  color: var(--pmw-ink);
-}
-
-.shell-navitem:hover .shell-navpill {
-  background: color-mix(in srgb, var(--pmw-ink) 8%, transparent);
-}
-
-.shell-navitem:focus-visible .shell-navpill {
-  outline: 3px solid var(--shell-focus-ring);
-  outline-offset: 2px;
-}
-
-.shell-navitem.active {
-  color: var(--pmw-ink);
-}
-
-.shell-navitem.active .shell-navpill {
-  background: var(--shell-selected-fill);
-  color: var(--shell-selected-ink);
-}
-
-.shell-navitem.active .shell-navlabel {
-  font-weight: 800;
-}
-
-/* Count: a small round badge on the glyph's top-right corner. Muted — red is
-   reserved for overdue work, and nothing in the shell's data says that yet. */
-.shell-navcount {
-  position: absolute;
-  top: -2px;
-  left: calc(50% + 14px);
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  box-sizing: border-box;
-  border-radius: 999px;
-  background: var(--pmw-sunken);
-  color: var(--pmw-muted);
-  font-size: 0.75rem;
-  font-weight: 800;
-  line-height: 14px;
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* ---------------------------------------------------------------------------
-   The sheet: the white surface the header and screen sit on.
---------------------------------------------------------------------------- */
-.shell-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
   min-width: 0;
-  margin: 8px;
-  min-height: calc(100dvh - 16px);
-  background: var(--pmw-panel);
-  border-radius: 24px;
 }
 
-/* Sticky, so the search bar stays in reach while the page scrolls. The sheet is
-   the containing block, so it sticks inside the sheet and never leaves it. */
-.shell-header {
-  position: sticky;
-  top: 8px;
-  z-index: 1100;
-  background: var(--pmw-panel);
-  border-radius: 24px 24px 0 0;
-  padding-top: env(safe-area-inset-top);
-}
-
-.shell-headerrow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-}
-
-.shell-hamburger {
-  display: flex;
-  background: none;
-  border: 0;
-  padding: 6px;
-  margin-left: -6px;
-  color: var(--pmw-muted);
-  cursor: pointer;
-}
-
-.shell-headerbrand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  min-width: 0;
-  text-decoration: none;
-  color: var(--pmw-ink);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.shell-headerbrand span {
-  font-size: 15px;
-  font-weight: 800;
-  font-family: var(--pmw-font-heading);
-}
-
-/* Wide pill search. Hidden on the smallest screens, as before. */
+/* Search sits to the left of the Create button on a wide screen, and shrinks
+   before the buttons do. */
 .shell-search {
-  display: none;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-  max-width: 560px;
-  height: 50px;
-  padding: 0 10px 0 18px;
-  border-radius: 999px;
-  background: var(--pmw-sunken);
-  color: var(--pmw-muted);
-  transition: box-shadow 160ms ease;
+  flex: 0 1 280px;
+  min-width: 160px;
 }
 
-.shell-search:focus-within {
-  box-shadow: inset 0 0 0 2px var(--pmw-blue);
-}
+/* Below 760px the tabs take a row of their own, beneath the brand, and the
+   search takes the full width on the row after them. */
+@media (max-width: 759.98px) {
+  .shell-tabs {
+    order: 3;
+    flex-basis: 100%;
+    overflow-x: auto;
+  }
 
-.shell-search svg {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-}
-
-.shell-search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 15px;
-  color: var(--pmw-ink);
-}
-
-.shell-searchkey {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--pmw-panel);
-  color: var(--pmw-muted);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.shell-headeractions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* The mobile "File a form" icon. Hidden on desktop, where the rail carries it. */
-.shell-iconbtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 0;
-  background: var(--pmw-sunken);
-  color: var(--pmw-muted);
-  cursor: pointer;
-}
-
-.shell-iconbtn:hover {
-  color: var(--pmw-ink);
+  .shell-search {
+    order: 4;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
 
 .shell-body {
   flex: 1;
   width: 100%;
-  max-width: 1360px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 12px 14px;
-  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+  padding: 16px 16px calc(32px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
-.shell-pagehead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.shell-pagehead h1 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--pmw-ink);
-  margin: 0 0 3px;
-  font-family: var(--pmw-font-heading);
-}
-
-.shell-pagehead p {
-  font-size: 13px;
-  color: var(--pmw-muted);
-  margin: 0;
-}
-
-.shell-pagehead-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ---------------------------------------------------------------------------
-   Account pill and the drawer's own rows: below 1024px the drawer lists every
-   destination, so the rail's "File a form" pill is off and its row is on.
---------------------------------------------------------------------------- */
-@media (max-width: 1023.98px) {
-  .shell-navitem {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 2px 0;
-    font-size: 14px;
-  }
-  .shell-navpill {
-    width: 44px;
-    height: 32px;
-    flex: none;
-  }
-  .shell-navlabel {
-    display: block;
-    -webkit-line-clamp: unset;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--pmw-ink);
-  }
-  .shell-navitem.active .shell-navlabel {
-    font-weight: 800;
-  }
-  .shell-navcount {
-    position: static;
-    margin-left: auto;
-    flex: none;
-  }
-  .shell-navgroup {
-    gap: 2px;
-  }
-  .shell-navitem.active .shell-navpill {
-    background: var(--shell-selected-fill);
-    color: var(--shell-selected-ink);
-  }
-}
-
-@media (min-width: 640px) {
-  .shell-search {
-    display: flex;
-  }
-  .shell-headerrow {
-    gap: 12px;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Desktop: the rail is a fixed-width column on the ground, the sheet beside it.
---------------------------------------------------------------------------- */
-@media (min-width: 1024px) {
-  .shell-nav {
-    position: sticky;
-    top: 0;
-    bottom: auto;
-    z-index: auto;
-    height: 100dvh;
-    width: var(--shell-nav-width);
-    max-width: none;
-    flex-shrink: 0;
-    align-items: center;
-    padding: calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom));
-    background: transparent;
-    border-radius: 0;
-    transform: translateX(0);
-    box-shadow: none;
-  }
-
-  .shell-brand {
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-    margin: 4px 0 14px;
-    padding: 0;
-  }
-
-  .shell-brand-link {
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .shell-brand-words,
-  .shell-navclose,
-  .shell-backdrop,
-  .shell-hamburger,
-  .shell-headerbrand {
-    display: none;
-  }
-
-  .shell-newbtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    width: 60px;
-    height: 60px;
-    margin: 0 0 18px;
-    border: 0;
-    border-radius: 24px;
-    background: var(--pmw-panel);
-    color: var(--pmw-blue);
-    box-shadow: 0 2px 8px rgba(22, 27, 36, 0.1);
-    cursor: pointer;
-    transition: box-shadow 200ms ease, background-color 200ms ease, transform 120ms ease;
-  }
-
-  .shell-newbtn svg {
-    width: 26px;
-    height: 26px;
-  }
-
-  .shell-newbtn:hover {
-    box-shadow: 0 8px 20px rgba(22, 27, 36, 0.16);
-    background: var(--pmw-sunken);
-  }
-
-  .shell-newbtn:active {
-    transform: scale(0.97);
-  }
-
-  .shell-newbtn:focus-visible {
-    outline: 3px solid var(--shell-focus-ring);
-    outline-offset: 2px;
-  }
-
-  .shell-navlist {
-    flex: 1 1 auto;
-    align-items: stretch;
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    scrollbar-width: none;
-  }
-
-  .shell-navgroup {
-    align-items: center;
-    gap: 6px;
-  }
-
-  .shell-navitem {
-    width: 76px;
-  }
-
-  .shell-navitem-file,
-  .shell-headerfile {
-    display: none;
-  }
-
-  .shell-main {
-    margin: 12px 12px 12px 0;
-    min-height: calc(100dvh - 24px);
-    border-radius: 32px;
-  }
-
-  .shell-header {
-    top: 12px;
-    border-radius: 32px 32px 0 0;
-  }
-
-  .shell-headerrow {
-    padding: 18px 28px 8px;
-  }
-
+@media (min-width: 600px) {
   .shell-body {
-    padding: 12px 28px 32px;
+    padding: 24px 24px calc(32px + env(safe-area-inset-bottom));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .oshes-rise {
     animation: none;
-  }
-  .shell-nav,
-  .shell-navpill,
-  .shell-newbtn {
-    transition: none;
   }
 }

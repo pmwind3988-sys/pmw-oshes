@@ -1,32 +1,20 @@
 import { Alert, Snackbar } from "@mui/material";
 import { usePortal } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
-import SubmissionDrawer from "../components/portal/SubmissionDrawer";
+import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "./portal/HomeScreen";
-import FormHubScreen from "./portal/FormHubScreen";
-import TodayScreen from "./portal/TodayScreen";
-import QueueScreen from "./portal/QueueScreen";
+import ManageScreen from "./portal/ManageScreen";
 import RecordsScreen from "./portal/RecordsScreen";
-import FileFormScreen from "./portal/FileFormScreen";
-import CatalogueScreen from "./portal/CatalogueScreen";
 import PeopleScreen from "./portal/PeopleScreen";
 import AuditScreen from "./portal/AuditScreen";
 import SmokingLogScreen from "./portal/SmokingLogScreen";
 import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
-  const { screen, focusForm, focusStatus, searchSeedAt } = usePortal();
+  const { screen, focusForm, focusStatus, focusSubsScope, focusFiled, searchSeedAt } = usePortal();
   switch (screen) {
-    case "form":
-      return <FormHubScreen />;
-    case "today":
-      return <TodayScreen />;
-    case "queue":
-      return <QueueScreen />;
-    case "file":
-      return <FileFormScreen />;
-    case "cat":
-      return <CatalogueScreen />;
+    case "record":
+      return <RecordPage />;
     case "people":
       return <PeopleScreen />;
     case "audit":
@@ -35,18 +23,14 @@ function ScreenBody() {
       return <SmokingLogScreen />;
     case "settings":
       return <SettingsScreen />;
-    // Two framings of one table: what you filed, and everything you may see.
-    //
-    // Keyed on the scope it was opened with, so arriving from a form hub door,
-    // a pressed statistic or the shell's search box remounts the table with
-    // those filters seeded.
-    // Without the key React reuses the mounted instance and keeps the filter
-    // state from wherever you were last — which is how "All Permit to Work"
-    // used to open showing the previous form.
-    case "mine":
-      return <RecordsScreen key={`mine-${focusForm}-${focusStatus}-${searchSeedAt}`} scope="mine" />;
+    case "manage":
+      return <ManageScreen />;
+    // Submissions. Keyed on the scope it was opened with, so arriving from a
+    // pressed statistic, the shell's search box or a Home card remounts it with
+    // those filters seeded. Without the key React reuses the mounted instance
+    // and keeps the filter state from wherever you were last.
     case "subs":
-      return <RecordsScreen key={`all-${focusForm}-${focusStatus}-${searchSeedAt}`} scope="all" />;
+      return <RecordsScreen key={`${focusSubsScope}-${focusForm}-${focusStatus}-${focusFiled}-${searchSeedAt}`} />;
     case "home":
     default:
       return <HomeScreen />;
@@ -54,8 +38,8 @@ function ScreenBody() {
 }
 
 /**
- * The portal: sidebar, the current role screen, the detail drawer, and a single
- * toast slot shared by every action.
+ * The portal: sidebar, the current screen (a record opens as one of them), and a
+ * single toast slot shared by every action.
  */
 export default function PortalPage({ toastMessage, onCloseToast }: { toastMessage: string; onCloseToast: () => void }) {
   return (
@@ -63,7 +47,6 @@ export default function PortalPage({ toastMessage, onCloseToast }: { toastMessag
       <PortalShell>
         <ScreenBody />
       </PortalShell>
-      <SubmissionDrawer />
       <Snackbar
         open={Boolean(toastMessage)}
         autoHideDuration={3400}

@@ -7,7 +7,6 @@ engine — SurveyJS no longer renders anything in the app.
 
 - `/form/:formId` (`DynamicFormPage`) — the live form, including the submit path.
 - `/eval/...` (`EvaluationPage`) and the approval dashboard — evaluation entry.
-- `ResponseViewer` — a submitted response, read-only (`useNativeForm(..., { readOnly: true })`).
 - **The builder's live preview** — `LivePreviewModal` in `components/builder/FormBuilder.tsx`.
   Its banner carries the logo beside the form's title and description; the managed Company
   question is published `visible: false` and this engine draws it inside the form, so a

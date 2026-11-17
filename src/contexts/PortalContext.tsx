@@ -2,12 +2,15 @@ import { createContext, useContext } from "react";
 import type {
   AuditEntry,
   CatalogueEntry,
+  FiledScope,
+  ManageView,
   PortalAccess,
   PortalRecord,
   PortalRole,
   PortalScreen,
   SharePointClient,
   StatFilter,
+  SubsScope,
   SurveyJson,
 } from "../types";
 import type { PeopleDirectory } from "../utils/portalPeople";
@@ -47,11 +50,21 @@ export interface PortalContextValue {
    * click ("All submissions") cannot inherit the form filter left behind by a
    * form hub door ("All Permit to Work").
    */
-  setScreen: (screen: PortalScreen, formScope?: string | null, statusScope?: StatFilter | null) => void;
+  setScreen: (
+    screen: PortalScreen,
+    formScope?: string | null,
+    statusScope?: StatFilter | null,
+    subsScope?: SubsScope | null,
+    filedScope?: FiledScope | null,
+  ) => void;
   /** List title the current screen is scoped to, or null for every form. */
   focusForm: string | null;
   /** Status the records table should open on — what the pressed statistic counted. */
   focusStatus: StatFilter | null;
+  /** Which framing of the submissions screen is open — everything, mine, or needs me. */
+  focusSubsScope: SubsScope | null;
+  /** Filed-date window the submissions list opens on, or null for any date. */
+  focusFiled: FiledScope | null;
 
   /**
    * Text the shell's search box was submitted with, which the records table
@@ -71,10 +84,22 @@ export interface PortalContextValue {
   prefs: PortalPrefs;
   setPrefs: (changes: Partial<PortalPrefs>) => void;
 
-  /** Reference of the record whose drawer is open, or null. */
+  /** Key of the record the record page shows, or null. */
   drawerRef: string | null;
+  /** Opens a record on the record page, remembering the screen it was opened from. */
   openDrawer: (reference: string) => void;
+  /** Leaves the record page for the screen it was opened from. */
   closeDrawer: () => void;
+  /** Records whose drawer was opened this session, newest first, no repeats, at most 8. */
+  recentRefs: string[];
+
+  /** Whether this account may run test workflows (the form-builder grant). */
+  canRunTestRuns: boolean;
+  /** Form slugs by list title, so a test run can open the form's public link. */
+  formSlugs: Record<string, string>;
+  /** Which section of Manage is showing: the overview, or the test-run tools. */
+  manageView: ManageView;
+  setManageView: (view: ManageView) => void;
 
   /** Nudges are idempotent per session — the button becomes "Nudged". */
   nudged: Record<string, boolean>;

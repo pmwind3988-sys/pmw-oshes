@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { Box, Stack, Typography } from "@mui/material";
-import { keyframes } from "@mui/material/styles";
-import type { SxProps, Theme } from "@mui/material";
-import { AlertCircle as ErrorOutlinedIcon, Check as CheckIcon, RefreshCw as RefreshIcon } from "../ui/Icons";
+import { Box, Button, Stack, Typography, type SxProps, type Theme } from "@mui/material";
 import { fadeInUp } from "../../theme";
-import Logo from "../../components/Logo";
+import { radius } from "../../theme/surfaces";
+import { LoadingView } from "../simple/LoadingView";
 
 /*
  * Soft UI tokens for the sign-in, loading and auth-state screens. They are
@@ -41,7 +39,7 @@ export const authSoft = {
   cardShadow: "0 10px 40px rgba(22, 27, 36, 0.06)",
 } as const;
 
-export const AUTH_FONT = 'Figtree, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const AUTH_FONT = 'var(--pmw-font-main, "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif)';
 
 const pillBase = {
   minHeight: 52,
@@ -111,255 +109,56 @@ export interface LoadingStep {
   status: LoadingStepStatus;
 }
 
+
 interface LoadingScreenProps {
   userEmail?: string;
-  progress?: number; // 0-100
+  progress?: number; // 0-100, no longer shown
   status?: string; // e.g. "Fetching submissions from 'Leave Form' (2/5)..."
-  steps?: LoadingStep[];
+  steps?: LoadingStep[]; // no longer shown
 }
 
-/** How long a load may run before the page offers a way out. */
-const SLOW_AFTER_MS = 10_000;
+/** After this long on the loading screen, offer a way out of a stuck load. */
+export const SLOW_AFTER_MS = 10_000;
 
-const spin = keyframes`
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-`;
-
-const RING_SIZE = 168;
-const RING_STROKE = 12;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-/**
- * One ring for every wait. With a `progress` it fills to that share; without
- * one it turns gently on a short arc, so the screen never looks frozen.
- */
-function ProgressRing({ progress }: { progress?: number }) {
-  const determinate = typeof progress === "number";
-  const fraction = determinate ? Math.min(100, Math.max(0, progress)) / 100 : 0;
-  const dashOffset = RING_CIRCUMFERENCE * (1 - fraction);
-
-  return (
-    <Box sx={{ position: "relative", width: RING_SIZE, height: RING_SIZE, flexShrink: 0 }}>
-      <Box
-        component="svg"
-        viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-        aria-hidden
-        focusable="false"
-        sx={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          transform: "rotate(-90deg)",
-          animation: determinate ? "none" : `${spin} 2.4s linear infinite`,
-          "@media (prefers-reduced-motion: reduce)": { animation: "none" },
-        }}
-      >
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          fill="none"
-          stroke={authSoft.ground}
-          strokeWidth={RING_STROKE}
-        />
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          fill="none"
-          stroke={authSoft.primary}
-          strokeWidth={RING_STROKE}
-          strokeLinecap="round"
-          strokeDasharray={determinate ? RING_CIRCUMFERENCE : `${RING_CIRCUMFERENCE * 0.28} ${RING_CIRCUMFERENCE}`}
-          strokeDashoffset={determinate ? dashOffset : 0}
-          style={{ transition: determinate ? "stroke-dashoffset 0.6s ease" : undefined }}
-        />
-      </Box>
-
-      <Box
-        sx={{
-          position: "absolute",
-          inset: 26,
-          borderRadius: 999,
-          backgroundColor: authSoft.soft,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Logo size={72} />
-      </Box>
-    </Box>
-  );
+/** Whether a load has been running long enough to offer "Try again". */
+export function isLoadSlow(elapsedMs: number): boolean {
+  return elapsedMs >= SLOW_AFTER_MS;
 }
 
-/** Steps as pills: done is a green container with a check, active a primary container with a dot, pending neutral. */
-export function StepPills({ steps }: { steps: LoadingStep[] }) {
-  const described = steps.filter((step) => step.description && (step.status === "active" || step.status === "error"));
-
+/** The "taking longer than usual" line and its retry button, shown under the loading bar. */
+export function SlowLoadNotice() {
   return (
-    <Stack spacing={1.5} sx={{ alignItems: "center", width: "100%" }}>
-      <Stack
-        component="ol"
-        direction="row"
-        useFlexGap
-        sx={{ flexWrap: "wrap", justifyContent: "center", gap: 1.25, m: 0, p: 0, listStyle: "none" }}
+    <Stack spacing={1.5} sx={{ alignItems: "center", mt: 2 }}>
+      <Typography sx={{ fontSize: 15, color: "text.secondary", textAlign: "center" }}>Taking longer than usual.</Typography>
+      <Button
+        variant="contained"
+        onClick={() => window.location.reload()}
+        sx={{ minHeight: 44, px: 3, borderRadius: radius.full, textTransform: "none", fontWeight: 600, boxShadow: "none" }}
       >
-        {steps.map((step) => {
-          const isActive = step.status === "active";
-          const palette = pillPalette(step.status);
-
-          return (
-            <Box
-              component="li"
-              key={step.label}
-              aria-current={isActive ? "step" : undefined}
-              sx={{
-                height: 40,
-                pl: 1,
-                pr: 2,
-                borderRadius: 999,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 1,
-                fontFamily: AUTH_FONT,
-                fontSize: 15,
-                fontWeight: 600,
-                transition: "background-color 0.3s ease",
-                backgroundColor: palette.background,
-                color: palette.color,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 999,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  backgroundColor: palette.dot,
-                  color: "#FFFFFF",
-                }}
-              >
-                {step.status === "complete" && <CheckIcon size={14} strokeWidth={3} />}
-                {step.status === "error" && <ErrorOutlinedIcon size={14} strokeWidth={2.6} />}
-                {step.status === "active" && (
-                  <Box sx={{ width: 8, height: 8, borderRadius: 999, backgroundColor: authSoft.primary }} />
-                )}
-              </Box>
-              {step.label}
-            </Box>
-          );
-        })}
-      </Stack>
-
-      {described.map((step) => (
-        <Typography key={`${step.label}-note`} sx={{ fontSize: 13, color: authSoft.muted, lineHeight: 1.5, overflowWrap: "anywhere" }}>
-          {step.description}
-        </Typography>
-      ))}
+        Try again
+      </Button>
     </Stack>
   );
 }
 
-function pillPalette(status: LoadingStepStatus): { background: string; color: string; dot: string } {
-  if (status === "complete") {
-    return { background: authSoft.greenContainer, color: authSoft.onGreenContainer, dot: authSoft.green };
-  }
-  if (status === "error") {
-    return { background: authSoft.redContainer, color: authSoft.onRedContainer, dot: authSoft.red };
-  }
-  if (status === "active") {
-    return { background: authSoft.primaryContainer, color: authSoft.onPrimaryContainer, dot: "#FFFFFF" };
-  }
-  return { background: authSoft.chip, color: authSoft.muted, dot: authSoft.divider };
+/** The loading view, plus the slow-load notice once `slow` is set. */
+export function LoadingScreenBody({ status, slow }: { status?: string; slow: boolean }) {
+  return (
+    <Box sx={{ minHeight: "100dvh", bgcolor: "background.default", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <LoadingView status={status} />
+      {slow && <SlowLoadNotice />}
+    </Box>
+  );
 }
 
-export default function LoadingScreen({ userEmail, progress, status, steps }: LoadingScreenProps) {
+/** Shown while the portal loads. After SLOW_AFTER_MS it offers a reload, so a stuck load has a way out. */
+export default function LoadingScreen({ status }: LoadingScreenProps) {
   const [slow, setSlow] = useState(false);
-  const hasProgress = typeof progress === "number" && progress > 0;
-  const hasSteps = Boolean(steps?.length);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
     return () => window.clearTimeout(timer);
   }, []);
 
-  return (
-    <Box sx={authPageSx}>
-      <Stack
-        role="status"
-        aria-live="polite"
-        spacing={3}
-        sx={{ ...authCardSx, maxWidth: 520, alignItems: "center" }}
-      >
-        <ProgressRing progress={hasProgress ? progress : undefined} />
-
-        <Stack spacing={0.75} sx={{ alignItems: "center" }}>
-          <Typography component="h1" sx={{ fontFamily: AUTH_FONT, fontSize: 26, fontWeight: 800, lineHeight: 1.2 }}>
-            Getting things ready
-          </Typography>
-          {status && (
-            <Typography sx={{ fontSize: 15, color: authSoft.muted, lineHeight: 1.5, maxWidth: 420, overflowWrap: "anywhere" }}>
-              {status}
-            </Typography>
-          )}
-          {userEmail && (
-            <Typography sx={{ fontSize: 14, color: authSoft.muted, overflowWrap: "anywhere" }}>
-              Signed in as {userEmail}
-            </Typography>
-          )}
-        </Stack>
-
-        {hasSteps && <StepPills steps={steps ?? []} />}
-
-        {slow && (
-          <Stack
-            direction="row"
-            useFlexGap
-            spacing={1.5}
-            sx={{
-              width: "100%",
-              alignItems: "center",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              p: 2,
-              borderRadius: "24px",
-              backgroundColor: authSoft.amberContainer,
-              color: authSoft.onAmberContainer,
-              textAlign: "left",
-            }}
-          >
-            <Typography sx={{ flex: "1 1 200px", fontWeight: 600, fontSize: 15, lineHeight: 1.45 }}>
-              Taking longer than usual. Your connection or SharePoint may be slow.
-            </Typography>
-            <Box
-              component="button"
-              type="button"
-              onClick={() => window.location.reload()}
-              sx={{
-                ...authPill.tonal,
-                minHeight: 40,
-                px: 2.25,
-                fontSize: 15,
-                border: 0,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 1,
-              }}
-            >
-              <RefreshIcon size={16} />
-              Try again
-            </Box>
-          </Stack>
-        )}
-      </Stack>
-    </Box>
-  );
+  return <LoadingScreenBody status={status} slow={slow} />;
 }

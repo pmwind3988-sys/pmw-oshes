@@ -35,50 +35,31 @@ export interface PortalAccess {
   canExport: boolean;
 }
 
-/** The pages the portal can show. Which ones an account may reach comes from `PortalAccess`. */
-export type PortalScreen =
-  | "home"
-  /** One form type's workspace: file a new one, or open either list of them. */
-  | "form"
-  | "queue"
-  | "mine"
-  | "file"
-  | "today"
-  | "subs"
-  | "cat"
-  | "people"
-  | "audit"
-  | "smoking"
-  | "settings";
+/**
+ * The pages the portal can show. Which ones an account may reach comes from `PortalAccess`.
+ * "record" is one submission's page, reached from a list and left back to where it was opened from.
+ */
+export type PortalScreen = "home" | "subs" | "manage" | "people" | "audit" | "smoking" | "settings" | "record";
 
-export interface PortalNavItem {
-  screen: PortalScreen;
-  label: string;
-  /** Rendered right-aligned; null when the item carries no count. */
-  count: number | null;
-  /**
-   * One line of what the page is for. This is the *tooltip* text — it appears on
-   * hover in the nav column, where there is time to read it and it costs no
-   * layout.
-   */
-  hint: string;
-  /**
-   * Two or three words, for anywhere the description is always on screen.
-   *
-   * The home dashboard used to print `hint` under every card title, so a screen
-   * whose job is to show numbers carried a paragraph of explanation above them —
-   * "Forms you filed, including ones sent from a QR poster with this email" over
-   * a card already titled "Your recent filings". The long line is still worth
-   * having on first hover; it is not worth having on every visit.
-   */
-  caption: string;
-}
+/**
+ * Which slice of the submissions screen is showing. "needs" is what is waiting
+ * on this account's own layer; it is offered only to accounts that sign or
+ * evaluate.
+ */
+export type SubsScope = "all" | "mine" | "needs";
 
-/** Nav items under one heading. A blank heading renders without one. */
-export interface PortalNavSection {
-  id: string;
+/** A Filed-date window a Submissions list can open on. Same vocabulary as the Filed filter. */
+export type FiledScope = "today" | "7d" | "30d";
+
+/** The sections of Manage: its overview, or the test-run tools. */
+export type ManageView = "overview" | "tests";
+
+/** One of the three top-level destinations in the portal's navigation. */
+export interface PortalTab {
+  screen: "home" | "subs" | "manage";
   label: string;
-  items: PortalNavItem[];
+  /** Right-aligned count; zero when the tab carries none. */
+  badge: number;
 }
 
 // ── Form shape ───────────────────────────────────────────────────────────────

@@ -114,6 +114,8 @@ typography:
     letterSpacing: '0'
 rounded:
   none: '0'
+  tag: '6px'
+  xs: '10px'
   sm: '16px'
   DEFAULT: '24px'
   lg: '24px'
@@ -194,11 +196,12 @@ port happens the two apps differ, which is known divergence rather than accident
 
 ## Typography
 
-The default is one family throughout: `"Inter", "Segoe UI", "Aptos", "Helvetica Neue",
-Arial, sans-serif`, with headings differing from body by weight (700–900) rather than by
-face. Segoe UI and Aptos are the Microsoft 365 system faces, which is why they sit
-directly behind Inter: this app renders inside SharePoint and should not look foreign
-there.
+The default is one family throughout: Plus Jakarta Sans (weights 500, 600, 700 and 800),
+the face the approved Jira-style canvas uses, with a system fallback stack behind it:
+`"Plus Jakarta Sans", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif`. Headings
+differ from body by weight (700–900) rather than by face. Segoe UI and Aptos are the
+Microsoft 365 system faces, which is why they sit directly behind the brand face: this
+app renders inside SharePoint and should not look foreign there.
 
 The other font themes split heading from body, so `--pmw-font-heading` and
 `--pmw-font-main` are separate variables and the `h1–h6` rule in `src/index.css` has to

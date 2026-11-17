@@ -78,7 +78,7 @@ describe("normalizeDashboardAppearance", () => {
     });
     expect(result.contrastThemeId).toBe("paper");
     expect(result.colorThemeId).toBe("pmw");
-    expect(result.fontThemeId).toBe("figtree");
+    expect(result.fontThemeId).toBe("jakarta");
     expect(result.backgroundId).toBe("clarity");
   });
 

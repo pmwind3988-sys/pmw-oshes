@@ -7,6 +7,7 @@ import type {
   SeverityTone,
   Submission,
 } from "../types";
+import type { StatFilter } from "../types";
 import { describeWorkflow } from "./formWorkflow";
 import { routedAssigneeEmail } from "./layerAssignees";
 import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDirectory } from "./portalPeople";
@@ -14,6 +15,7 @@ import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
 import { formatDisplayDayMonthTime } from "./displayDateTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
 import { malaysiaDateKey } from "./referenceNumber";
+import { malaysiaDateStamp } from "./malaysiaTime";
 
 function normalizeFieldKey(key: string): string {
   return key.replace(/_x[0-9a-f]{4}_/gi, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -102,6 +104,48 @@ export function buildReference(code: string, submission: Submission): string {
  */
 export function recordKey(record: { listTitle: string; itemId: string }): string {
   return `${record.listTitle}::${record.itemId}`;
+}
+
+/**
+ * A choice on the submissions Status filter: any status word, "open" for still
+ * moving, "settled" for Done (records that have stopped moving), or "all".
+ */
+export type StatusChoice = StatFilter | "settled";
+
+/** The statuses the Done choice holds. */
+const SETTLED_STATUSES: readonly PortalStatus[] = ["Approved", "Recorded", "Cancelled", "Rejected"];
+
+/** Whether a record passes a Status choice. */
+export function matchesStatusChoice(
+  record: Pick<PortalRecord, "status" | "done" | "returned" | "hasWorkflow">,
+  choice: StatusChoice,
+): boolean {
+  if (choice === "all") return true;
+  if (choice === "open") return !(record.done || record.returned || !record.hasWorkflow);
+  if (choice === "settled") return SETTLED_STATUSES.includes(record.status);
+  return record.status === choice;
+}
+
+/** The filed-date choices on the submissions filter bar. */
+export type FiledRange = "any" | "today" | "7d" | "30d";
+
+/**
+ * Whether a record was filed inside a range. "Today" is the Malaysian calendar
+ * day (UTC+8, like every other portal date); the others count back from `now`.
+ * A record with no filing date only passes "any".
+ */
+export function filedWithin(record: Pick<PortalRecord, "filedAt">, range: FiledRange, now: Date = new Date()): boolean {
+  if (range === "any") return true;
+  if (!record.filedAt) return false;
+  if (range === "today") {
+    // Malaysia has no daylight saving, so midnight MYT is always a fixed +08:00 instant.
+    const startOfToday = Date.parse(`${malaysiaDateStamp(now)}T00:00:00+08:00`);
+    const startOfTomorrow = startOfToday + 86_400_000;
+    const filed = record.filedAt.getTime();
+    return filed >= startOfToday && filed < startOfTomorrow;
+  }
+  const days = range === "7d" ? 7 : 30;
+  return now.getTime() - record.filedAt.getTime() <= days * 86_400_000;
 }
 
 /** Strips separators so punctuation in a pasted reference does not matter. */

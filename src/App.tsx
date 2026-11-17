@@ -20,16 +20,9 @@ import {
   startFreshReauthentication,
 } from "./utils/authRecovery";
 import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
-import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, resolveFormBuilderAccess } from "./utils/spConfig";
-import {
-  EMPTY_SUBMISSION_FILTERS,
-  hasActiveFilters,
-  sortSubmissions,
-  submissionMatchesFilters,
-  type SubmissionFilterState,
-} from "./utils/submissionFilters";
+import { SP_STATIC, loadConfig, filterVisibleLists, generateMeta, resolveFormBuilderAccess } from "./utils/spConfig";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
-import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, SurveyJson } from "./types";
 import { normalizeLayerStatus } from "./utils/statusConstants";
 import { fixedAssigneeEmails } from "./utils/layerAssignees";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./utils/submissionDisplay";
@@ -45,9 +38,8 @@ import ErrorScreen from "./components/auth/ErrorScreen";
 import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
-import { DashboardProvider } from "./contexts/DashboardContext";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
-import { builderUrl } from "./config/oshes";
+import { legacyRouteTarget, legacyRouteTargetForPath } from "./utils/legacyRoutes";
 import { isTestRow } from "./utils/testRun";
 
 
@@ -274,9 +266,6 @@ function buildAuthLoadingSteps(activeStep: AuthLoadStep, errorStep: AuthLoadStep
 }
 
 const loadDynamicFormPage = () => import("./pages/DynamicFormPage");
-const loadApprovalDashboard = () => import("./components/builder/ApprovalDashboard");
-const loadResponseViewer = () => import("./components/builder/ResponseViewer");
-const loadAdminHomePage = () => import("./pages/AdminHomePage");
 const loadEvaluationPage = () => import("./pages/EvaluationPage");
 const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadPublicReportPage = () => import("./pages/PublicReportPage");
@@ -648,6 +637,12 @@ function CatchAllRedirect({ to }: { to: string }) {
   return null;
 }
 
+/** An old dashboard address, sent on to its portal equivalent with its query string kept. */
+function LegacyRouteRedirect() {
+  const location = useLocation();
+  return <CatchAllRedirect to={legacyRouteTarget(location.pathname, location.search) ?? "/portal"} />;
+}
+
 export default function App() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -667,17 +662,11 @@ export default function App() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [visibleLists, setVisibleLists] = useState<DiscoveredList[]>([]);
   const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
-  const [missingConfigs, setMissingConfigs] = useState<string[]>([]);
-  const [detailItem, setDetailItem] = useState<Submission | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadStatus, setLoadStatus] = useState("Initializing...");
   const [authLoadStep, setAuthLoadStep] = useState<AuthLoadStep>("session");
   const [authErrorMode, setAuthErrorMode] = useState<AuthErrorMode>("generic");
   const [authErrorStep, setAuthErrorStep] = useState<AuthLoadStep | null>(null);
-
-  // Filters
-  const [filters, setFilters] = useState<SubmissionFilterState>(EMPTY_SUBMISSION_FILTERS);
-  const [sortBy, setSortBy] = useState("newest");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -706,8 +695,6 @@ export default function App() {
     setSubmissions([]);
     setVisibleLists([]);
     setLoadedConfig(null);
-    setMissingConfigs([]);
-    setDetailItem(null);
     setAuthLoadStep("session");
     setAuthErrorMode("generic");
     setAuthErrorStep(null);
@@ -1019,7 +1006,6 @@ export default function App() {
         }
 
         setSubmissions(finalSubmissions);
-        setMissingConfigs(getMissingConfigs(visible, config.layerConfig));
         setLoadProgress(100);
         setLoadStatus("Ready.");
         clearAuthTimeoutReloginAttempt();
@@ -1087,13 +1073,16 @@ export default function App() {
         const redirectPath = sessionStorage.getItem("pmw_post_login_redirect");
         if (redirectPath) {
           sessionStorage.removeItem("pmw_post_login_redirect");
-          // Root or legacy adminhomepage → the role-scoped portal
-          if (redirectPath === "/" || redirectPath === "/adminhomepage") {
+          // Root → the role-scoped portal; a legacy dashboard address → its portal equivalent
+          const legacyTarget = legacyRouteTargetForPath(redirectPath);
+          if (redirectPath === "/") {
             navigate("/portal", { replace: true });
+          } else if (legacyTarget) {
+            navigate(legacyTarget, { replace: true });
           } else {
             navigate(redirectPath);
           }
-        } else if (currentPath === "/" || currentPath === "/adminhomepage") {
+        } else if (currentPath === "/") {
           // No stored redirect — the portal resolves the role and its landing screen
           navigate("/portal", { replace: true });
         }
@@ -1102,12 +1091,6 @@ export default function App() {
       }
     }
   }, [pageState, isAuthenticated, authProfileReady, isPublicRoute, navigate, isAdmin, currentPath]);
-
-  useEffect(() => {
-    if (pageState === "ready" && authProfileReady && isAdmin && currentPath === "/user/dashboard") {
-      navigate("/admin/dashboard", { replace: true });
-    }
-  }, [pageState, authProfileReady, isAdmin, currentPath, navigate]);
 
   /** Re-run the profile load, so a fresh filing shows up without a full reload. */
   const handleRefreshSubmissions = useCallback(() => {
@@ -1220,55 +1203,15 @@ export default function App() {
     setPageState("loading");
   };
 
-  // Filter + sort. Both live in submissionFilters so the dashboard, the approval
-  // workspace and the response viewer narrow a list the same way.
-  const filteredSubmissions = submissions.filter((item) => submissionMatchesFilters(item, filters));
-  // Test runs are rehearsals: kept out of every count, card and export unless
-  // an admin ticks "Show test runs", and out of the portal — where approvers
-  // work their real queue — entirely.
+  // Test runs are rehearsals: kept out of every count, card and export, and out
+  // of the portal — where approvers work their real queue — entirely.
   const realSubmissions = submissions.filter((item) => !item.isTest);
-  const dashboardSubmissions = filters.includeTestRuns ? submissions : realSubmissions;
-  const sortedSubmissions = sortSubmissions(filteredSubmissions, sortBy);
-
-  const listMetaMap = { ...loadedConfig?.listMetaMap };
-  for (const list of visibleLists) {
-    if (!listMetaMap[list.title]) {
-      listMetaMap[list.title] = generateMeta(list.title);
-    }
-  }
-
-  const hasFilters = hasActiveFilters(filters);
 
   // One client instance for the portal, so its effects do not re-run every render.
   const portalSpClient = useMemo(
     () => createSpClient(instance, activeAccount ? [activeAccount] : accounts),
     [instance, accountKey, accounts.length], // eslint-disable-line react-hooks/exhaustive-deps
   );
-
-  async function handleHardDeleteSubmission(item: Submission): Promise<HardDeleteSubmissionResult> {
-    if (!isAdmin) {
-      throw new Error(
-        `Only members of ${SP_STATIC.adminGroup || "the OSHES admin group"} can delete submissions.`,
-      );
-    }
-
-    const account = activeAccount ?? accounts[0] ?? null;
-    if (!account) {
-      throw new Error("No signed-in account is available for SharePoint deletion.");
-    }
-
-    const spClient = createSpClient(instance, [account]);
-    const result = await spClient.hardDeleteSubmission(item);
-
-    setSubmissions((current) =>
-      current.filter((submission) => !(submission.listTitle === item.listTitle && submission.id === item.id))
-    );
-    setDetailItem((current) =>
-      current?.listTitle === item.listTitle && current.id === item.id ? null : current
-    );
-
-    return result;
-  }
 
   // ---- Render ----
 
@@ -1360,62 +1303,10 @@ export default function App() {
           spClient={portalSpClient}
           onSignOut={handleSignOut}
           onRefresh={handleRefreshSubmissions}
+          canRunTestRuns={canUseFormBuilder}
+          formSlugs={loadedConfig?.formSlugMap ?? {}}
         />
       </Suspense>
-    </ErrorBoundary>
-  );
-
-  /**
-   * Hands off to the shared builder in pmw-hrform, in a new tab.
-   *
-   * `noopener` matters here: the builder is a different origin holding the same
-   * tenant's session, and an opener reference would let it reach back into this
-   * window. Silently does nothing when VITE_BUILDER_URL is unset — the same
-   * condition that hides the header link, so no control here promises a page
-   * that cannot exist.
-   */
-  const openBuilder = (formTitle?: string) => {
-    const url = builderUrl(formTitle);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  // ---- Legacy full dashboard, kept for admin power tools ----
-  const adminDashboardInner = (
-    <ErrorBoundary>
-      <DashboardProvider
-        userEmail={userEmail}
-        isAdmin={isAdmin}
-        // Owning the builder is not enough here: it lives in another app, so an
-        // unconfigured VITE_BUILDER_URL means there is nowhere to send anyone.
-        // Folding that in keeps every builder affordance from rendering dead.
-        canUseFormBuilder={canUseFormBuilder && builderUrl() !== null}
-        // A test run happens here, not in the external builder, so it needs
-        // only the form-builder grant — the server checks the same grant.
-        canRunTestRuns={canUseFormBuilder}
-        formSlugs={loadedConfig?.formSlugMap ?? {}}
-        submissions={dashboardSubmissions}
-        visibleLists={visibleLists}
-        listMetaMap={listMetaMap}
-        missingConfigs={missingConfigs}
-        hasFilters={hasFilters}
-        detailItem={detailItem}
-        setDetailItem={setDetailItem}
-        filters={filters}
-        setFilters={setFilters}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        sortedSubmissions={sortedSubmissions}
-        onSignOut={handleSignOut}
-        onSwitchAccount={handleSwitchAccount}
-        // The builder is not a route in this app — it lives in pmw-hrform, so
-        // both of these leave for it rather than navigating. Gated the same way
-        // the header link is: unconfigured means no builder, so nothing opens.
-        onOpenBuilder={() => openBuilder()}
-        onEditForm={(listTitle: string) => openBuilder(listTitle)}
-        onHardDeleteSubmission={handleHardDeleteSubmission}
-      >
-        <LazyRoute load={loadAdminHomePage} fallback={<LoadingScreen status="Loading dashboard..." />} />
-      </DashboardProvider>
     </ErrorBoundary>
   );
 
@@ -1466,50 +1357,10 @@ export default function App() {
               </ErrorBoundary>
             }
           />
-          <Route
-            path="/admin/submissions"
-            element={
-              <AdminGuard isAdmin={isAdmin}>
-                <ErrorBoundary>
-                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
-                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading submissions..." />} />
-                  </Box>
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/admin/approvals"
-            element={
-              <AdminGuard isAdmin={isAdmin}>
-                <ErrorBoundary>
-                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
-                    <LazyRoute load={loadApprovalDashboard} fallback={<LoadingScreen status="Loading approvals..." />} />
-                  </Box>
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/admin/responses/:formTitle"
-            element={
-              <AdminGuard isAdmin={isAdmin}>
-                <ErrorBoundary>
-                  <Box sx={{ minHeight: "100dvh", background: APP_BG }}>
-                    <LazyRoute load={loadResponseViewer} fallback={<LoadingScreen status="Loading responses..." />} />
-                  </Box>
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
-          <Route
-            path="/admin/dashboard"
-            element={
-              <AdminGuard isAdmin={isAdmin}>
-                {adminDashboardInner}
-              </AdminGuard>
-            }
-          />
+          <Route path="/admin/submissions" element={<LegacyRouteRedirect />} />
+          <Route path="/admin/approvals" element={<LegacyRouteRedirect />} />
+          <Route path="/admin/responses/:formTitle" element={<LegacyRouteRedirect />} />
+          <Route path="/admin/dashboard" element={<LegacyRouteRedirect />} />
           {/* The same published form /form/:formId draws, read-only. Needs no
               tenant on /native/demo, which is the quick way to eyeball the
               engine itself after a change. */}
@@ -1531,14 +1382,8 @@ export default function App() {
               </AdminGuard>
             }
           />
-          <Route
-            path="/user/dashboard"
-            element={
-              <ErrorBoundary>
-                {adminDashboardInner}
-              </ErrorBoundary>
-            }
-          />
+          <Route path="/user/dashboard" element={<LegacyRouteRedirect />} />
+          <Route path="/adminhomepage" element={<LegacyRouteRedirect />} />
           <Route
             path="/share-link"
             element={

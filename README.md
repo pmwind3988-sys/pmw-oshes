@@ -53,12 +53,17 @@ node node_modules\vitest\vitest.mjs run
 ## Main routes
 
 - `/` — Microsoft 365 sign-in
-- `/portal` — role-scoped portal; the role resolves its own landing screen
+- `/portal` — the portal, with three tabs: Your work (the landing page), Submissions (list or board view) and Manage (People, Audit and the smoking log, for accounts that reach them). A submission opens on its record page.
+- `/portal?screen=subs&form=F&item=I` — deep link to one record (`scope=all|mine|needs` is also read)
 - `/report` — signed-out QR poster flow (`?poster=JTY3-C&location=Jetty+3` prefills from the poster)
 - `/track` — track a report by reference, no sign-in
-- `/user/dashboard` — legacy full dashboard, user scope
-- `/admin/dashboard` — legacy full dashboard, admin scope
-- `/admin/submissions` — submission and workflow administration
+- `/admin/routing` — approval routing (admin only)
 - `/form/:formId` — published form
 - `/eval/:token` — public evaluation/approval link
 - `/privacy` — PDPA privacy notice
+
+Legacy addresses redirect into the portal and are not admin-gated, because approvers receive the old email links (`src/utils/legacyRoutes.ts`):
+
+- `/admin/submissions` and `/admin/approvals` — `/portal?screen=subs`, or that record when `form` and `item` are given
+- `/admin/responses/:formTitle` — the Submissions tab filtered to that form
+- `/admin/dashboard`, `/user/dashboard`, `/adminhomepage` — `/portal`

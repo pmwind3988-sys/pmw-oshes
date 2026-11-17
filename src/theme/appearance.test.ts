@@ -4,6 +4,7 @@ import {
   COLOR_THEMES,
   CONTRAST_THEMES,
   contrastRatio,
+  DEFAULT_APPEARANCE,
   FONT_THEMES,
   mix,
   NAV_DIM,
@@ -12,6 +13,23 @@ import {
   readableOn,
   resolveAppearance,
 } from "./appearance";
+
+describe("the default look", () => {
+  it("defaults to Plus Jakarta Sans and the canvas palette", () => {
+    const a = resolveAppearance(DEFAULT_APPEARANCE);
+    expect(a.fontBody).toContain("Plus Jakarta Sans");
+    expect(a.brand).toBe("#1F5FD0");
+    // Page background: the canvas the cards sit on, and the fallback ground.
+    expect(a.canvas).toBe("#F4F6FA");
+    expect(a.ground).toBe("#F4F6FA");
+    expect(a.ink).toBe("#1B2540");
+    expect(a.panel).toBe("#FFFFFF");
+    expect(a.muted).toBe("#5B6577");
+    expect(a.border).toBe("#E3E8F0");
+    expect(a.success).toBe("#17794B");
+    expect(a.error).toBe("#C8372D");
+  });
+});
 
 /**
  * The point of these tests is the claim the whole system rests on: that any
@@ -118,12 +136,12 @@ describe("normalizeAppearance", () => {
     expect(normalizeAppearance(null)).toEqual({
       colorThemeId: "pmw",
       contrastThemeId: "paper",
-      fontThemeId: "figtree",
+      fontThemeId: "jakarta",
     });
     expect(normalizeAppearance({ colorThemeId: "chartreuse", contrastThemeId: 7 })).toEqual({
       colorThemeId: "pmw",
       contrastThemeId: "paper",
-      fontThemeId: "figtree",
+      fontThemeId: "jakarta",
     });
   });
 

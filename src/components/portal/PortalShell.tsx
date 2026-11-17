@@ -1,52 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import { Wrench as BuildOutlinedIcon, LayoutGrid as CategoryOutlinedIcon, X as CloseIcon, ChevronDown as ExpandMoreIcon, Folder as FolderOutlinedIcon, Users as GroupOutlinedIcon, HelpCircle as HelpOutlineIcon, History as HistoryOutlinedIcon, Home as HomeOutlinedIcon, ListChecks as ListAltOutlinedIcon, LogOut as LogoutIcon, Menu as MenuIcon, FilePlus as NoteAddOutlinedIcon, Plus as PlusIcon, ExternalLink as OpenInNewIcon, ClipboardClock as PendingActionsOutlinedIcon, Search as SearchIcon, Settings as SettingsOutlinedIcon, SmokingRoomsOutlined as SmokingRoomsOutlinedIcon, CalendarDays as TodayOutlinedIcon } from "../ui/Icons";
-import type { IconComponent } from "../ui/Icons";
-import { editorial, editorialHairline } from "../../theme/editorial";
+import { Avatar, Box, Divider, Menu, MenuItem, Stack, Typography } from "@mui/material";
+import {
+  HelpCircle as HelpOutlineIcon,
+  LogOut as LogoutIcon,
+  Plus as PlusIcon,
+  Search as SearchIcon,
+  Settings as SettingsOutlinedIcon,
+  Wrench as BuildOutlinedIcon,
+} from "../ui/Icons";
+import { editorialHairline } from "../../theme/editorial";
+import { SUN } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
-import { portalSections, roleLabel } from "../../utils/portalRole";
-import { builderUrl, OSHES_APP } from "../../config/oshes";
+import { portalTabs, roleLabel } from "../../utils/portalRole";
+import { initialsOf } from "../../utils/portalPeople";
+import { builderUrl } from "../../config/oshes";
 import Logo from "../Logo";
+import FormPickerDialog from "./FormPickerDialog";
 import type { PortalScreen } from "../../types";
 import "../../styles/shell.css";
 
 /**
- * The shell: a narrow icon rail of destinations on the page ground, a white
- * sheet holding the search bar and the screen, and an account pill in the bar.
+ * The shell: a white top bar and the screen beneath it.
  *
- * On a desktop the rail is always visible: each destination is a pill holding
- * its glyph with the word under it, so the label and the target stay together.
- * Below 1024px the same element is an off-canvas drawer behind a hamburger —
- * switched by CSS in shell.css rather than by a width check here, so first
- * paint is never the wrong layout.
+ * The bar carries the brand, the top-level tabs (Your work, Submissions and,
+ * for those who reach it, Manage), the search, the "Create" button and the
+ * account avatar. The avatar opens a small menu holding Account, the form
+ * builder link (for catalogue managers), the privacy notice and Sign out.
  *
- * The footer links (Form builder, Privacy notice) and sign-out live in the
- * account menu, not in the rail.
+ * Layout that depends on width (the tabs and search wrapping onto their own
+ * rows below 760px) lives in shell.css so first paint is never the wrong layout.
  */
 
-/** One glyph per screen. The rail carries the word too — this is not a memory test. */
-const SCREEN_ICON: Partial<Record<PortalScreen, IconComponent>> = {
-  home: HomeOutlinedIcon,
-  today: TodayOutlinedIcon,
-  queue: PendingActionsOutlinedIcon,
-  subs: ListAltOutlinedIcon,
-  mine: FolderOutlinedIcon,
-  file: NoteAddOutlinedIcon,
-  cat: CategoryOutlinedIcon,
-  people: GroupOutlinedIcon,
-  audit: HistoryOutlinedIcon,
-  smoking: SmokingRoomsOutlinedIcon,
-  settings: SettingsOutlinedIcon,
-};
-
-/** Two letters from the display name, or one from the email when there is no name yet. */
-function initialsOf(name: string, email: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (email.trim()[0] ?? "?").toUpperCase();
-}
+/** The pages that sit under the Manage tab, so the tab stays lit while one is open. */
+const MANAGE_SCREENS: PortalScreen[] = ["manage", "people", "audit", "smoking"];
 
 /** True when a keystroke is already going somewhere that takes text. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -56,59 +43,17 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
-  const {
-    access,
-    role,
-    userName,
-    userEmail,
-    screen,
-    setScreen,
-    records,
-    myRecords,
-    queue,
-    catalogue,
-    audit,
-    submitSearch,
-    onSignOut,
-  } = usePortal();
-  const [navOpen, setNavOpen] = useState(false);
-  const [profileAnchor, setProfileAnchor] = useState<HTMLElement | null>(null);
+  const { access, role, userName, userEmail, screen, setScreen, queue, submitSearch, onSignOut } = usePortal();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [draftQuery, setDraftQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
   const builder = builderUrl();
-  const profileOpen = Boolean(profileAnchor);
+  const menuOpen = Boolean(menuAnchor);
   const displayed = userName || userEmail;
   const initials = initialsOf(userName, userEmail);
-
-  const sections = portalSections(access, {
-    queue: queue.length,
-    allRecords: records.length,
-    myRecords: myRecords.length,
-    catalogue: catalogue.length,
-    audit: audit.length,
-  });
-
-  // A form's own workspace has no rail item of its own; it is the "file" area
-  // it was reached from, so that is the destination that stays lit.
-  const activeScreen: PortalScreen = screen === "form" ? "file" : screen;
-
-  // While the drawer is over the page the page behind it must not scroll — on a
-  // phone a scrolling backdrop reads as the drawer itself failing to scroll.
-  // Escape closes it for anyone on a keyboard.
-  useEffect(() => {
-    if (!navOpen) return undefined;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setNavOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [navOpen]);
+  const tabs = portalTabs(access, queue.length);
 
   // "/" moves the cursor to the search box, as the key hint in it says — unless
   // the person is already typing somewhere, or the search box is not on screen.
@@ -125,226 +70,300 @@ export default function PortalShell({ children }: { children: React.ReactNode })
     return () => document.removeEventListener("keydown", onSlash);
   }, []);
 
-  const pick = (next: PortalScreen) => {
-    setScreen(next);
-    setNavOpen(false);
-    setProfileAnchor(null);
-  };
+  const pick = (next: PortalScreen) => setScreen(next);
 
   const onSearchSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     const query = draftQuery.trim();
     if (!query) return;
     submitSearch(query);
-    setNavOpen(false);
   };
 
-  const avatarSx = {
-    bgcolor: editorial.pmwBlueSoft,
-    color: editorial.pmwBlueDark,
-    fontWeight: 800,
-  } as const;
+  const openAccount = () => {
+    setMenuAnchor(null);
+    pick("settings");
+  };
 
   return (
     <div className="shell">
-      {navOpen && (
-        <button
-          type="button"
-          className="shell-backdrop"
-          onClick={() => setNavOpen(false)}
-          aria-label="Close navigation"
-        />
-      )}
-
-      <aside
-        id="portal-nav"
-        aria-label="Portal sections"
-        className={`shell-nav${navOpen ? " open" : ""}`}
+      <Box
+        component="header"
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
+          bgcolor: "background.paper",
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
       >
-        <div className="shell-brand">
-          {/* The logo is the way back Home, which is the screen that shows every
-              other one — so the shortest route out of anywhere is a click on it. */}
-          <button type="button" className="shell-brand-link" onClick={() => pick("home")}>
-            <span className="shell-logo-chip">
-              <Logo size={22} />
-            </span>
-            <span className="shell-brand-words">
-              <span className="shell-brand-name">{OSHES_APP.department}</span>
-              <span className="shell-brand-sub">Forms Portal</span>
-            </span>
-          </button>
-          <button
+        <Box
+          sx={{
+            maxWidth: 1280,
+            mx: "auto",
+            px: { xs: 2, sm: 3 },
+            py: 1,
+            minHeight: 60,
+            boxSizing: "border-box",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            columnGap: 2.5,
+            rowGap: 1,
+          }}
+        >
+          <Box
+            component="button"
             type="button"
-            className="shell-navclose"
-            onClick={() => setNavOpen(false)}
-            aria-label="Close navigation"
+            onClick={() => pick("home")}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              minHeight: 44,
+              p: 0,
+              border: 0,
+              bgcolor: "transparent",
+              color: "text.primary",
+              font: "inherit",
+              cursor: "pointer",
+              "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
+            }}
           >
-            <CloseIcon fontSize="small" />
-          </button>
-        </div>
-
-        {access.canFile && (
-          <button
-            type="button"
-            className="shell-newbtn"
-            onClick={() => pick("file")}
-            aria-label="File a form"
-            title="File a form"
-          >
-            <PlusIcon />
-          </button>
-        )}
-
-        <nav className="shell-navlist">
-          {sections.map((section) => (
-            <div key={section.id} className="shell-navgroup">
-              {section.items.map((item) => {
-                const Icon = SCREEN_ICON[item.screen];
-                const active = activeScreen === item.screen;
-                // On a desktop the "+" button above is the way in to filing, so
-                // this row would only repeat it. The row stays for the drawer.
-                const className = [
-                  "shell-navitem",
-                  active ? "active" : "",
-                  item.screen === "file" ? "shell-navitem-file" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-                return (
-                  <button
-                    key={item.screen}
-                    type="button"
-                    className={className}
-                    onClick={() => pick(item.screen)}
-                    aria-current={active ? "page" : undefined}
-                    title={item.hint}
-                  >
-                    <span className="shell-navpill">{Icon && <Icon fontSize="small" />}</span>
-                    <span className="shell-navlabel">{item.label}</span>
-                    {item.count !== null && item.count > 0 && item.screen === "queue" && (
-                      <span className="shell-navcount">{item.count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="shell-main">
-        <header className="shell-header">
-          <div className="shell-headerrow">
-            <button
-              type="button"
-              className="shell-hamburger"
-              onClick={() => setNavOpen(true)}
-              aria-label="Open navigation"
-              aria-controls="portal-nav"
-              aria-expanded={navOpen}
+            <Box
+              sx={{
+                flex: "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 34,
+                height: 34,
+                boxSizing: "border-box",
+                borderRadius: radius.xs,
+                bgcolor: SUN,
+                border: "2px solid",
+                borderColor: "text.primary",
+              }}
             >
-              <MenuIcon />
-            </button>
+              <Logo size={18} />
+            </Box>
+            <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.1, whiteSpace: "nowrap" }}>OSHES Forms</Typography>
+          </Box>
 
-            {/* The rail's brand mark is behind the drawer on a phone, so the bar
-                carries one of its own. */}
-            <button type="button" className="shell-headerbrand" onClick={() => pick("home")}>
-              <Logo size={22} />
-              <span>{OSHES_APP.department}</span>
-            </button>
-
-            <form className="shell-search" onSubmit={onSearchSubmit} role="search">
-              <SearchIcon />
-              <input
-                ref={searchRef}
-                value={draftQuery}
-                onChange={(event) => setDraftQuery(event.target.value)}
-                placeholder="Search records…"
-                aria-label="Search records"
-              />
-              <kbd className="shell-searchkey" aria-hidden="true">/</kbd>
-            </form>
-
-            <div className="shell-headeractions">
-              {access.canFile && (
-                <Tooltip title="File a form" enterDelay={400}>
-                  <button
-                    type="button"
-                    className="shell-iconbtn shell-headerfile"
-                    onClick={() => pick("file")}
-                    aria-label="File a form"
-                  >
-                    <NoteAddOutlinedIcon sx={{ fontSize: 18 }} />
-                  </button>
-                </Tooltip>
-              )}
-
-              <Box
-                component="button"
-                type="button"
-                onClick={(event: React.MouseEvent<HTMLElement>) => setProfileAnchor(event.currentTarget)}
-                aria-label={`Account: ${displayed}`}
-                aria-haspopup="menu"
-                aria-controls={profileOpen ? "portal-profile-menu" : undefined}
-                aria-expanded={profileOpen}
-                sx={{
-                  flex: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  maxWidth: 240,
-                  height: 46,
-                  pl: 0.5,
-                  pr: { xs: 0.5, lg: 1.5 },
-                  border: 0,
-                  borderRadius: radius.full,
-                  background: profileOpen ? editorial.blueWash : editorial.neutralWash,
-                  font: "inherit",
-                  color: "inherit",
-                  cursor: "pointer",
-                  transition: "background-color 0.16s ease, transform 0.12s ease",
-                  "&:hover": { background: editorial.blueWash },
-                  "&:active": { transform: "scale(0.97)" },
-                  "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
-                }}
-              >
-                <Avatar sx={{ ...avatarSx, width: 36, height: 36, fontSize: 12.5 }}>{initials}</Avatar>
-                <Box sx={{ display: { xs: "none", lg: "block" }, minWidth: 0, textAlign: "left" }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 800, lineHeight: 1.25 }} noWrap>
-                    {displayed}
-                  </Typography>
-                  <Typography sx={{ fontSize: 11, lineHeight: 1.25, color: editorial.muted }} noWrap>
-                    {access.readOnly ? "Read only" : roleLabel(role)}
-                  </Typography>
+          <nav className="shell-tabs" aria-label="Portal sections">
+            {tabs.map((tab) => {
+              const active = tab.screen === "manage" ? MANAGE_SCREENS.includes(screen) : screen === tab.screen;
+              return (
+                <Box
+                  key={tab.screen}
+                  component="button"
+                  type="button"
+                  onClick={() => pick(tab.screen)}
+                  aria-current={active ? "page" : undefined}
+                  aria-label={tab.badge > 0 ? `${tab.label}, ${tab.badge} need you` : undefined}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.75,
+                    minHeight: 60,
+                    px: 1.5,
+                    boxSizing: "border-box",
+                    border: 0,
+                    borderBottom: "3px solid",
+                    borderBottomColor: active ? "primary.main" : "transparent",
+                    bgcolor: "transparent",
+                    color: active ? "primary.main" : "text.primary",
+                    font: "inherit",
+                    fontSize: 14,
+                    fontWeight: active ? 800 : 700,
+                    cursor: "pointer",
+                    "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: -3 },
+                  }}
+                >
+                  {tab.label}
+                  {tab.badge > 0 && (
+                    <Box
+                      component="span"
+                      aria-hidden="true"
+                      sx={{
+                        minWidth: 20,
+                        height: 20,
+                        px: 0.75,
+                        boxSizing: "border-box",
+                        borderRadius: radius.full,
+                        bgcolor: "error.main",
+                        color: "common.white",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        lineHeight: "20px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {tab.badge}
+                    </Box>
+                  )}
                 </Box>
-                {/* The chevron only appears where the name beside it does. A plain
-                    <svg> has no breakpoints, so the responsive part rides on a Box. */}
-                <Box sx={{ display: { xs: "none", lg: "block" }, color: editorial.muted }}>
-                  <ExpandMoreIcon size={18} />
-                </Box>
-              </Box>
-            </div>
-          </div>
-        </header>
+              );
+            })}
+          </nav>
+
+          <span className="shell-spacer" />
+
+          <Box
+            component="form"
+            role="search"
+            onSubmit={onSearchSubmit}
+            className="shell-search"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              height: 40,
+              px: 1.5,
+              boxSizing: "border-box",
+              bgcolor: "background.default",
+              border: "1.5px solid",
+              borderColor: "divider",
+              borderRadius: radius.xs,
+              color: "text.secondary",
+              "&:focus-within": { borderColor: "primary.main" },
+            }}
+          >
+            <SearchIcon size={16} />
+            <Box
+              component="input"
+              type="search"
+              ref={searchRef}
+              value={draftQuery}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setDraftQuery(event.target.value)}
+              placeholder="Search forms or PTW-0417"
+              aria-label="Search forms or records"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                border: 0,
+                outline: 0,
+                bgcolor: "transparent",
+                font: "inherit",
+                fontSize: 13.5,
+                fontWeight: 500,
+                color: "text.primary",
+                "&::placeholder": { color: "text.secondary", opacity: 1 },
+              }}
+            />
+            <Box
+              component="kbd"
+              aria-hidden="true"
+              sx={{
+                font: "inherit",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "text.secondary",
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: radius.tag,
+                px: 0.875,
+                lineHeight: "18px",
+              }}
+            >
+              /
+            </Box>
+          </Box>
+
+          {access.canFile && (
+            <Box
+              component="button"
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              sx={{
+                flex: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0.75,
+                position: "relative",
+                height: 40,
+                px: 2,
+                border: 0,
+                borderRadius: radius.xs,
+                bgcolor: "primary.main",
+                // Widens the touch target to 44px without changing the visible 40px button.
+                "&::before": { content: '""', position: "absolute", inset: -2 },
+                color: "primary.contrastText",
+                font: "inherit",
+                fontSize: 14,
+                fontWeight: 800,
+                cursor: "pointer",
+                transition: "filter 0.16s ease",
+                "&:hover": { filter: "brightness(0.95)" },
+                "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
+              }}
+            >
+              <PlusIcon size={16} />
+              Create
+            </Box>
+          )}
+
+          <Box
+            component="button"
+            type="button"
+            onClick={(event: React.MouseEvent<HTMLElement>) => setMenuAnchor(event.currentTarget)}
+            aria-label={`Account options for ${displayed}`}
+            aria-haspopup="menu"
+            aria-controls={menuOpen ? "portal-account-menu" : undefined}
+            aria-expanded={menuOpen}
+            sx={{
+              flex: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              p: 0,
+              border: 0,
+              borderRadius: radius.xs,
+              bgcolor: "transparent",
+              cursor: "pointer",
+              "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 36,
+                height: 36,
+                bgcolor: SUN,
+                color: "text.primary",
+                border: "2px solid",
+                borderColor: "text.primary",
+                fontSize: 12.5,
+                fontWeight: 800,
+              }}
+            >
+              {initials}
+            </Avatar>
+          </Box>
+        </Box>
 
         <Menu
-          id="portal-profile-menu"
-          anchorEl={profileAnchor}
-          open={profileOpen}
-          onClose={() => setProfileAnchor(null)}
+          id="portal-account-menu"
+          anchorEl={menuAnchor}
+          open={menuOpen}
+          onClose={() => setMenuAnchor(null)}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340, borderRadius: "16px" } } }}
+          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340, borderRadius: radius.sm } } }}
         >
           {/* The identity is stated once, in full, before any action — so signing
               out is never done from a guess about which account this is. */}
           <Stack direction="row" spacing={1.5} sx={{ px: 2, pt: 1.75, pb: 1.5, alignItems: "center" }}>
-            <Avatar sx={{ ...avatarSx, width: 40, height: 40, fontSize: 14.5 }}>{initials}</Avatar>
+            <Avatar sx={{ width: 40, height: 40, fontSize: 14.5, bgcolor: SUN, color: "text.primary", border: "2px solid", borderColor: "text.primary", fontWeight: 800 }}>
+              {initials}
+            </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontSize: 13.5, fontWeight: 800 }} noWrap>
                 {displayed}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: editorial.muted }} noWrap>
+              <Typography sx={{ fontSize: 11.5, color: "text.secondary" }} noWrap>
                 {userEmail}
               </Typography>
               <Box
@@ -358,35 +377,29 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   fontWeight: 800,
                   borderRadius: radius.full,
                   border: editorialHairline,
-                  backgroundColor: editorial.blueWash,
-                  color: editorial.pmwBlueDark,
+                  color: "text.primary",
                 }}
               >
-                {roleLabel(role)}
+                {access.readOnly ? "Read only" : roleLabel(role)}
               </Box>
             </Box>
           </Stack>
           <Divider />
-          <MenuItem onClick={() => pick("settings")} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}>
-            <SettingsOutlinedIcon sx={{ fontSize: 18, color: editorial.muted }} />
-            Settings
+          <MenuItem onClick={openAccount} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}>
+            <SettingsOutlinedIcon fontSize="small" />
+            Account
           </MenuItem>
-          <Divider />
-          {/* Authoring lives in pmw-hrform. The link is only offered when
-              VITE_BUILDER_URL is set, and it carries ?site=oshes so the operator
-              lands on THIS site's forms rather than HR's. */}
           {builder && access.canManageCatalogue && (
             <MenuItem
               component="a"
               href={builder}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => setProfileAnchor(null)}
+              onClick={() => setMenuAnchor(null)}
               sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}
             >
               <BuildOutlinedIcon fontSize="small" />
               Form builder
-              <OpenInNewIcon sx={{ fontSize: 12, ml: "auto" }} />
             </MenuItem>
           )}
           <MenuItem
@@ -394,26 +407,28 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             href="/privacy"
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => setProfileAnchor(null)}
+            onClick={() => setMenuAnchor(null)}
             sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}
           >
             <HelpOutlineIcon fontSize="small" />
             Privacy notice
           </MenuItem>
           <Divider />
-          <MenuItem onClick={onSignOut} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700, color: editorial.error }}>
-            <LogoutIcon sx={{ fontSize: 18 }} />
+          <MenuItem onClick={onSignOut} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700, color: "error.main" }}>
+            <LogoutIcon fontSize="small" />
             Sign out
           </MenuItem>
         </Menu>
+      </Box>
 
-        {/* Keyed on the screen so the entrance replays on every navigation rather
-            than only on first mount — which is the point of it: it marks that the
-            content changed, on a phone where there is no other cue. */}
-        <main key={screen} className="shell-body oshes-rise">
-          {children}
-        </main>
-      </div>
+      {/* Keyed on the screen so the entrance replays on every navigation rather
+          than only on first mount — which is the point of it: it marks that the
+          content changed, on a phone where there is no other cue. */}
+      <main key={screen} className="shell-body oshes-rise">
+        {children}
+      </main>
+
+      <FormPickerDialog open={pickerOpen} onClose={() => setPickerOpen(false)} />
     </div>
   );
 }

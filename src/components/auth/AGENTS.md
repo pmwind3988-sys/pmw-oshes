@@ -8,7 +8,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 
 | State | Component | Purpose |
 |-------|-----------|---------|
-| `choice` | `ChoiceScreen` | MSAL login vs guest decision (persisted to localStorage) |
+| `choice` | `SignInScreen` | Signed out: starts Microsoft 365 sign-in |
 | `guest` | `GuestLanding` | Guest mode entry point |
 | `loading` | `LoadingScreen` | Animated progress bar while fetching data |
 | `restricted` | `RestrictedAccessScreen` | Signed-in account lacks SharePoint site access |
@@ -20,13 +20,13 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 
 | Task | File | Notes |
 |------|------|-------|
-| Auth choice | `ChoiceScreen.tsx` | MSAL vs guest toggle — note: checkbox state is NOT wired (decision always persisted) |
+| Sign-in | `SignInScreen.tsx` | The signed-out screen; starts Microsoft 365 sign-in |
 | Guest landing | `GuestLanding.tsx` | Public user landing page |
 | Loading indicator | `LoadingScreen.tsx` | `LinearProgress` with fade-in animation |
 | SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |
 | Wrong tenant | `WrongTenantScreen.tsx` | Identity mismatch — shows current vs expected tenant |
 | Error fallback | `ErrorScreen.tsx` | Catch-all error with configurable retry/re-login callback and optional visual recovery steps |
-| Admin guard | `AdminGuard.tsx` | Wraps protected admin-style routes; shows "Access Denied" + 4s redirect to `/user/dashboard`. Builder routes pass a superuser restriction label. |
+| Admin guard | `AdminGuard.tsx` | Wraps the admin-only routes (`/admin/routing`); a non-admin sees an access-denied notice and is sent to `/portal`. The legacy dashboard redirects are not wrapped, so approvers can still follow them. |
 
 ## Conventions
 
@@ -38,6 +38,5 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 
 ## Anti-Patterns
 
-- `ChoiceScreen.tsx` has `console.log("Choice clicked")` — remove
 - `AdminGuard.tsx` receives the already-computed permission flag from `App.tsx` rather than checking group membership itself. All admin routes pass `isAdmin`.
 - `WrongTenantScreen.tsx` exposes `accounts[0]?.tenantId` (the current tenant) — this is visible to the user; acceptable for debugging

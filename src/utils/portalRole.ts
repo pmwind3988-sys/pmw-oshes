@@ -1,11 +1,11 @@
 import type {
   CatalogueEntry,
   PortalAccess,
-  PortalNavItem,
-  PortalNavSection,
   PortalRecord,
   PortalRole,
   PortalScreen,
+  PortalTab,
+  SubsScope,
 } from "../types";
 import { normalizeEmail } from "./portalPeople";
 
@@ -141,174 +141,59 @@ export function canDeleteRecord(access: PortalAccess): boolean {
   return !access.readOnly && access.isAdmin;
 }
 
-export interface PortalNavCounts {
-  queue: number;
-  allRecords: number;
-  myRecords: number;
-  catalogue: number;
-  audit: number;
+/**
+ * Whether the typed text names this record. The delete stays disabled until it
+ * does: a record with signatures and photos against it is worth more than one
+ * misplaced click. Case and surrounding spaces are forgiven; nothing else is.
+ */
+export function canConfirmDelete(typed: string, reference: string): boolean {
+  const target = reference.trim().toLowerCase();
+  return target !== "" && typed.trim().toLowerCase() === target;
 }
 
 /**
- * The whole portal in one nav, grouped by whose question each page answers.
- *
- * Sections appear when the account has something in them, and only then — the
- * nav is short for a submitter and long for an administrator without either of
- * them being on a different app. Every page an account can reach is reachable
- * from here, so nothing lives behind a role switch.
+ * The three top-level destinations, in the order the navigation shows them.
+ * Manage appears only for an account that reaches one of its pages.
  */
-export function portalSections(access: PortalAccess, counts: PortalNavCounts): PortalNavSection[] {
-  const sections: PortalNavSection[] = [
-    {
-      id: "start",
-      label: "",
-      items: [
-        { screen: "home", label: "Home", count: null, hint: "Everything waiting on you, in one place", caption: "Your overview" },
-      ],
-    },
+export function portalTabs(access: PortalAccess, needsCount: number): PortalTab[] {
+  const tabs: PortalTab[] = [
+    { screen: "home", label: "Your work", badge: 0 },
+    { screen: "subs", label: "Submissions", badge: needsCount },
   ];
-
-  const yours: PortalNavItem[] = [];
-  // Shown to anyone ever assigned, so it does not appear and vanish with the
-  // queue count, and so an admin who also approves is not left without it.
-  if (!access.readOnly && (access.isAssignee || counts.queue > 0)) {
-    yours.push({
-      screen: "queue",
-      label: access.isEvaluator ? "To evaluate" : "To approve",
-      count: counts.queue,
-      hint: access.isEvaluator
-        ? "On your layer now — evaluate, and it routes onward"
-        : "On your layer now — signing releases it to the next approver",
-      caption: "On your layer",
-    });
-  }
-  yours.push({
-    screen: "mine",
-    label: "My submissions",
-    count: counts.myRecords,
-    hint: "Forms you filed, including ones sent from a QR poster with this email",
-    caption: "Filed by you",
-  });
-  if (access.canFile) {
-    yours.push({
-      screen: "file",
-      label: "File a form",
-      count: null,
-      hint: "Pick a form type and fill it in",
-      caption: "Start a new one",
-    });
-  }
-  sections.push({ id: "yours", label: "Your work", items: yours });
-
-  // An approver sees more than their own filings — everything they are on a
-  // layer of — so they get the records page too, even without full oversight.
-  // Without it, anything they had already signed became unreachable.
-  const seesBeyondOwn = access.canSeeEveryRecord || counts.allRecords > counts.myRecords;
-
-  if (seesBeyondOwn) {
-    const oversight: PortalNavItem[] = [];
-    if (access.canSeeOperations) {
-      oversight.push({
-        screen: "today",
-        label: "Today",
-        count: null,
-        hint: "High severity, stuck approvals, and where work is sitting",
-        caption: "Needs attention",
-      });
-    }
-    oversight.push({
-      screen: "subs",
-      label: access.isAuditor ? "Records" : access.canSeeEveryRecord ? "All submissions" : "Records you are on",
-      count: counts.allRecords,
-      hint: access.canSeeEveryRecord
-        ? "Every form instance, whichever door it came through"
-        : "Everything you are on a layer of, including what you have already signed",
-      caption: access.canSeeEveryRecord ? "Every record" : "Records you are on",
-    });
-    if (access.canManageCatalogue) {
-      oversight.push({
-        screen: "cat",
-        label: "Form catalogue",
-        count: counts.catalogue,
-        hint: "What each form does after submit, its SLA, and who can reach it",
-        caption: "Published form types",
-      });
-    }
-    if (access.canSeePeople) {
-      oversight.push({
-        screen: "people",
-        label: "People & roles",
-        count: null,
-        hint: "Who holds which approval role",
-        caption: "Who approves what",
-      });
-    }
-    if (access.canSeeAudit) {
-      oversight.push({
-        screen: "audit",
-        label: "Audit trail",
-        count: counts.audit,
-        hint: "Append-only: every signature, nudge, reassignment and cancellation",
-        caption: "Every action, in order",
-      });
-    }
-    // Its own list, not a form: OSHES's view of the smoking-area posters.
-    if (access.isAdmin || access.isAuditor) {
-      oversight.push({
-        screen: "smoking",
-        label: "Smoking log",
-        count: null,
-        hint: "Who checked out for a smoking break, and for how long",
-        caption: "Smoking breaks",
-      });
-    }
-    sections.push({
-      id: "oversight",
-      label: access.canSeeEveryRecord ? "Oversight" : "Beyond your own filings",
-      items: oversight,
-    });
-  }
-
-  sections.push({
-    id: "account",
-    label: "Account",
-    items: [
-      {
-        screen: "settings",
-        label: "Settings",
-        count: null,
-        hint: "Your account, what you can see, and where you land",
-        caption: "Your account",
-      },
-    ],
-  });
-
-  return sections;
+  if (showsManage(access)) tabs.push({ screen: "manage", label: "Manage", badge: 0 });
+  return tabs;
 }
 
-/** Flat nav, for anything that wants items without their headings. */
-export function portalNav(access: PortalAccess, counts: PortalNavCounts): PortalNavItem[] {
-  return portalSections(access, counts).flatMap((section) => section.items);
+function showsManage(access: PortalAccess): boolean {
+  return access.canSeeOperations || access.canSeePeople || access.canSeeAudit || access.isAdmin;
 }
 
-/**
- * Counts that make every count-conditional nav item appear.
- *
- * `allowedScreens` asks what an account *may* reach, not what it happens to
- * have right now — a queue that is empty this second can fill from a
- * reassignment, and reaching the page then must not bounce back to Home.
- */
-const ANY_COUNTS: PortalNavCounts = { queue: 1, allRecords: 1, myRecords: 0, catalogue: 0, audit: 0 };
+/** The pages inside Manage that this account may open. The sidebar and allowedScreens both read this. */
+export function manageScreens(access: PortalAccess): PortalScreen[] {
+  const screens: PortalScreen[] = [];
+  if (access.canSeePeople) screens.push("people");
+  if (access.canSeeAudit) screens.push("audit");
+  if (access.isAdmin || access.isAuditor) screens.push("smoking");
+  return screens;
+}
 
 /**
  * Screens this account may reach — keeps deep links and saved preferences honest.
  *
- * The form hub is reachable by everyone and appears in no nav section: it is
- * the page Home opens when you pick a form type, and it shows only that form's
- * own doors. Each door is gated where it leads, not here.
+ * Each page is gated where it leads as well; this only decides which screens a
+ * link or a saved preference may name without bouncing back to Home.
  */
 export function allowedScreens(access: PortalAccess): PortalScreen[] {
-  return [...portalNav(access, ANY_COUNTS).map((item) => item.screen), "form"];
+  const screens: PortalScreen[] = ["home", "subs", "settings", "record"];
+  if (showsManage(access)) screens.push("manage", ...manageScreens(access));
+  return screens;
+}
+
+/** The framings of the submissions screen this account may open. */
+export function subsScopes(access: PortalAccess): SubsScope[] {
+  const scopes: SubsScope[] = ["all", "mine"];
+  if (!access.readOnly && access.isAssignee) scopes.push("needs");
+  return scopes;
 }
 
 /**
