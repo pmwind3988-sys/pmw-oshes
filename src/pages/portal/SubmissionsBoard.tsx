@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import type { Theme } from "@mui/material";
 import { TINTS } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
 import type { BoardColumn, BoardColumnId } from "../../utils/boardColumns";
 import { formTint, personInitials, recordTone } from "../../utils/boardColumns";
 import { recordKey } from "../../utils/portalRecords";
-import type { StatusTone } from "../../utils/portalWork";
+import { toneColors, type StatusTone } from "../../utils/portalWork";
 import type { PortalRecord } from "../../types";
 
 /*
@@ -14,15 +15,6 @@ import type { PortalRecord } from "../../types";
  * initials avatar, and the tint a form's square is drawn in. They live here so
  * both views read the same and neither imports the other.
  */
-
-/** Lozenge colours per tone. The tints are the fixed accents; the text is the ink on each. */
-const TONE_STYLE: Record<StatusTone, { backgroundColor: string; color: string }> = {
-  waiting: { backgroundColor: TINTS.amber, color: "#7A4A00" },
-  progress: { backgroundColor: TINTS.blue, color: "#174AA6" },
-  done: { backgroundColor: TINTS.green, color: "#0F5C38" },
-  returned: { backgroundColor: TINTS.red, color: "#9B231B" },
-  neutral: { backgroundColor: TINTS.grey, color: "#5B6577" },
-};
 
 export function StatusLozenge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
   return (
@@ -40,7 +32,8 @@ export function StatusLozenge({ tone, children }: { tone: StatusTone; children: 
         textTransform: "uppercase",
         letterSpacing: "0.03em",
         whiteSpace: "nowrap",
-        ...TONE_STYLE[tone],
+        backgroundColor: toneColors[tone].bg,
+        color: toneColors[tone].fg,
       }}
     >
       {children}
@@ -52,6 +45,7 @@ export function StatusLozenge({ tone, children }: { tone: StatusTone; children: 
 export function PersonAvatar({ name, isYou = false, size = 26 }: { name: string; isYou?: boolean; size?: number }) {
   return (
     <Box
+      component="span"
       aria-hidden="true"
       sx={{
         width: size,
@@ -59,7 +53,7 @@ export function PersonAvatar({ name, isYou = false, size = 26 }: { name: string;
         flex: "none",
         borderRadius: "50%",
         backgroundColor: isYou ? TINTS.amber : TINTS.blue,
-        color: "#1B2540",
+        color: "text.primary",
         fontSize: size < 26 ? 9.5 : 10.5,
         fontWeight: 800,
         display: "inline-flex",
@@ -94,13 +88,13 @@ function BoardCard({
     trailing = <StatusLozenge tone={recordTone(record, userEmail)}>{record.status}</StatusLozenge>;
   } else if (column === "returned") {
     trailing = (
-      <Typography sx={{ ml: "auto", fontSize: 12, fontWeight: 600, color: "text.secondary", whiteSpace: "nowrap" }}>
+      <Typography component="span" sx={{ ml: "auto", fontSize: 12, fontWeight: 600, color: "text.secondary", whiteSpace: "nowrap" }}>
         With filer
       </Typography>
     );
   } else {
     trailing = (
-      <Typography sx={{ ml: "auto", fontSize: 12, fontWeight: 600, color: "text.secondary", whiteSpace: "nowrap" }}>
+      <Typography component="span" sx={{ ml: "auto", fontSize: 12, fontWeight: 600, color: "text.secondary", whiteSpace: "nowrap" }}>
         {`${record.at + 1} of ${record.totalLayers}`}
       </Typography>
     );
@@ -126,14 +120,18 @@ function BoardCard({
         borderRadius: radius.xs,
         cursor: "pointer",
         "&:hover": { borderColor: yours ? "text.primary" : "primary.main" },
-        "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2 },
+        "&:focus-visible": { outline: "3px solid", outlineColor: (theme: Theme) => theme.palette.primary.light, outlineOffset: 2 },
       }}
     >
-      <Typography sx={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35, color: done ? "#3D4657" : "text.primary" }}>
+      <Typography
+        component="span"
+        sx={{ display: "block", fontSize: 14, fontWeight: 700, lineHeight: 1.35, color: done ? "text.secondary" : "text.primary" }}
+      >
         {record.subject}
       </Typography>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", fontSize: 12, fontWeight: 700 }}>
+      <Stack component="span" direction="row" spacing={1} sx={{ alignItems: "center", fontSize: 12, fontWeight: 700 }}>
         <Box
+          component="span"
           aria-hidden="true"
           sx={{ width: 18, height: 18, flex: "none", borderRadius: radius.tag, backgroundColor: formTint(record.listTitle) }}
         />

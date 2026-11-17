@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PortalRecord } from "../types";
 import { boardColumns, doneBeyondWindow, lastMovedAt } from "./boardColumns";
-import { filedWithin } from "./portalRecords";
+import { filedWithin, matchesStatusChoice } from "./portalRecords";
 
 const NOW = new Date("2026-11-17T09:00:00.000Z");
 const DAY = 86_400_000;
@@ -124,5 +124,22 @@ describe("filedWithin", () => {
 
   it("drops a record with no filing date from any dated range", () => {
     expect(filedWithin(record({ id: "14", filedAt: null }), "7d", now)).toBe(false);
+  });
+});
+
+describe("matchesStatusChoice", () => {
+  it("Done holds approved, recorded, cancelled and rejected records, and nothing still moving", () => {
+    for (const status of ["Approved", "Recorded", "Cancelled", "Rejected"] as const) {
+      expect(matchesStatusChoice(record({ id: status, status, done: true }), "settled")).toBe(true);
+    }
+    expect(matchesStatusChoice(record({ id: "p", status: "In approval" }), "settled")).toBe(false);
+    expect(matchesStatusChoice(record({ id: "r", status: "Returned", returned: true }), "settled")).toBe(false);
+  });
+
+  it("still lets a single status word or Still moving match on its own", () => {
+    expect(matchesStatusChoice(record({ id: "a", status: "Returned", returned: true }), "Returned")).toBe(true);
+    expect(matchesStatusChoice(record({ id: "b", status: "In approval" }), "open")).toBe(true);
+    expect(matchesStatusChoice(record({ id: "c", status: "Approved", done: true }), "open")).toBe(false);
+    expect(matchesStatusChoice(record({ id: "d", status: "Approved", done: true }), "all")).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import {
   LayoutGrid as BoardIcon,
   Table as ListIcon,
 } from "../../components/ui/Icons";
+import type { Theme } from "@mui/material";
 import { TINTS } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
 import { MessageCard } from "../../components/simple/MessageCard";
@@ -35,14 +36,23 @@ import {
 import { paginate } from "../../utils/paginate";
 import type { SubsView } from "../../utils/portalPrefs";
 import { subsScopes } from "../../utils/portalRole";
-import { anySla, filedWithin, recordKey, recordMatchesQuery, type FiledRange } from "../../utils/portalRecords";
+import {
+  anySla,
+  filedWithin,
+  matchesStatusChoice,
+  recordKey,
+  recordMatchesQuery,
+  type FiledRange,
+  type StatusChoice,
+} from "../../utils/portalRecords";
 import { formatAgo, hoursBetween } from "../../utils/portalTime";
-import type { PortalRecord, StatFilter, SubsScope } from "../../types";
+import type { PortalRecord, SubsScope } from "../../types";
 import SubmissionsBoard, { PersonAvatar, StatusLozenge } from "./SubmissionsBoard";
 
-const BASE_STATUS_OPTIONS: { value: StatFilter; label: string }[] = [
+const BASE_STATUS_OPTIONS: { value: StatusChoice; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Still moving" },
+  { value: "settled", label: "Done" },
   { value: "In approval", label: "In approval" },
   { value: "Past SLA", label: "Past SLA" },
   { value: "Recorded", label: "Recorded — no approval" },
@@ -89,7 +99,7 @@ function chipSx(on: boolean) {
     border: "1.5px solid",
     borderColor: on ? "primary.main" : "divider",
     backgroundColor: on ? TINTS.blue : "background.paper",
-    color: on ? "#174AA6" : "text.primary",
+    color: on ? "primary.dark" : "text.primary",
     fontSize: 13.5,
     fontWeight: 800,
     textTransform: "none",
@@ -122,7 +132,7 @@ const linkButtonSx = {
   color: "primary.main",
   cursor: "pointer",
   textAlign: "left",
-  "&:focus-visible": { outline: "3px solid #9DBDF5", outlineOffset: 2, borderRadius: radius.tag },
+  "&:focus-visible": { outline: "3px solid", outlineColor: (theme: Theme) => theme.palette.primary.light, outlineOffset: 2, borderRadius: radius.tag },
 } as const;
 
 const visuallyHidden = {
@@ -180,7 +190,7 @@ export default function RecordsScreen() {
     focusSubsScope && scopes.includes(focusSubsScope) ? focusSubsScope : "all",
   );
   const [formFilter, setFormFilter] = useState(focusForm ?? "all");
-  const [statusFilter, setStatusFilter] = useState<StatFilter>(
+  const [statusFilter, setStatusFilter] = useState<StatusChoice>(
     // Text from the shell's bar is unscoped by construction, so a search opens
     // on every status: hiding settled rows would drop matches the operator can
     // see no reason for. Only a plain visit honours the "hide settled" pref.
@@ -210,11 +220,7 @@ export default function RecordsScreen() {
     const instant = new Date();
     return source.filter((record) => {
       if (formFilter !== "all" && record.listTitle !== formFilter) return false;
-      if (statusFilter === "open") {
-        if (record.done || record.returned || !record.hasWorkflow) return false;
-      } else if (statusFilter !== "all" && record.status !== statusFilter) {
-        return false;
-      }
+      if (!matchesStatusChoice(record, statusFilter)) return false;
       if (!filedWithin(record, filedRange, instant)) return false;
       return recordMatchesQuery(record, query);
     });
@@ -226,7 +232,7 @@ export default function RecordsScreen() {
 
   /** Switching to the list for the settled records the board left out. */
   const showSettledInList = () => {
-    setStatusFilter("all");
+    setStatusFilter("settled");
     setPage(1);
     setPrefs({ subsView: "list" });
   };
@@ -284,7 +290,7 @@ export default function RecordsScreen() {
                   textTransform: "none",
                   color: "text.primary",
                   backgroundColor: on ? "background.paper" : "transparent",
-                  boxShadow: on ? "0 1px 2px rgba(27,37,64,0.12)" : "none",
+                  boxShadow: on ? 1 : 0,
                   "&:hover": { backgroundColor: on ? "background.paper" : "action.hover" },
                 }}
               >
@@ -375,7 +381,7 @@ export default function RecordsScreen() {
           label="Status"
           value={statusFilter}
           onChange={(event) => {
-            setStatusFilter(event.target.value as StatFilter);
+            setStatusFilter(event.target.value as StatusChoice);
             setPage(1);
           }}
           sx={fieldSx}
@@ -467,12 +473,28 @@ export default function RecordsScreen() {
                         />
                       </TableCell>
                       <TableCell sx={{ ...cellSx, whiteSpace: "nowrap" }}>
-                        <Box component="button" type="button" sx={{ ...linkButtonSx, whiteSpace: "nowrap" }}>
+                        <Box
+                          component="button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openRecord(record);
+                          }}
+                          sx={{ ...linkButtonSx, whiteSpace: "nowrap" }}
+                        >
                           {record.reference}
                         </Box>
                       </TableCell>
                       <TableCell sx={{ ...cellSx, maxWidth: 340 }}>
-                        <Box component="button" type="button" sx={{ ...linkButtonSx, display: "block", color: "text.primary", fontWeight: 600 }}>
+                        <Box
+                          component="button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openRecord(record);
+                          }}
+                          sx={{ ...linkButtonSx, display: "block", color: "text.primary", fontWeight: 600 }}
+                        >
                           {record.subject}
                         </Box>
                         <Box component="span" sx={{ display: "block", fontSize: 12, fontWeight: 600, color: "text.secondary" }}>

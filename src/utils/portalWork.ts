@@ -1,4 +1,5 @@
 import type { PortalRecord, PortalStatus } from "../types";
+import { TINTS } from "../theme/simple";
 import { recordKey } from "./portalRecords";
 
 /**
@@ -12,6 +13,19 @@ export type WorkTab = "needs" | "mine" | "viewed";
 
 /** The lozenge colour family for a row. */
 export type StatusTone = "waiting" | "progress" | "done" | "returned" | "neutral";
+
+/**
+ * The lozenge colours per tone: the background is a fixed accent tint, and the
+ * text is the ink that reads on it. Every status lozenge in the portal takes
+ * these, so a tone looks the same on Your work, Submissions and the board.
+ */
+export const toneColors: Record<StatusTone, { bg: string; fg: string }> = {
+  waiting: { bg: TINTS.amber, fg: "#7A4A00" },
+  progress: { bg: TINTS.blue, fg: "#174AA6" },
+  done: { bg: TINTS.green, fg: "#0F5C38" },
+  returned: { bg: TINTS.red, fg: "#9B231B" },
+  neutral: { bg: TINTS.grey, fg: "#5B6577" },
+};
 
 /** Rows a tab shows before its "See all" link takes over. */
 export const WORK_ROW_LIMIT = 8;

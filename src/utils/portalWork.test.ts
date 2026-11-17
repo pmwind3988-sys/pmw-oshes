@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PortalRecord, PortalStatus } from "../types";
 import {
   defaultWorkTab,
+  toneColors,
   emptyWorkCopy,
   greetingFor,
   pushRecentRef,
@@ -151,5 +152,14 @@ describe("recentlyViewed", () => {
     const records = [record("1")];
     const found = recentlyViewed(records, ["Permit To Work::9", "Permit To Work::1"]);
     expect(found.map((item) => item.itemId)).toEqual(["1"]);
+  });
+});
+
+describe("toneColors", () => {
+  it("gives every tone a tint background and the ink that reads on it", () => {
+    expect(toneColors.waiting).toEqual({ bg: "#FFF1CC", fg: "#7A4A00" });
+    expect(toneColors.done).toEqual({ bg: "#DDF5E6", fg: "#0F5C38" });
+    expect(toneColors.returned).toEqual({ bg: "#FFE4E0", fg: "#9B231B" });
+    expect(Object.keys(toneColors).sort()).toEqual(["done", "neutral", "progress", "returned", "waiting"]);
   });
 });

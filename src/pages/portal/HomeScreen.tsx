@@ -19,6 +19,7 @@ import {
   recentlyViewed,
   signOffLabel,
   statusTone,
+  toneColors,
   visibleWorkTabs,
   workGreeting,
   WORK_ROW_LIMIT,
@@ -28,13 +29,11 @@ import {
 import type { CatalogueEntry, PortalRecord } from "../../types";
 
 /** Lozenge and row-icon colours per tone. Tints are the fixed accents; the text is the ink on each. */
-const TONE_STYLE: Record<StatusTone, { backgroundColor: string; color: string }> = {
-  waiting: { backgroundColor: TINTS.amber, color: "#7A4A00" },
-  progress: { backgroundColor: TINTS.blue, color: "#174AA6" },
-  done: { backgroundColor: TINTS.green, color: "#0F5C38" },
-  returned: { backgroundColor: TINTS.red, color: "#9B231B" },
-  neutral: { backgroundColor: TINTS.grey, color: "#5B6577" },
-};
+
+/** A lozenge's colours from the shared tone map. */
+function toneStyle(tone: StatusTone): { backgroundColor: string; color: string } {
+  return { backgroundColor: toneColors[tone].bg, color: toneColors[tone].fg };
+}
 
 /** The rotation of tints behind the Start a form icons. */
 const START_TINTS = [TINTS.amber, TINTS.red, TINTS.violet, TINTS.green, TINTS.blue, TINTS.grey];
@@ -63,7 +62,7 @@ function Lozenge({ tone, children }: { tone: StatusTone; children: ReactNode }) 
         textTransform: "uppercase",
         letterSpacing: "0.03em",
         whiteSpace: "nowrap",
-        ...TONE_STYLE[tone],
+        ...toneStyle(tone),
       }}
     >
       {children}
@@ -172,7 +171,7 @@ function WorkRow({ record, tab, onOpen }: { record: PortalRecord; tab: WorkTab; 
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: TONE_STYLE[tone].backgroundColor,
+          backgroundColor: toneColors[tone].bg,
           "& svg": { width: 18, height: 18 },
         }}
       >
@@ -368,7 +367,7 @@ export default function HomeScreen() {
                       justifyContent: "center",
                       fontSize: 11,
                       fontWeight: 800,
-                      ...(queue.length > 0 ? TONE_STYLE.returned : TONE_STYLE.neutral),
+                      ...toneStyle(queue.length > 0 ? "returned" : "neutral"),
                     }}
                   >
                     {queue.length}

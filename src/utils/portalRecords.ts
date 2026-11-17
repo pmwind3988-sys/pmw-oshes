@@ -7,6 +7,7 @@ import type {
   SeverityTone,
   Submission,
 } from "../types";
+import type { StatFilter } from "../types";
 import { describeWorkflow } from "./formWorkflow";
 import { routedAssigneeEmail } from "./layerAssignees";
 import { layerRoleLabel, displayName, firstName, normalizeEmail, type PeopleDirectory } from "./portalPeople";
@@ -102,6 +103,26 @@ export function buildReference(code: string, submission: Submission): string {
  */
 export function recordKey(record: { listTitle: string; itemId: string }): string {
   return `${record.listTitle}::${record.itemId}`;
+}
+
+/**
+ * A choice on the submissions Status filter: any status word, "open" for still
+ * moving, "settled" for Done (records that have stopped moving), or "all".
+ */
+export type StatusChoice = StatFilter | "settled";
+
+/** The statuses the Done choice holds. */
+const SETTLED_STATUSES: readonly PortalStatus[] = ["Approved", "Recorded", "Cancelled", "Rejected"];
+
+/** Whether a record passes a Status choice. */
+export function matchesStatusChoice(
+  record: Pick<PortalRecord, "status" | "done" | "returned" | "hasWorkflow">,
+  choice: StatusChoice,
+): boolean {
+  if (choice === "all") return true;
+  if (choice === "open") return !(record.done || record.returned || !record.hasWorkflow);
+  if (choice === "settled") return SETTLED_STATUSES.includes(record.status);
+  return record.status === choice;
 }
 
 /** The filed-date choices on the submissions filter bar. */
