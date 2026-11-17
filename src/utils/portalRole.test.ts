@@ -122,12 +122,12 @@ describe("navigation", () => {
   const tabLabels = (roleInput: PortalRoleInput, needsCount = 0) =>
     portalTabs(derivePortalAccess(roleInput), needsCount).map((tab) => tab.label);
 
-  it("gives everyone Home and Submissions, and nothing else", () => {
-    expect(tabLabels(input({ userEmail: "sazali@marinekita.com" }))).toEqual(["Home", "Submissions"]);
+  it("gives everyone Your work and Submissions, and nothing else", () => {
+    expect(tabLabels(input({ userEmail: "sazali@marinekita.com" }))).toEqual(["Your work", "Submissions"]);
   });
 
   it("adds Manage for an administrator", () => {
-    expect(tabLabels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toEqual(["Home", "Submissions", "Manage"]);
+    expect(tabLabels(input({ userEmail: "faizal@pmw.gov.my", isAdmin: true }))).toEqual(["Your work", "Submissions", "Manage"]);
   });
 
   it("shows the number waiting on the Submissions tab", () => {

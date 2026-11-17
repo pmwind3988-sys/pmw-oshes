@@ -147,7 +147,7 @@ export function canDeleteRecord(access: PortalAccess): boolean {
  */
 export function portalTabs(access: PortalAccess, needsCount: number): PortalTab[] {
   const tabs: PortalTab[] = [
-    { screen: "home", label: "Home", badge: 0 },
+    { screen: "home", label: "Your work", badge: 0 },
     { screen: "subs", label: "Submissions", badge: needsCount },
   ];
   if (showsManage(access)) tabs.push({ screen: "manage", label: "Manage", badge: 0 });

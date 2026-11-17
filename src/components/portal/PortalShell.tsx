@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { Avatar, Box, Divider, Menu, MenuItem, Stack, Tooltip, Typography } from "@mui/material";
-import { Wrench as BuildOutlinedIcon, ChevronDown as ExpandMoreIcon, HelpCircle as HelpOutlineIcon, LogOut as LogoutIcon, Plus as PlusIcon } from "../ui/Icons";
+import { useEffect, useRef, useState } from "react";
+import { Avatar, Box, Divider, Menu, MenuItem, Stack, Typography } from "@mui/material";
+import {
+  HelpCircle as HelpOutlineIcon,
+  LogOut as LogoutIcon,
+  Plus as PlusIcon,
+  Search as SearchIcon,
+  Settings as SettingsOutlinedIcon,
+  Wrench as BuildOutlinedIcon,
+} from "../ui/Icons";
 import { editorialHairline } from "../../theme/editorial";
 import { SUN } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
@@ -15,13 +22,13 @@ import "../../styles/shell.css";
 /**
  * The shell: a white top bar and the screen beneath it.
  *
- * The bar carries the brand, the three top-level tabs (Home, Submissions and,
- * for those who reach it, Manage), the "File a form" button, and the account.
- * The account pill goes to Settings; its small arrow opens a menu holding the
- * form builder link, the privacy notice and Sign out.
+ * The bar carries the brand, the top-level tabs (Your work, Submissions and,
+ * for those who reach it, Manage), the search, the "Create" button and the
+ * account avatar. The avatar opens a small menu holding Account, the form
+ * builder link (for catalogue managers), the privacy notice and Sign out.
  *
- * Below 760px the tabs drop onto their own row under the brand, which is done
- * in shell.css so first paint is never the wrong layout.
+ * Layout that depends on width (the tabs and search wrapping onto their own
+ * rows below 760px) lives in shell.css so first paint is never the wrong layout.
  */
 
 /** The pages that sit under the Manage tab, so the tab stays lit while one is open. */
@@ -35,10 +42,19 @@ function initialsOf(name: string, email: string): string {
   return (email.trim()[0] ?? "?").toUpperCase();
 }
 
+/** True when a keystroke is already going somewhere that takes text. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+}
+
 export default function PortalShell({ children }: { children: React.ReactNode }) {
-  const { access, role, userName, userEmail, screen, setScreen, queue, onSignOut } = usePortal();
+  const { access, role, userName, userEmail, screen, setScreen, queue, submitSearch, onSignOut } = usePortal();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftQuery, setDraftQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const builder = builderUrl();
   const menuOpen = Boolean(menuAnchor);
@@ -46,7 +62,34 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const initials = initialsOf(userName, userEmail);
   const tabs = portalTabs(access, queue.length);
 
+  // "/" moves the cursor to the search box, as the key hint in it says — unless
+  // the person is already typing somewhere, or the search box is not on screen.
+  useEffect(() => {
+    const onSlash = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTypingTarget(event.target)) return;
+      const input = searchRef.current;
+      if (!input || input.offsetParent === null) return;
+      event.preventDefault();
+      input.focus();
+    };
+    document.addEventListener("keydown", onSlash);
+    return () => document.removeEventListener("keydown", onSlash);
+  }, []);
+
   const pick = (next: PortalScreen) => setScreen(next);
+
+  const onSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const query = draftQuery.trim();
+    if (!query) return;
+    submitSearch(query);
+  };
+
+  const openAccount = () => {
+    setMenuAnchor(null);
+    pick("settings");
+  };
 
   return (
     <div className="shell">
@@ -63,14 +106,17 @@ export default function PortalShell({ children }: { children: React.ReactNode })
       >
         <Box
           sx={{
-            maxWidth: 1160,
+            maxWidth: 1280,
             mx: "auto",
             px: { xs: 2, sm: 3 },
-            py: 1.5,
+            py: 1,
+            minHeight: 60,
+            boxSizing: "border-box",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
-            gap: 1.5,
+            columnGap: 2.5,
+            rowGap: 1,
           }}
         >
           <Box
@@ -97,15 +143,16 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 40,
-                height: 40,
+                width: 34,
+                height: 34,
+                boxSizing: "border-box",
                 borderRadius: radius.full,
                 bgcolor: SUN,
-                border: "2.5px solid",
+                border: "2px solid",
                 borderColor: "text.primary",
               }}
             >
-              <Logo size={22} />
+              <Logo size={18} />
             </Box>
             <Typography sx={{ fontSize: 16, fontWeight: 800, lineHeight: 1.1, whiteSpace: "nowrap" }}>OSHES Forms</Typography>
           </Box>
@@ -123,35 +170,36 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   sx={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 1,
-                    minHeight: 44,
-                    px: 2,
+                    gap: 0.75,
+                    minHeight: 60,
+                    px: 1.5,
+                    boxSizing: "border-box",
                     border: 0,
-                    borderRadius: radius.full,
-                    bgcolor: active ? "text.primary" : "transparent",
-                    color: active ? "background.paper" : "text.primary",
+                    borderBottom: "3px solid",
+                    borderBottomColor: active ? "primary.main" : "transparent",
+                    bgcolor: "transparent",
+                    color: active ? "primary.main" : "text.primary",
                     font: "inherit",
-                    fontSize: 15,
-                    fontWeight: 700,
+                    fontSize: 14,
+                    fontWeight: active ? 800 : 700,
                     cursor: "pointer",
-                    transition: "background-color 0.16s ease",
-                    "&:hover": { bgcolor: active ? "text.primary" : "action.hover" },
-                    "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
+                    "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: -3 },
                   }}
                 >
                   {tab.label}
                   {tab.badge > 0 && (
                     <Box
                       component="span"
-                      aria-label={`${tab.badge} waiting`}
+                      aria-label={`${tab.badge} need you`}
                       sx={{
                         minWidth: 20,
                         height: 20,
                         px: 0.75,
+                        boxSizing: "border-box",
                         borderRadius: radius.full,
                         bgcolor: "error.main",
                         color: "common.white",
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: 800,
                         lineHeight: "20px",
                         textAlign: "center",
@@ -167,14 +215,77 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
           <span className="shell-spacer" />
 
+          <Box
+            component="form"
+            role="search"
+            onSubmit={onSearchSubmit}
+            className="shell-search"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              height: 44,
+              px: 1.5,
+              boxSizing: "border-box",
+              bgcolor: "background.default",
+              border: "1.5px solid",
+              borderColor: "divider",
+              borderRadius: radius.full,
+              color: "text.secondary",
+              "&:focus-within": { borderColor: "primary.main" },
+            }}
+          >
+            <SearchIcon size={16} />
+            <Box
+              component="input"
+              type="search"
+              ref={searchRef}
+              value={draftQuery}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => setDraftQuery(event.target.value)}
+              placeholder="Search forms or PTW-0417"
+              aria-label="Search forms or records"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                border: 0,
+                outline: 0,
+                bgcolor: "transparent",
+                font: "inherit",
+                fontSize: 13.5,
+                fontWeight: 500,
+                color: "text.primary",
+                "&::placeholder": { color: "text.secondary", opacity: 1 },
+              }}
+            />
+            <Box
+              component="kbd"
+              aria-hidden="true"
+              sx={{
+                font: "inherit",
+                fontSize: 11,
+                fontWeight: 700,
+                color: "text.secondary",
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: radius.full,
+                px: 0.875,
+                lineHeight: "18px",
+              }}
+            >
+              /
+            </Box>
+          </Box>
+
           {access.canFile && (
             <Box
               component="button"
               type="button"
               onClick={() => setPickerOpen(true)}
               sx={{
+                flex: "none",
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 0.75,
                 minHeight: 44,
                 px: 2,
@@ -183,39 +294,39 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 bgcolor: "primary.main",
                 color: "primary.contrastText",
                 font: "inherit",
-                fontSize: 15,
-                fontWeight: 700,
+                fontSize: 14,
+                fontWeight: 800,
                 cursor: "pointer",
                 transition: "filter 0.16s ease",
                 "&:hover": { filter: "brightness(0.95)" },
                 "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
               }}
             >
-              <PlusIcon size={18} />
-              File a form
+              <PlusIcon size={16} />
+              Create
             </Box>
           )}
 
           <Box
             component="button"
             type="button"
-            onClick={() => pick("settings")}
-            aria-label={`Account: ${displayed}`}
+            onClick={(event: React.MouseEvent<HTMLElement>) => setMenuAnchor(event.currentTarget)}
+            aria-label={`Account options for ${displayed}`}
+            aria-haspopup="menu"
+            aria-controls={menuOpen ? "portal-account-menu" : undefined}
+            aria-expanded={menuOpen}
             sx={{
+              flex: "none",
               display: "inline-flex",
               alignItems: "center",
-              gap: 1,
-              minHeight: 44,
-              maxWidth: 260,
-              pl: 0.5,
-              pr: 1.5,
+              justifyContent: "center",
+              width: 44,
+              height: 44,
+              p: 0,
               border: 0,
               borderRadius: radius.full,
-              bgcolor: "background.default",
-              color: "text.primary",
-              font: "inherit",
+              bgcolor: "transparent",
               cursor: "pointer",
-              "&:hover": { bgcolor: "action.hover" },
               "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
             }}
           >
@@ -225,7 +336,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 height: 36,
                 bgcolor: SUN,
                 color: "text.primary",
-                border: "2.5px solid",
+                border: "2px solid",
                 borderColor: "text.primary",
                 fontSize: 12.5,
                 fontWeight: 800,
@@ -233,49 +344,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             >
               {initials}
             </Avatar>
-            <Typography
-              sx={{
-                display: { xs: "none", sm: "block" },
-                fontSize: 14,
-                fontWeight: 700,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {displayed}
-            </Typography>
           </Box>
-
-          <Tooltip title="More account options">
-            <Box
-              component="button"
-              type="button"
-              onClick={(event: React.MouseEvent<HTMLElement>) => setMenuAnchor(event.currentTarget)}
-              aria-label="Account options"
-              aria-haspopup="menu"
-              aria-controls={menuOpen ? "portal-account-menu" : undefined}
-              aria-expanded={menuOpen}
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 44,
-                height: 44,
-                flex: "none",
-                border: 0,
-                borderRadius: radius.full,
-                bgcolor: "transparent",
-                color: "text.secondary",
-                cursor: "pointer",
-                "&:hover": { bgcolor: "action.hover", color: "text.primary" },
-                "&:focus-visible": { outline: "3px solid", outlineColor: "primary.main", outlineOffset: 2 },
-              }}
-            >
-              <ExpandMoreIcon size={18} />
-            </Box>
-          </Tooltip>
         </Box>
 
         <Menu
@@ -290,7 +359,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           {/* The identity is stated once, in full, before any action — so signing
               out is never done from a guess about which account this is. */}
           <Stack direction="row" spacing={1.5} sx={{ px: 2, pt: 1.75, pb: 1.5, alignItems: "center" }}>
-            <Avatar sx={{ width: 40, height: 40, fontSize: 14.5, bgcolor: SUN, color: "text.primary", border: "2.5px solid", borderColor: "text.primary", fontWeight: 800 }}>
+            <Avatar sx={{ width: 40, height: 40, fontSize: 14.5, bgcolor: SUN, color: "text.primary", border: "2px solid", borderColor: "text.primary", fontWeight: 800 }}>
               {initials}
             </Avatar>
             <Box sx={{ minWidth: 0 }}>
@@ -319,6 +388,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             </Box>
           </Stack>
           <Divider />
+          <MenuItem onClick={openAccount} sx={{ gap: 1.25, fontSize: 13.5, fontWeight: 700 }}>
+            <SettingsOutlinedIcon fontSize="small" />
+            Account
+          </MenuItem>
           {builder && access.canManageCatalogue && (
             <MenuItem
               component="a"

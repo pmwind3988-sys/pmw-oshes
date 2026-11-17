@@ -40,12 +40,26 @@
   min-width: 0;
 }
 
-/* Below 760px the tabs take a row of their own, beneath the brand. */
+/* Search sits to the left of the Create button on a wide screen, and shrinks
+   before the buttons do. */
+.shell-search {
+  flex: 0 1 280px;
+  min-width: 160px;
+}
+
+/* Below 760px the tabs take a row of their own, beneath the brand, and the
+   search takes the full width on the row after them. */
 @media (max-width: 759.98px) {
   .shell-tabs {
     order: 3;
     flex-basis: 100%;
     overflow-x: auto;
+  }
+
+  .shell-search {
+    order: 4;
+    flex: 1 1 100%;
+    min-width: 0;
   }
 }
 

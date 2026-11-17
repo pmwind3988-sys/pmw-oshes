@@ -229,14 +229,20 @@ describe("SmokingSettingsTab", () => {
 });
 
 describe("PortalShell", () => {
-  it("shows Home, Submissions and Manage to an administrator", () => {
+  it("shows Your work, Submissions and Manage with a Create button to an administrator", () => {
     const html = render(<PortalShell><span /></PortalShell>, contextValue());
-    expect(html).toContain("Home");
+    expect(html).toContain("Your work");
     expect(html).toContain("Submissions");
     expect(html).toContain("Manage");
+    expect(html).toContain("Create");
   });
 
-  it("shows no Manage tab to a submitter, but keeps File a form", () => {
+  it("shows the search box with its placeholder", () => {
+    const html = render(<PortalShell><span /></PortalShell>, contextValue());
+    expect(html).toContain('placeholder="Search forms or PTW-0417"');
+  });
+
+  it("shows no Manage tab to a submitter, but keeps Create", () => {
     const catalogue = [entry()];
     const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
     const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: false, catalogue, records });
@@ -246,10 +252,10 @@ describe("PortalShell", () => {
     );
     expect(html).toContain("Submissions");
     expect(html).not.toContain("Manage");
-    expect(html).toContain("File a form");
+    expect(html).toContain("Create");
   });
 
-  it("offers no File a form to a read-only account", () => {
+  it("offers no Create to a read-only account", () => {
     const catalogue = [entry()];
     const records = [toPortalRecord(submission(), catalogue[0], {}, {}, NOW)];
     const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: true, catalogue, records });
@@ -257,7 +263,7 @@ describe("PortalShell", () => {
       <PortalShell><span /></PortalShell>,
       contextValue({ access, role: access.role, isAdmin: false, catalogue, records }),
     );
-    expect(html).not.toContain("File a form");
+    expect(html).not.toContain("Create");
   });
 });
 
