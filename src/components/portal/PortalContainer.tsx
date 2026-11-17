@@ -5,6 +5,7 @@ import type {
   CatalogueEntry,
   DiscoveredList,
   LoadedConfig,
+  ManageView,
   PortalRecord,
   PortalScreen,
   SharePointClient,
@@ -37,6 +38,8 @@ interface PortalContainerProps {
   spClient: SharePointClient;
   onSignOut: () => void;
   onRefresh: () => void;
+  canRunTestRuns: boolean;
+  formSlugs: Record<string, string>;
 }
 
 /** The screen and scopes a record page was opened from. */
@@ -71,6 +74,8 @@ export default function PortalContainer({
   spClient,
   onSignOut,
   onRefresh,
+  canRunTestRuns,
+  formSlugs,
 }: PortalContainerProps) {
   const [patched, setPatched] = useState<Record<string, Submission>>({});
   /** Keys of records deleted this session — held until the next read from SharePoint. */
@@ -95,6 +100,7 @@ export default function PortalContainer({
   /** Where the record page was opened from, so leaving it returns there. Null after a deep link or a nav click. */
   const [returnTo, setReturnTo] = useState<ReturnPoint | null>(null);
   const [recentRefs, setRecentRefs] = useState<string[]>([]);
+  const [manageView, setManageView] = useState<ManageView>("overview");
   const [toastMessage, setToastMessage] = useState("");
   const [screen, setScreenState] = useState<PortalScreen | null>(() =>
     deepLink.form && deepLink.item ? "record" : (deepLink.screen ?? null),
@@ -271,6 +277,7 @@ export default function PortalContainer({
       subsScope: SubsScope | null = null,
     ) => {
       setScreenState(next);
+      setManageView("overview");
       setFocusForm(formScope);
       setFocusStatus(statusScope);
       setFocusSubsScope(subsScope);
@@ -318,6 +325,10 @@ export default function PortalContainer({
     },
     closeDrawer: leaveRecord,
     recentRefs,
+    canRunTestRuns,
+    formSlugs,
+    manageView,
+    setManageView,
     nudged,
     markNudged: (reference: string) => setNudged((current) => ({ ...current, [reference]: true })),
     applyPatch: (record: PortalRecord, fields: Record<string, unknown>) =>

@@ -3,6 +3,7 @@ import { usePortal } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
 import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "./portal/HomeScreen";
+import ManageScreen from "./portal/ManageScreen";
 import RecordsScreen from "./portal/RecordsScreen";
 import PeopleScreen from "./portal/PeopleScreen";
 import AuditScreen from "./portal/AuditScreen";
@@ -22,10 +23,8 @@ function ScreenBody() {
       return <SmokingLogScreen />;
     case "settings":
       return <SettingsScreen />;
-    // Manage has no page of its own yet; its tab opens Home, which links to each
-    // of the pages inside it.
     case "manage":
-      return <HomeScreen />;
+      return <ManageScreen />;
     // Submissions. Keyed on the scope it was opened with, so arriving from a
     // pressed statistic, the shell's search box or a Home card remounts it with
     // those filters seeded. Without the key React reuses the mounted instance

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
 import { Callout, PageHeader, Widget } from "../../components/Widget";
+import ManageLayout from "../../components/portal/ManageLayout";
 import { usePortal } from "../../contexts/PortalContext";
 import { writeAuditEntry } from "../../utils/portalAudit";
 import { downloadCsv } from "../../utils/csv";
@@ -321,7 +322,8 @@ export default function SmokingLogScreen() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1200 }}>
+    <ManageLayout active="smoking">
+      <Box sx={{ maxWidth: 1200 }}>
       <PageHeader
         title="Smoking log"
         subtitle="every break, from check-out to check-in"
@@ -551,7 +553,8 @@ export default function SmokingLogScreen() {
         onSave={handleResolveSave}
       />
       <DeleteBreakDialog open={!!deleteTarget} target={deleteTarget} busy={busy} onNo={() => setDeleteTarget(null)} onYes={handleDeleteYes} />
-    </Box>
+      </Box>
+    </ManageLayout>
   );
 }
 

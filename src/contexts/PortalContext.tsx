@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type {
   AuditEntry,
   CatalogueEntry,
+  ManageView,
   PortalAccess,
   PortalRecord,
   PortalRole,
@@ -87,6 +88,14 @@ export interface PortalContextValue {
   closeDrawer: () => void;
   /** Records whose drawer was opened this session, newest first, no repeats, at most 8. */
   recentRefs: string[];
+
+  /** Whether this account may run test workflows (the form-builder grant). */
+  canRunTestRuns: boolean;
+  /** Form slugs by list title, so a test run can open the form's public link. */
+  formSlugs: Record<string, string>;
+  /** Which section of Manage is showing: the overview, or the test-run tools. */
+  manageView: ManageView;
+  setManageView: (view: ManageView) => void;
 
   /** Nudges are idempotent per session — the button becomes "Nudged". */
   nudged: Record<string, boolean>;

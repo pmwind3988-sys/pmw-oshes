@@ -2,208 +2,110 @@ import { useState } from "react";
 import { Box, Button, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
 import { editorial } from "../../theme/editorial";
 import { radius } from "../../theme/surfaces";
+import { SUN } from "../../theme/simple";
 import { PageHeader, Widget } from "../../components/Widget";
 import { usePortal } from "../../contexts/PortalContext";
 import { useAppearance } from "../../contexts/AppearanceContext";
 import AppearancePicker from "../../components/dashboard/AppearancePicker";
 import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
-import { accessSummary, allowedScreens, roleLabel } from "../../utils/portalRole";
+import { accessSummary, roleLabel } from "../../utils/portalRole";
 import type { PortalScreen } from "../../types";
 
-/** The name each page goes by in the "Start on" choice. */
-const START_LABELS: Partial<Record<PortalScreen, string>> = {
-  home: "Home",
-  subs: "Submissions",
-  manage: "Manage",
-  people: "People & roles",
-  audit: "Audit trail",
-  smoking: "Smoking log",
-};
+/** The pages the account may open the portal on. Home shows the rest; Submissions is the list of work. */
+const START_OPTIONS: { screen: PortalScreen; label: string }[] = [
+  { screen: "home", label: "Your work" },
+  { screen: "subs", label: "Submissions" },
+];
 
-/** A tonal pill: the secondary action that is not the one primary on the page. */
-const tonalPillSx = {
-  minHeight: 40,
-  px: 2,
-  borderRadius: radius.full,
-  backgroundColor: editorial.pmwBlueSoft,
-  color: editorial.pmwBlueDark,
-  fontWeight: 700,
-  boxShadow: "none",
-  "&:hover": { backgroundColor: editorial.blueWash, boxShadow: "none" },
-} as const;
-
-/** A ghost pill: a filled well with no outline, for the quieter actions. */
-const ghostPillSx = {
-  minHeight: 40,
-  px: 2,
-  borderRadius: radius.full,
-  backgroundColor: editorial.neutralWash,
-  color: editorial.ink,
-  fontWeight: 700,
-  boxShadow: "none",
-  "&:hover": { backgroundColor: editorial.blueWash, boxShadow: "none" },
-} as const;
-
-/** A settings group. Roomier than a dashboard widget, because these are read, not scanned. */
-function Panel({ title, caption, children }: { title: string; caption: string; children: React.ReactNode }) {
-  return (
-    <Widget title={title} caption={caption} sx={{ p: { xs: 2, sm: 2.5 } }}>
-      {children}
-    </Widget>
-  );
+/** Two letters for the avatar, from the name. */
+function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+  return (words[0] ?? "?").slice(0, 2).toUpperCase();
 }
+
+/** A secondary action: a quiet outline, sized like the rest of the controls. */
+const controlSx = { minHeight: 40, px: 2, borderRadius: radius.xs, fontWeight: 700, textTransform: "none" } as const;
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <Stack
-      direction={{ xs: "column", sm: "row" }}
-      spacing={{ xs: 0.25, sm: 2 }}
-      sx={{ py: 1.1, alignItems: { sm: "baseline" } }}
-    >
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 0.25, sm: 2 }} sx={{ py: 1.1, alignItems: { sm: "baseline" } }}>
       <Typography sx={{ fontSize: 12, color: editorial.muted, width: { sm: 180 }, flex: "none" }}>{label}</Typography>
       <Box sx={{ fontSize: 13.5, minWidth: 0 }}>{value}</Box>
     </Stack>
   );
 }
 
-function Toggle({
-  label,
-  caption,
-  checked,
-  onChange,
-}: {
-  label: string;
-  caption: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <Stack
-      direction="row"
-      spacing={2}
-      sx={{ py: 1.25, alignItems: "center", justifyContent: "space-between" }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>{label}</Typography>
-        <Typography sx={{ fontSize: 12, color: editorial.muted }}>{caption}</Typography>
-      </Box>
-      <Switch
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        slotProps={{ input: { "aria-label": label } }}
-      />
-    </Stack>
-  );
-}
-
 /**
- * Settings — the account's own page, which the portal did not previously have.
- *
- * It answers the three questions people actually bring here: who am I signed in
- * as, what is this account allowed to do, and where do I land when I open the
- * portal. Preferences are per-browser (see portalPrefs); permissions are shown
- * but never edited here — they come from SharePoint group membership and from
- * what the form catalogue assigns, and inviting an edit that cannot work would
- * be worse than not offering one.
+ * Account: who is signed in, how the appearance and the start page are set, and
+ * the exits. Permissions are not listed here; the role line says what they mean.
+ * Start page and list preferences are per browser; appearance is for the whole
+ * workspace.
  */
 export default function SettingsScreen() {
-  const {
-    access,
-    role,
-    userName,
-    userEmail,
-    isAdmin,
-    prefs,
-    setPrefs,
-    records,
-    catalogue,
-    audit,
-    refresh,
-    toast,
-    onSignOut,
-  } = usePortal();
+  const { access, role, userName, userEmail, isAdmin, prefs, setPrefs, refresh, toast, onSignOut } = usePortal();
   const { setting: appearance, resolved } = useAppearance();
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-
-  const startOptions = allowedScreens(access)
-    .filter((screen) => screen !== "settings")
-    .map((screen) => ({ screen, label: START_LABELS[screen] ?? screen }));
-
-  const capabilities: { label: string; granted: boolean; why: string }[] = [
-    { label: "File forms", granted: access.canFile, why: "Any signed-in account, unless it is read-only." },
-    {
-      label: access.isEvaluator ? "Evaluate assigned layers" : "Sign assigned layers",
-      granted: access.isAssignee && !access.readOnly,
-      why: "Granted by being named on a layer in the form catalogue, or by a reassignment.",
-    },
-    { label: "See every record", granted: access.canSeeEveryRecord, why: "Administrators, evaluators and auditors." },
-    { label: "Nudge and reassign approvers", granted: access.canChase, why: "Administrators and evaluators." },
-    { label: "Export to CSV", granted: access.canExport, why: "Anyone who can see every record." },
-    { label: "Edit the form catalogue", granted: access.canManageCatalogue, why: "Administrators only." },
-    { label: "Read the audit trail", granted: access.canSeeAudit, why: "Administrators and auditors." },
-  ];
+  const name = userName || userEmail || "Signed in";
 
   return (
     <Box sx={{ maxWidth: 840 }}>
-      <PageHeader
-        title="Settings"
-        subtitle="your account, what it can do, and where the portal opens"
-        meta={roleLabel(role)}
-      />
+      <PageHeader title="Account" />
 
       <Stack spacing={{ xs: 1.5, sm: 2 }}>
-        <Panel title="Account" caption="from your Microsoft 365 sign-in — nothing here is stored by this app">
-          <Row label="Name" value={userName || "—"} />
-          <Row label="Signed in as" value={userEmail || "—"} />
-          <Row label="Role" value={roleLabel(role)} />
-          <Row label="What that means" value={accessSummary(access)} />
-        </Panel>
+        <Widget sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0 }}>
+            <Box
+              aria-hidden="true"
+              sx={{
+                flex: "none",
+                width: 56,
+                height: 56,
+                borderRadius: radius.full,
+                bgcolor: SUN,
+                border: "2px solid",
+                borderColor: "text.primary",
+                display: "grid",
+                placeItems: "center",
+                fontSize: 17,
+                fontWeight: 800,
+                color: "text.primary",
+              }}
+            >
+              {initialsOf(name)}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 18, fontWeight: 800 }} noWrap>
+                {name}
+              </Typography>
+              <Typography sx={{ fontSize: 13, color: "text.secondary" }} noWrap>
+                {userEmail}
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", mt: 0.75 }}>
+                <Box
+                  component="span"
+                  sx={{ fontSize: 11, fontWeight: 800, px: 1, py: 0.4, borderRadius: radius.tag, bgcolor: editorial.blueWash, color: editorial.pmwBlueDark, whiteSpace: "nowrap" }}
+                >
+                  {roleLabel(role)}
+                </Box>
+                <Typography component="span" sx={{ fontSize: 12.5, color: "text.secondary" }}>
+                  {accessSummary(access)}
+                </Typography>
+              </Stack>
+            </Box>
+          </Stack>
+        </Widget>
 
-        <Panel
-          title="What this account can do"
-          caption="derived from SharePoint group membership and from the layers assigned to you — it is not editable here"
-        >
-          {capabilities.map((capability) => (
-            <Row
-              key={capability.label}
-              label={capability.label}
-              value={
-                <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", flexWrap: "wrap" }}>
-                  <Box
-                    component="span"
-                    sx={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      px: 0.9,
-                      py: 0.3,
-                      borderRadius: radius.full,
-                      whiteSpace: "nowrap",
-                      color: capability.granted ? editorial.pmwBlueDark : editorial.muted,
-                      backgroundColor: capability.granted ? editorial.blueWash : "transparent",
-                    }}
-                  >
-                    {capability.granted ? "Yes" : "No"}
-                  </Box>
-                  <Typography component="span" sx={{ fontSize: 12, color: editorial.muted }}>
-                    {capability.why}
-                  </Typography>
-                </Stack>
-              }
-            />
-          ))}
-        </Panel>
-
-        {/* Appearance sits above Preferences because it is the opposite kind of
-            setting — one record for the whole workspace rather than one per
-            browser — and saying so once, here, is clearer than repeating it on
-            each row. */}
-        <Panel
+        {/* Appearance is one record for the whole workspace, not one per browser,
+            so it is said once here rather than repeated on each row. */}
+        <Widget
           title="Appearance"
           caption={
             isAdmin
-              ? "one setting for the whole workspace — changing it changes what everyone sees"
-              : "chosen by an administrator for the whole workspace"
+              ? "One setting for the whole workspace. Changing it changes what everyone sees."
+              : "Chosen by an administrator for the whole workspace."
           }
+          sx={{ p: { xs: 2, sm: 2.5 } }}
         >
           <Row label="Contrast" value={`${resolved.contrast.label} — ${resolved.contrast.note}`} />
           <Row label="Colour" value={`${resolved.color.label} — ${resolved.color.note}`} />
@@ -223,86 +125,68 @@ export default function SettingsScreen() {
             />
           )}
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, pt: 2 }}>
-            <Button variant="text" onClick={() => setAppearanceOpen(true)} sx={tonalPillSx}>
+            <Button variant="outlined" onClick={() => setAppearanceOpen(true)} sx={controlSx}>
               {isAdmin ? "Change appearance" : "View themes"}
             </Button>
           </Stack>
-        </Panel>
+        </Widget>
 
-        <Panel title="Preferences" caption="remembered in this browser only, so a shared machine never carries them over">
-          <Stack sx={{ pt: 0.5 }}>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={2}
-              sx={{ py: 1.25, alignItems: { sm: "center" }, justifyContent: "space-between" }}
+        <Widget title="Open the app on" caption="The page the portal opens on after you sign in. Remembered in this browser only." sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", py: 0.5 }}>
+            <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>Start page</Typography>
+            <TextField
+              select
+              size="small"
+              value={START_OPTIONS.some((option) => option.screen === prefs.startScreen) ? prefs.startScreen : "home"}
+              onChange={(event) => setPrefs({ startScreen: event.target.value as PortalScreen })}
+              sx={{ width: { xs: "100%", sm: 240 }, flex: "none" }}
+              slotProps={{ htmlInput: { "aria-label": "Open the app on" } }}
             >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>Start on</Typography>
-                <Typography sx={{ fontSize: 12, color: editorial.muted }}>
-                  The page the portal opens on. Home shows all the others.
-                </Typography>
-              </Box>
-              <TextField
-                select
-                size="small"
-                value={prefs.startScreen}
-                onChange={(event) => setPrefs({ startScreen: event.target.value as PortalScreen })}
-                sx={{ width: { xs: "100%", sm: 240 }, flex: "none" }}
-                slotProps={{ htmlInput: { "aria-label": "Start on" } }}
-              >
-                {startOptions.map((item) => (
-                  <MenuItem key={item.screen} value={item.screen}>
-                    {item.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Stack>
+              {START_OPTIONS.map((option) => (
+                <MenuItem key={option.screen} value={option.screen}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Stack>
 
-            <Toggle
-              label="Compact tables"
-              caption="Tighter rows, and the second line of each row is dropped."
-              checked={prefs.compactTables}
-              onChange={(compactTables) => setPrefs({ compactTables })}
-            />
-            <Toggle
-              label="Hide settled records by default"
-              caption="Submission tables open on what is still moving. The filter still reaches everything."
+          <Stack direction="row" spacing={2} sx={{ py: 1.25, alignItems: "center", justifyContent: "space-between" }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>Hide settled records by default</Typography>
+              <Typography sx={{ fontSize: 12, color: editorial.muted }}>
+                Submission lists open on what is still moving. The filter still reaches everything.
+              </Typography>
+            </Box>
+            <Switch
               checked={prefs.hideSettled}
-              onChange={(hideSettled) => setPrefs({ hideSettled })}
+              onChange={(event) => setPrefs({ hideSettled: event.target.checked })}
+              slotProps={{ input: { "aria-label": "Hide settled records by default" } }}
             />
           </Stack>
-        </Panel>
+        </Widget>
 
-        <Panel title="Session" caption="the data below was read when you signed in, or when you last refreshed">
-          <Row
-            label="Loaded"
-            value={`${records.length} records · ${catalogue.length} form types · ${audit.length} audit rows`}
-          />
-          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, pt: 2 }}>
-            <Button
-              variant="text"
-              onClick={() => {
-                refresh();
-                toast("Re-reading submissions from SharePoint...");
-              }}
-              sx={ghostPillSx}
-            >
-              Refresh data
-            </Button>
-            <Button variant="text" onClick={onSignOut} sx={ghostPillSx}>
+        <Widget sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  refresh();
+                  toast("Re-reading submissions from SharePoint...");
+                }}
+                sx={controlSx}
+              >
+                Refresh my data
+              </Button>
+              <Button component="a" href="/privacy" target="_blank" rel="noopener noreferrer" sx={{ ...controlSx, color: editorial.muted }}>
+                Privacy notice
+              </Button>
+            </Stack>
+            <Button variant="outlined" color="error" onClick={onSignOut} sx={controlSx}>
               Sign out
             </Button>
-            <Button
-              component="a"
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{ minHeight: 40, color: editorial.muted }}
-            >
-              Privacy notice
-            </Button>
           </Stack>
-        </Panel>
+        </Widget>
       </Stack>
 
       <AppearancePicker open={appearanceOpen} onClose={() => setAppearanceOpen(false)} isAdmin={isAdmin} />

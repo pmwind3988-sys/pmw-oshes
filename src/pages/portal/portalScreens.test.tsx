@@ -12,9 +12,13 @@ import RecordsScreen from "./RecordsScreen";
 import SmokingSettingsTab from "../../components/smoking/SmokingSettingsTab";
 import { OverviewTab } from "../../components/portal/RecordDetail";
 import PortalShell from "../../components/portal/PortalShell";
+import ManageLayout from "../../components/portal/ManageLayout";
+import ManageScreen from "./ManageScreen";
+import AuditScreen from "./AuditScreen";
 import { FormPickerList } from "../../components/portal/FormPickerDialog";
 import type {
   ApprovalLayerConfig,
+  AuditEntry,
   CatalogueEntry,
   PortalRecord,
   SharePointClient,
@@ -142,6 +146,10 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     appendAudit: () => {},
     updateCatalogue: () => {},
     recentRefs: [],
+    canRunTestRuns: false,
+    formSlugs: {},
+    manageView: "overview",
+    setManageView: () => {},
     toast: () => {},
     onSignOut: () => {},
     ...overrides,
@@ -377,5 +385,82 @@ describe("FormPickerList", () => {
     const html = render(<FormPickerList catalogue={[]} onPick={() => {}} />, contextValue());
     expect(html).toContain("No forms yet");
     expect(html).toContain("Forms appear here once they are published.");
+  });
+});
+
+describe("ManageLayout", () => {
+  it("lists Overview, People and approvers, Smoking log, History and Test runs to an administrator", () => {
+    const html = render(
+      <ManageLayout active="overview"><span /></ManageLayout>,
+      contextValue({ canRunTestRuns: true }),
+    );
+    const text = visibleText(html);
+    for (const item of ["Overview", "People and approvers", "Smoking log", "History", "Test runs"]) {
+      expect(text).toContain(item);
+    }
+  });
+
+  it("gives an auditor History and the smoking log, but no People or Test runs", () => {
+    const base = contextValue();
+    const auditor = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: true,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const html = render(
+      <ManageLayout active="audit"><span /></ManageLayout>,
+      contextValue({ access: auditor, isAdmin: false, canRunTestRuns: false }),
+    );
+    const text = visibleText(html);
+    expect(text).toContain("History");
+    expect(text).toContain("Smoking log");
+    expect(text).not.toContain("People and approvers");
+    expect(text).not.toContain("Test runs");
+  });
+});
+
+describe("ManageScreen", () => {
+  it("shows the filed, waiting and late counts, with late only where a form has an SLA", () => {
+    const html = render(<ManageScreen />, contextValue());
+    expect(html).toContain("Filed today");
+    expect(html).toContain("Waiting for a signature");
+    expect(html).not.toContain("Waiting too long");
+
+    const sla = entry({ slaDays: 3 });
+    const withSla = render(
+      <ManageScreen />,
+      contextValue({ catalogue: [sla], records: [toPortalRecord(submission(), sla, {}, {}, NOW)] }),
+    );
+    expect(withSla).toContain("Waiting too long");
+  });
+
+  it("offers the test-run tools, picking a form first, when the account holds the grant", () => {
+    const html = render(<ManageScreen />, contextValue({ manageView: "tests", canRunTestRuns: true }));
+    const text = visibleText(html);
+    expect(text).toContain("Test workflow");
+    expect(text).toContain("Test runs");
+    expect(text).toContain("Permit To Work");
+  });
+
+  it("falls back to the overview when test runs are not granted", () => {
+    const html = render(<ManageScreen />, contextValue({ manageView: "tests", canRunTestRuns: false }));
+    expect(html).toContain("Waiting for a signature");
+    expect(html).not.toContain("Test workflow");
+  });
+});
+
+describe("AuditScreen", () => {
+  it("pages a trail of 80 entries 25 at a time", () => {
+    const audit: AuditEntry[] = Array.from({ length: 80 }, (_, index) => ({
+      at: new Date(2026, 6, 29, 9, index % 60).toISOString(),
+      whenLabel: "",
+      reference: `INC-2607-${String(index).padStart(4, "0")}`,
+      who: "Nurul Aziz",
+      event: "Signed",
+    }));
+    const html = render(<AuditScreen />, contextValue({ audit }));
+    expect(visibleText(html)).toContain("Showing 1–25 of 80");
   });
 });

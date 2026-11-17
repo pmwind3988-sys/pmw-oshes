@@ -2,6 +2,7 @@ export type {
   AuditEntry,
   CatalogueEntry,
   FormVisibility,
+  ManageView,
   PortalAccess,
   PortalChainStep,
   PortalPerson,

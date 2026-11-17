@@ -1360,6 +1360,8 @@ export default function App() {
           spClient={portalSpClient}
           onSignOut={handleSignOut}
           onRefresh={handleRefreshSubmissions}
+          canRunTestRuns={canUseFormBuilder}
+          formSlugs={loadedConfig?.formSlugMap ?? {}}
         />
       </Suspense>
     </ErrorBoundary>

@@ -48,6 +48,9 @@ export type PortalScreen = "home" | "subs" | "manage" | "people" | "audit" | "sm
  */
 export type SubsScope = "all" | "mine" | "needs";
 
+/** The sections of Manage: its overview, or the test-run tools. */
+export type ManageView = "overview" | "tests";
+
 /** One of the three top-level destinations in the portal's navigation. */
 export interface PortalTab {
   screen: "home" | "subs" | "manage";
