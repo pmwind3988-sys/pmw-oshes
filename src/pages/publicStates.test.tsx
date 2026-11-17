@@ -1,48 +1,70 @@
 import { describe, expect, it } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
-import { MessageCard } from "../components/simple/MessageCard";
-import { FORM_STATE_COPY, NOT_YOURS_COPY } from "./publicStates";
+import { formStateFor, NOT_YOURS_STATE } from "./publicStates";
 
-/**
- * Every full-page state a public form or approval link can show is one
- * MessageCard with a plain title. Checked as markup: there is no DOM here.
- */
-describe("public form states", () => {
-  // The error kinds formErrorKind() can return, each with its own screen.
-  const kinds = ["closed", "expired", "notFound", "failed"] as const;
-  const screenFor: Record<(typeof kinds)[number], keyof typeof FORM_STATE_COPY> = {
-    closed: "closed",
-    expired: "expired",
-    notFound: "notFound",
-    failed: "failed",
-  };
-
-  it.each(kinds)("renders the %s error as a message card with its title as the heading", (kind) => {
-    const copy = FORM_STATE_COPY[screenFor[kind]];
-    const markup = renderToStaticMarkup(<MessageCard mood={copy.mood} title={copy.title} body={copy.body} />);
-
-    expect(markup).toContain("<h1");
-    // Static markup escapes apostrophes, so compare against the escaped title.
-    expect(markup).toContain(copy.title.replace(/'/g, "&#x27;"));
+/** The screen each form-link state shows: picture, title, announcement and buttons. */
+describe("formStateFor", () => {
+  it("shows a closed form as a closed picture with a way back home", () => {
+    expect(formStateFor("closed")).toMatchObject({
+      mood: "closed",
+      title: "This form is closed",
+      role: "alert",
+      secondary: { action: "backHome", label: "Back to home" },
+    });
+    expect(formStateFor("closed").primary).toBeUndefined();
   });
 
-  it("uses the agreed titles for each state", () => {
-    expect(FORM_STATE_COPY.notReady.title).toBe("This form isn't ready yet");
-    expect(FORM_STATE_COPY.closed.title).toBe("This form is closed");
-    expect(FORM_STATE_COPY.expired.title).toBe("This form has expired");
-    expect(FORM_STATE_COPY.notFound.title).toBe("We couldn't find this form");
-    expect(FORM_STATE_COPY.failed.title).toBe("We couldn't load this form");
-    expect(FORM_STATE_COPY.signIn.title).toBe("Sign in to open this form");
-    expect(NOT_YOURS_COPY.title).toBe("This one isn't for you");
+  it("shows a form with no published content as not ready", () => {
+    expect(formStateFor("notReady")).toMatchObject({
+      mood: "closed",
+      title: "This form isn't ready yet",
+      role: "alert",
+      secondary: { action: "backHome" },
+    });
   });
 
-  it("gives each state the picture that matches it", () => {
-    expect(FORM_STATE_COPY.notReady.mood).toBe("closed");
-    expect(FORM_STATE_COPY.closed.mood).toBe("closed");
-    expect(FORM_STATE_COPY.expired.mood).toBe("expired");
-    expect(FORM_STATE_COPY.notFound.mood).toBe("notfound");
-    expect(FORM_STATE_COPY.failed.mood).toBe("error");
-    expect(FORM_STATE_COPY.signIn.mood).toBe("locked");
-    expect(NOT_YOURS_COPY.mood).toBe("locked");
+  it("shows a lapsed form as expired", () => {
+    expect(formStateFor("expired")).toMatchObject({
+      mood: "expired",
+      title: "This form has expired",
+      role: "alert",
+    });
+  });
+
+  it("shows a missing form as not found", () => {
+    expect(formStateFor("notFound")).toMatchObject({
+      mood: "notfound",
+      title: "We couldn't find this form",
+      role: "alert",
+    });
+  });
+
+  it("offers Try again when the form fails to load", () => {
+    expect(formStateFor("failed")).toMatchObject({
+      mood: "error",
+      title: "We couldn't load this form",
+      role: "alert",
+      primary: { action: "tryAgain", label: "Try again" },
+      secondary: { action: "backHome" },
+    });
+  });
+
+  it("asks for sign-in with the report link as the alternative", () => {
+    expect(formStateFor("signIn")).toMatchObject({
+      mood: "locked",
+      title: "Sign in to open this form",
+      role: "status",
+      primary: { action: "signIn", label: "Sign in with Microsoft 365" },
+      secondary: { action: "report", label: "Report something without signing in" },
+    });
+  });
+});
+
+describe("NOT_YOURS_STATE", () => {
+  it("is a locked, polite notice with the agreed title", () => {
+    expect(NOT_YOURS_STATE).toMatchObject({
+      mood: "locked",
+      title: "This one isn't for you",
+      role: "status",
+    });
   });
 });

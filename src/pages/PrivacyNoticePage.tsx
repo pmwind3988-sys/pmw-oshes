@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { ArrowLeft as ArrowBackIcon, ShieldCheck as ShieldIcon } from "../components/ui/Icons";
 import { editorial } from "../theme/editorial";
+import { radius } from "../theme/surfaces";
 import {
   PDPA_CONTACT_EMAIL,
   PDPA_CONTROLLER_NAME,
@@ -32,7 +33,18 @@ export default function PrivacyNoticePage() {
           Back
         </Button>
 
-        <Paper sx={{ borderRadius: "18px", overflow: "hidden", border: `1px solid ${editorial.ink}`, boxShadow: "none" }}>
+        <Paper
+          sx={{
+            mx: "auto",
+            maxWidth: 760,
+            backgroundColor: "background.paper",
+            borderRadius: radius.lg,
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: "none",
+          }}
+        >
           {/* The signal yellow is one of the few fills that keeps its hue in
               every theme, so the text on it is pinned to the on-yellow ink
               rather than following the theme's — which inverts to near-white

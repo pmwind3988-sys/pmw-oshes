@@ -56,7 +56,7 @@ import {
 import SignOffBlock from "../components/SignOffBlock";
 import { MessageCard, type MessageAction } from "../components/simple/MessageCard";
 import type { MascotMood } from "../components/simple/Mascot";
-import { NOT_YOURS_COPY } from "./publicStates";
+import { NOT_YOURS_STATE } from "./publicStates";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -274,14 +274,16 @@ function StateScreen({
   message,
   primary,
   details,
+  role,
 }: {
   mood: MascotMood;
   title: string;
   message?: string;
   primary?: MessageAction;
   details?: string;
+  role?: "alert" | "status";
 }) {
-  return <MessageCard mood={mood} title={title} body={message ?? ""} primary={primary} details={details} />;
+  return <MessageCard mood={mood} title={title} body={message ?? ""} primary={primary} details={details} role={role} />;
 }
 
 function valueToText(value: unknown): string {
@@ -902,6 +904,7 @@ export default function EvaluationPage() {
     return (
       <StateScreen
         mood="locked"
+        role="status"
         title="Sign in to open this approval"
         message="You need to sign in with your Microsoft 365 account to access this approval."
         primary={{ label: "Sign in with Microsoft 365", onClick: () => instance.loginRedirect({ ...loginRequest }) }}
@@ -911,11 +914,12 @@ export default function EvaluationPage() {
 
   if (error) {
     if (error === NOT_ASSIGNED_MESSAGE) {
-      return <StateScreen mood="locked" title={NOT_YOURS_COPY.title} message={NOT_YOURS_COPY.body} />;
+      return <StateScreen mood={NOT_YOURS_STATE.mood} title={NOT_YOURS_STATE.title} message={NOT_YOURS_STATE.body} role={NOT_YOURS_STATE.role} />;
     }
     return (
       <StateScreen
         mood="error"
+        role="alert"
         title={isPublic ? "This link can't be used" : "Something went wrong"}
         message={isPublic ? "Check the link, or ask for a new one." : "We couldn't load this approval."}
         details={error}
@@ -928,6 +932,7 @@ export default function EvaluationPage() {
     return (
       <StateScreen
         mood="success"
+        role="status"
         title={nextStepName ? `Signed — sent to ${nextStepName}` : "All done!"}
         message="Your response has been recorded. You may close this page."
       />

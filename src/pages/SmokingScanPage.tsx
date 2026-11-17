@@ -758,9 +758,10 @@ export default function SmokingScanPage() {
             <MessageCard
               fullPage={false}
               mood="error"
+              role="alert"
               title="That didn't go through"
               body={error}
-              primary={{ label: "Try again", onClick: retry }}
+              primary={{ label: "Try again", onClick: retry, disabled: busy }}
             />
           )}
         </Box>

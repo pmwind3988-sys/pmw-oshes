@@ -37,6 +37,16 @@ describe("MessageCard", () => {
     expect(markup).toContain("<h2");
   });
 
+  it("puts the role it is given on the card so screen readers announce it", () => {
+    const alert = renderToStaticMarkup(<MessageCard mood="error" title="Failed" body="Try again." role="alert" />);
+    const status = renderToStaticMarkup(<MessageCard mood="closed" title="Closed" body="Later." role="status" />);
+    const plain = renderToStaticMarkup(<MessageCard mood="hello" title="Hi" body="Welcome." />);
+
+    expect(alert).toMatch(/<div[^>]*role="alert"/);
+    expect(status).toMatch(/<div[^>]*role="status"/);
+    expect(plain).not.toContain("role=");
+  });
+
   it("keeps details hidden until the reader asks for them", () => {
     const markup = renderToStaticMarkup(
       <MessageCard mood="error" title="Something went wrong" body="Try again." details="Error code 502" />,

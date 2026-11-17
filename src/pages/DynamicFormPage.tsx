@@ -32,7 +32,7 @@ import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
 import { Share as IosShareIcon } from "../components/ui/Icons";
 import { MessageCard, type MessageAction } from "../components/simple/MessageCard";
-import { FORM_STATE_COPY, type FormStateKind } from "./publicStates";
+import { formStateFor, type PublicStateKind, type StateButton } from "./publicStates";
 import { radius } from "../theme/surfaces";
 import { alpha, useTheme } from "@mui/material/styles";
 import Logo from "../components/Logo";
@@ -570,35 +570,42 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-/** The one action every public state offers: back to the portal's home. */
-const BACK_HOME: MessageAction = { label: "Back to home", href: "/" };
-
-/** A full-page state for a public form link: one message card with its own copy. */
-function FormState({
-  t, kind, body, primary, secondary, details,
+/** A full-page state for a public form link: the message card for that state, with its buttons wired up here. */
+function PublicState({
+  t, kind, body, details, onTryAgain, onSignIn,
 }: {
   t: typeof LIGHT;
-  kind: FormStateKind;
+  kind: PublicStateKind;
   body?: ReactNode;
-  primary?: MessageAction;
-  secondary?: MessageAction;
   details?: string;
+  onTryAgain?: () => void;
+  onSignIn?: () => void;
 }) {
-  const copy = FORM_STATE_COPY[kind];
+  const state = formStateFor(kind);
+  const button = (b?: StateButton): MessageAction | undefined => {
+    if (!b) return undefined;
+    if (b.action === "tryAgain") return { label: b.label, onClick: onTryAgain };
+    if (b.action === "signIn") return { label: b.label, onClick: onSignIn };
+    if (b.action === "report") return { label: b.label, href: "/report" };
+    return { label: b.label, href: "/" };
+  };
   return (
     <>
       <style>{globalCss(t)}</style>
       <MessageCard
-        mood={copy.mood}
-        title={copy.title}
-        body={body ?? copy.body}
-        primary={primary}
-        secondary={secondary}
+        mood={state.mood}
+        title={state.title}
+        body={body ?? state.body}
+        role={state.role}
+        primary={button(state.primary)}
+        secondary={button(state.secondary)}
         details={details}
       />
     </>
   );
 }
+
+const BACK_HOME: MessageAction = { label: "Back to home", href: "/" };
 
 const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmailDisplay, testRunReview }: { formTitle: string; referenceNo: string; onReset: () => void; t: typeof LIGHT; isTestRun?: boolean; testEmailDisplay?: string; testRunReview?: { href: string; label: string } | null }) => {
   const [referenceCopied, setReferenceCopied] = useState(false);
@@ -678,7 +685,7 @@ export default function DynamicFormPage() {
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
 
-  const [dark, _setDark] = useState(() => { try { return localStorage.getItem("dfp_dark") === "1"; } catch { return false; } });
+  const dark = useTheme().palette.mode === "dark";
   const t = useFormTokens();
 
   useEffect(() => { document.body.style.background = t.bg; document.body.style.color = t.textPrimary; return () => { document.body.style.background = ""; document.body.style.color = ""; }; }, [t]);
@@ -1861,34 +1868,28 @@ export default function DynamicFormPage() {
 
   // A form that loaded without survey content can never be filled in or submitted —
   // say so instead of sitting on a spinner forever.
-  // A form that loaded without survey content can never be filled in or submitted —
-  // say so instead of sitting on a spinner forever.
-  if (!error && !formData?.surveyJson) return <FormState t={t} kind="notReady" secondary={BACK_HOME} />;
+  if (!error && !formData?.surveyJson) return <PublicState t={t} kind="notReady" />;
 
   if (error) {
     const kind = formErrorKind(error);
-    if (kind === "failed") return (
-      <FormState
+    return (
+      <PublicState
         t={t}
-        kind="failed"
-        details={error}
-        primary={{ label: "Try again", onClick: () => window.location.reload() }}
-        secondary={BACK_HOME}
+        kind={kind}
+        details={kind === "failed" ? error : undefined}
+        onTryAgain={() => window.location.reload()}
       />
     );
-    return <FormState t={t} kind={kind} secondary={BACK_HOME} />;
   }
 
   if (!isPublicForm && !isAuthenticated) return (
-    <FormState
+    <PublicState
       t={t}
       kind="signIn"
       body={<><strong style={{ color: t.textPrimary }}>{formTitle || "This form"}</strong> is for PMW staff only. Sign in with your work account to continue.</>}
-      primary={{ label: "Sign in with Microsoft 365", onClick: handleSignIn }}
-      secondary={{ label: "Report something without signing in", href: "/report" }}
+      onSignIn={handleSignIn}
     />
   );
-
 
   return (
     <div style={{ minHeight: "100dvh", background: t.bg, fontFamily: APP_FONT_FAMILY }}>
@@ -1985,7 +1986,7 @@ export default function DynamicFormPage() {
                         }}
                       >
                         <span aria-hidden="true" style={{
-                          width: 26, height: 26, borderRadius: 999, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 26, height: 26, borderRadius: radius.full, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
                           fontSize: 12, fontWeight: 800, background: current ? t.purple : t.chip, color: current ? t.onPrimary : t.textSecond,
                         }}>{index + 1}</span>
                         <span style={{ overflowWrap: "anywhere" }}>{page.title || `Page ${index + 1}`}</span>

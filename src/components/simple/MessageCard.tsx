@@ -22,6 +22,7 @@ export function MessageCard({
   secondary,
   details,
   fullPage = true,
+  role,
 }: {
   mood: MascotMood;
   title: string;
@@ -30,11 +31,14 @@ export function MessageCard({
   secondary?: MessageAction;
   details?: string;
   fullPage?: boolean;
+  /** "alert" for failures, "status" for neutral notices; announced to screen readers. */
+  role?: "alert" | "status";
 }) {
   const [showDetails, setShowDetails] = useState(false);
 
   const card = (
     <Box
+      role={role}
       sx={{
         bgcolor: "background.paper",
         borderRadius: radius.xl,
