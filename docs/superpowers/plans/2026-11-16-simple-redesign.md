@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19, MUI 9, react-router 7, Vitest + Testing Library, Vite.
 
+**Amended 2026-11-17:** Tasks 6–10 now follow the Jira-style canvas artboards (Your work, Submissions list + board, record page with side panel, Manage sidebar); Task 14 swaps the mascot for Corporate Memphis art and runs before Task 6.
+
 **Spec:** `docs/superpowers/specs/2026-11-16-simple-redesign-design.md`. Visual reference: https://claude.ai/artifact/RCLzzsg5SnArk5NcCphmbU (desktop artboards Main, Submissions, Record, Form, Done, Manage, Account, SignIn, Loading, Messages).
 
 ## Global Constraints
@@ -123,88 +125,71 @@
 - [ ] **Step 4:** `npx vitest run src/utils/portalRole.test.ts src/utils/portalDeepLink.test.ts` → PASS.
 - [ ] **Step 5:** Commit `Reduce the portal to Home, Submissions and Manage`.
 
-### Task 6: Top bar shell and form picker
+### Task 6: Jira-style top bar and form picker (rework of commit a267ea4)
 
 **Files:**
-- Modify: `src/components/portal/PortalShell.tsx`, `src/styles/shell.css`, `src/pages/PortalPage.tsx`, `src/devPreview/main.tsx`
-- Create: `src/components/portal/FormPickerDialog.tsx` (logic lifted from `src/pages/portal/FileFormScreen.tsx`, which is then deleted)
-- Test: `src/pages/portal/portalScreens.test.tsx`
+- Modify: `src/components/portal/PortalShell.tsx`, `src/styles/shell.css`, `src/components/portal/FormPickerDialog.tsx` (already exists from a267ea4), `src/pages/portal/portalScreens.test.tsx`
 
 **Interfaces:**
-- Consumes: `portalTabs`, `setScreen`, `submitSearch`.
-- Produces: `FormPickerDialog({ open, onClose }: { open: boolean; onClose: () => void })` listing catalogue forms as tiles that open the published form exactly as `FileFormScreen` does today. Shell layout per canvas: logo + "OSHES Forms", tab pills (active = ink fill), red badge on Submissions, "File a form" button (when `access.canFile`) opening the picker, account pill (initials + name) → `setScreen("settings")`. Search moves into Home and Submissions (removes the bar's search and the "/" shortcut). Below 760px the tabs wrap under the logo; no hamburger. `PortalPage` routes: home, subs, manage, people, audit, smoking, settings.
+- Consumes: `portalTabs`, `setScreen`, `submitSearch`, `FormPickerDialog`.
+- Produces (canvas artboard `Main` header; HTML reference at `.superpowers/sdd/2026-11-16-simple-redesign/canvas/Main.dc.html`): white bar, bottom hairline, content max-width 1280px, min-height 60px. Left: logo chip (34px, SUN, 2px ink border) + "OSHES Forms". Tabs are text links 60px tall with a 3px bottom border — active: `primary.main` border and text, weight 800; inactive: transparent border, `text.primary`. Tab labels: **"Your work"** (screen home), "Submissions" (red count badge when `badge > 0`, with an `aria-label` like "2 need you"), "Manage". Right: global search (40px, light ground, 1.5px hairline border, radius `radius.md`-ish, placeholder "Search forms or PTW-0417", a `/` kbd hint) that submits to `submitSearch`; the **"/" shortcut is restored** (focus the box unless typing in a field); blue **"Create"** button (plus icon, only when `access.canFile`) opening `FormPickerDialog`; 36px avatar button (initials on SUN) opening a small menu with "Account" (→ settings) and "Sign out". Buttons here are 40px tall, radius ~10px (not pills) — the Jira look; keep 44px+ touch targets by padding the clickable area.
+- Below 760px: tabs wrap to their own row, search takes full width on its own row.
 
-- [ ] **Step 1: Failing test** — shell for an admin fixture shows tabs "Home", "Submissions", "Manage"; for a submitter fixture, no "Manage"; pressing "File a form" opens a dialog listing the fixture catalogue's form names.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement; update `devPreview/main.tsx` screen chips to the new screens.
-- [ ] **Step 4:** `npx vitest run src/pages/portal` → PASS.
-- [ ] **Step 5:** Commit `Replace the side rail with a three-tab top bar`.
+- [ ] Step 1: failing tests — admin fixture shows tab "Your work", "Submissions", "Manage" and a "Create" button; submitter has no "Manage"; the search input has placeholder "Search forms or PTW-0417".
+- [ ] Step 2: run → FAIL. Step 3: implement. Step 4: `npx vitest run src/pages/portal && npx tsc -b` → PASS. Step 5: commit `Give the top bar Jira-style tabs, search and Create`.
 
-### Task 7: Home
+### Task 7: Your work (Home)
 
-**Files:**
-- Modify: `src/pages/portal/HomeScreen.tsx`
-- Delete: `src/pages/portal/FormHubScreen.tsx`, `TodayScreen.tsx`, `CatalogueScreen.tsx`
-- Test: `src/pages/portal/portalScreens.test.tsx`
+**Files:** Modify `src/pages/portal/HomeScreen.tsx`; test `src/pages/portal/portalScreens.test.tsx`.
 
 **Interfaces:**
-- Consumes: `FormPickerDialog`, `Mascot`, `TINTS`, `setScreen`, `submitSearch`, `openDrawer`.
-- Produces (canvas "Main"): blue greeting banner ("Good morning/afternoon/evening", "Hi, {first name}", search box submitting to `submitSearch`, `hello` mascot); "File a form" grid of up to 5 catalogue tiles (tint cycles through `TINTS`) plus "All forms" opening the picker — only when `access.canFile`; "Needs you" card listing the first 3 of `queue` with a "Sign" button opening the drawer, plus "See all" → `setScreen("subs", null, null, "needs")` — only when `queue.length > 0`; "Recent" card with the first 5 of `myRecords` and "See all" → `setScreen("subs", null, null, "mine")`. Empty recent → `MessageCard` (`fullPage={false}`, mood `empty`, "Nothing here yet", "Forms you file will show up here.", primary "File a form").
+- Consumes: `FormPickerDialog`, `TINTS`, `setScreen`, `openDrawer`, `queue`, `myRecords`, `records`, `catalogue`.
+- Produces (canvas `Main`): h1 "Your work" + one muted line ("Good morning, {first name}. {n} forms are waiting for your signature." — omit the second sentence when n = 0); a "View all submissions" outline button. "Start a form" section (only `access.canFile`): small uppercase label, grid of up to 4 catalogue cards (tinted 44px icon square, form name, "{n} sign-off(s)" from the chain length or "No sign-off"), and an "All forms" link opening the picker. A white card with tabs **Needs you** (count chip) / **Filed by you** / **Viewed recently**:
+  - Needs you = `queue`; Filed by you = `myRecords`; Viewed recently = records whose drawer was opened this session (keep a small in-memory list in context: `recentRefs: string[]`, newest first, max 8, pushed by `openDrawer`).
+  - Row: 32px tinted icon, subject (bold) over "{reference} · {form} · {submitter}", a status lozenge (uppercase 11px, tinted bg — waiting amber, in approval blue, approved green, returned red, recorded grey), date, and on Needs-you rows a blue "Review" button. Max 8 rows, then "See all" → Submissions with the matching scope.
+  - Default tab: Needs you when it has items, else Filed by you. Hide Needs you for read-only accounts.
+  - Empty tab → `MessageCard fullPage={false}` (Needs you: mood `success`, "You're all caught up", "Nothing is waiting for your signature."; Filed by you: mood `empty`, "Nothing here yet", "Forms you file will show up here.", primary "Create" → picker).
 
-- [ ] **Step 1: Failing tests** — fixture with 2 queue items shows "Needs you" with two "Sign" buttons; empty-queue fixture has no "Needs you"; clicking "See all" under Recent calls `setScreen` with `("subs", null, null, "mine")`.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement and delete the three screens (and any helper used only by them; `npx tsc -b` tells you).
-- [ ] **Step 4:** `npx vitest run src/pages/portal && npx tsc -b` → PASS.
-- [ ] **Step 5:** Commit `Simplify Home to forms, what needs you, and recent filings`.
+- [ ] Step 1: failing tests — default tab logic (pure helper `defaultWorkTab(queueLength, readOnly)`), lozenge tone mapping (pure `statusTone(status: PortalStatus): "waiting" | "progress" | "done" | "returned" | "neutral"`), empty-state titles. Step 2 FAIL → Step 3 implement → Step 4 PASS → Step 5 commit `Make Home a Your work page`.
 
-### Task 8: Submissions — one list, three scopes, pages
+### Task 8: Submissions — list and board
 
-**Files:**
-- Modify: `src/pages/portal/RecordsScreen.tsx`, `src/pages/PortalPage.tsx`
-- Delete: `src/pages/portal/QueueScreen.tsx`
-- Test: `src/pages/portal/portalScreens.test.tsx`
+**Files:** Modify `src/pages/portal/RecordsScreen.tsx`, `src/pages/PortalPage.tsx`; create `src/pages/portal/SubmissionsBoard.tsx`, `src/utils/boardColumns.ts`; tests `src/utils/boardColumns.test.ts`, `src/pages/portal/portalScreens.test.tsx`.
 
 **Interfaces:**
-- Consumes: `subsScopes`, `focusSubsScope`, `Pager`, `paginate`, existing filters/`ExportCsvButton`.
-- Produces (canvas "Submissions"): title, segmented All / Mine / Needs me (badge on Needs me), search, status filter, form filter, Export. Rows: tinted form icon, form name, reference, filed by, date, status pill, trailing "Sign" (Needs me rows, opens drawer) or "Open". Needs-me rows get the ink 2px border. Pager under the table (default 25; size remembered in `prefs` as `pageSize`). Scope, search, status, form or size change → page 1. Empty result → `MessageCard` `fullPage={false}`, mood `empty`, "Nothing matches", "Try a different search or filter." `RecordsScreen` takes no `scope` prop any more; `PortalPage` keys it on `${focusSubsScope}-${focusForm}-${focusStatus}-${searchSeedAt}`.
+- Consumes: `subsScopes`, `focusSubsScope`, `Pager`, `paginate`, `statusTone` (Task 7), existing filters and `ExportCsvButton`.
+- Produces (canvas `Submissions` and `Board`):
+  - Header: h1 "Submissions", a List / Board segmented switch (remembered in `prefs.subsView: "list" | "board"`), Export.
+  - Filter row: search box, chips All / Mine / Needs me (single-select; Needs me hidden when not in `subsScopes`; "Needs me" = `queue`), then dropdown buttons Form, Status, Filed (date range: Any time / Today / Last 7 days / Last 30 days).
+  - List: a real `<table>` — columns: icon, Reference (blue bold link), Summary (subject, with form name under it), Filed by (avatar initials + name), With (current assignee avatar + name, "You" for this account, "—" when done), Status lozenge, Updated. Row click opens the record. `Pager` below (default 25; `prefs.pageSize`). Any filter/scope/size change → page 1.
+  - Board: `boardColumns(records, userEmail): { id: "you" | "progress" | "returned" | "done"; title: string; items: PortalRecord[] }[]` — titles "Waiting for you", "In approval", "Returned", "Done"; Done holds only records settled in the last 14 days (a "Show N more in the list" link switches to List with status filter). Cards: subject, tinted form square, reference, age lozenge (or "x of y" step), assignee avatar; cards waiting for you get the ink 2px border. The board applies the same chips/filters but no paging; each column scrolls on its own. No drag-and-drop (statuses change only through signing).
+  - Empty results → `MessageCard fullPage={false}` mood `notfound`, "Nothing matches", "Try a different search or filter."
 
-- [ ] **Step 1: Failing tests** — fixture of 60 records: 25 rows rendered, "Showing 1–25 of 60"; Next → "Showing 26–50 of 60"; switching to Mine returns to page 1; auditor fixture shows no "Needs me".
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** `npx vitest run src/pages/portal` → PASS.
-- [ ] **Step 5:** Commit `Merge every submissions list into one paged list`.
+- [ ] Step 1: failing tests — `boardColumns` puts a record on your layer in "you", a returned one in "returned", an approved one from 20 days ago nowhere and from 3 days ago in "done"; list of 60 shows "Showing 1–25 of 60"; auditor fixture has no "Needs me" chip. Step 2 FAIL → 3 → 4 PASS → Step 5 commit `Add list and board views to Submissions`.
 
-### Task 9: Record panel
+### Task 9: Record page
 
-**Files:**
-- Modify: `src/components/portal/SubmissionDrawer.tsx`, `src/components/portal/RecordDetail.tsx`, `DeleteRecordDialog.tsx`, `WithdrawDialog.tsx`, `ReassignDialog.tsx`
-- Test: `src/components/portal/recordDetailAnswers.test.tsx`, new `src/components/portal/submissionDrawer.test.tsx`
-
-**Interfaces:**
-- Produces (canvas "Record"): the drawer opens wide (min(1040px, 100vw)); header with back/close, form name, "{reference} · filed by {submitter} on {date}", "Download PDF" (existing split control kept). Two columns that stack under 900px: left "What was filed" (first 6 answers + "See all N answers" expanding the existing Answers view) and Photos; right "Where it is" step list (signed = green tick, current = sun circle with ink border, pending = grey) and the action buttons ("Approve and sign" / "Return with a note" for the current assignee; Withdraw/Cancel/Delete per the existing rules). Timeline stays reachable as a "History" toggle under the steps. **Wire `ReassignDialog`** as a "Change who signs" action for `access.canChase && !record.done` (replaces the reassignment that lived on the retired `/admin/submissions` page). Delete confirmation uses `MessageCard` `fullPage={false}` (mood `delete`, "Delete {reference}?", "This removes the form, its signatures and photos for everyone. It cannot be undone.", "Delete for everyone" danger / "Keep it") while keeping the type-the-reference guard.
-
-- [ ] **Step 1: Failing tests** — for an admin on an in-flight record, "Change who signs" is present; for an auditor no buttons render; delete dialog shows "Delete for everyone" disabled until the reference is typed.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement; existing `recordDetailAnswers.test.tsx` must still pass.
-- [ ] **Step 4:** `npx vitest run src/components/portal` → PASS.
-- [ ] **Step 5:** Commit `Redesign the record panel and bring back reassignment`.
-
-### Task 10: Manage, its tools, and Account
-
-**Files:**
-- Create: `src/pages/portal/ManageScreen.tsx`
-- Modify: `src/pages/portal/PeopleScreen.tsx`, `AuditScreen.tsx`, `SmokingLogScreen.tsx`, `SettingsScreen.tsx`, `src/components/smoking/SmokingLogTable.tsx`, `src/components/smoking/SmokingPaging.tsx`
-- Test: `src/pages/portal/portalScreens.test.tsx`
+**Files:** Modify `src/components/portal/SubmissionDrawer.tsx`, `src/components/portal/RecordDetail.tsx`, `src/pages/PortalPage.tsx`, `src/components/portal/PortalContainer.tsx`, `src/contexts/PortalContext.tsx`, `src/types/portal.ts`, `DeleteRecordDialog.tsx`, `WithdrawDialog.tsx`, `ReassignDialog.tsx`; tests `src/components/portal/recordDetailAnswers.test.tsx`, new `src/components/portal/recordPage.test.tsx`.
 
 **Interfaces:**
-- Consumes: `portalStats`, `TestRunLauncher` / `TestRunPanel` (props `{ open, onClose, form: { Title, Slug } }`), `loadedConfig.formSlugMap` (thread `formSlugs: Record<string,string>` and `canRunTestRuns: boolean` into the context from `App.tsx` → `PortalContainer`), `builderUrl()`.
-- Produces (canvas "Manage"): three count tiles, each a button → Submissions: "forms filed today" (`statusScope` "all"), "waiting for a signature" ("open"), and "waiting too long" ("Past SLA") only when `anySla(catalogue)`. Tool cards (each only when allowed): People and approvers → `people`; Smoking log → `smoking`; History → `audit`; Approval routing → `/admin/routing` (builder superusers, as today); Test runs (when `canRunTestRuns`) → pick a form, then launcher or results; Form builder (external, `builderUrl()`). People/History/Smoking pages get a "Back to Manage" link and `Pager` on their tables (smoking keeps its own paging component restyled to match `Pager`, or switches to it). Account (canvas "Account"): identity card with role pill, Appearance (existing control), "Open the app on" (Home / Submissions), Privacy notice, Refresh my data, red-outlined "Sign out".
+- The record becomes a **page**, not a drawer: add `"record"` to `PortalScreen`. `openDrawer(ref)` keeps its name and now sets screen `"record"` (remembering the previous screen + scopes); `closeDrawer()` returns to it. The deep link from Task 5 therefore lands on the record page. `allowedScreens` includes `"record"` for everyone.
+- Layout (canvas `Record`): breadcrumb "Submissions / {form} / {reference}" (Submissions and form go back to the list, form-scoped); h1 = subject; action row: Download PDF (existing split control), "Change who signs" (`ReassignDialog`, only `access.canChase && !record.done`), a ⋯ menu holding Withdraw/Cancel and Delete per `canWithdrawRecord` / `canDeleteRecord`. Left column: "What was filed" (first 6 answers in a 2-column definition grid, "Show all N answers" expands the existing Answers view), photos grid; **Activity** card with tabs All / Notes / History built from the record's existing timeline (notes = rejection/return reasons and evaluation notes; history = filed, each signature, returns, cancellations). No new write path for notes — the "Add a note" box from the canvas is **not** built (it has no backend); leave it out. Right side panel (300–420px, stacks under 900px): Approve and sign (green) + Return (outline) for the current assignee only; **Details** list (Status lozenge, With, Filed by, Form, Reference, Filed, and Due only when `hasSla`); **Sign-off steps** list (signed = green tick, current = sun circle with ink border, pending = grey ring) with "· {at+1} of {total}"; footer "Filed {date} · Updated {age}".
+- Delete confirmation uses `MessageCard fullPage={false}` (mood `delete`, "Delete {reference}?", "This removes the form, its signatures and photos for everyone. It cannot be undone.", danger "Delete for everyone" / "Keep it") and keeps the type-the-reference guard.
 
-- [ ] **Step 1: Failing tests** — admin fixture: Manage shows "People and approvers", "History", "Smoking log"; auditor fixture: Manage shows "History" and no "Test runs"; clicking "waiting for a signature" calls `setScreen("subs", null, "open", "all")`; History with 80 entries shows a pager.
-- [ ] **Step 2:** Run → FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** `npx vitest run src/pages/portal && npx tsc -b` → PASS.
-- [ ] **Step 5:** Commit `Gather admin tools under Manage and simplify Account`.
+- [ ] Step 1: failing tests — admin on in-flight record sees "Change who signs"; auditor sees no action buttons; breadcrumb text; Due row absent when `hasSla` is false; delete button disabled until the reference is typed (pure `canConfirmDelete(typed, reference)`). Step 2 FAIL → 3 → 4 PASS → Step 5 commit `Turn the record into a page with a details side panel`.
+
+### Task 10: Manage with a sidebar, and Account
+
+**Files:** Create `src/pages/portal/ManageScreen.tsx`, `src/components/portal/ManageLayout.tsx`; modify `PeopleScreen.tsx`, `AuditScreen.tsx`, `SmokingLogScreen.tsx`, `SettingsScreen.tsx`, `src/pages/PortalPage.tsx`, `src/components/smoking/SmokingLogTable.tsx` / `SmokingPaging.tsx`, `src/App.tsx` + `PortalContainer.tsx` (thread `formSlugs` and `canRunTestRuns`); tests `src/pages/portal/portalScreens.test.tsx`.
+
+**Interfaces:**
+- `ManageLayout({ active, children })`: left sidebar (canvas `Manage`) titled "MANAGE" with items Overview (`manage`), People and approvers (`people`, canSeePeople), Approval routing (link `/admin/routing`, builder superusers as today), Smoking log (`smoking`, isAdmin || isAuditor), History (`audit`, canSeeAudit), Test runs (`manage` sub-view, `canRunTestRuns`), divider, Form builder ↗ (`builderUrl()`, when set and `canManageCatalogue`). Active item: tinted `E3EEFF` background, `primary` text. Sidebar stacks above content under 900px.
+- Overview: three count cards (each a button to Submissions): "Filed today" (status "all"), "Waiting for a signature" ("open"), "Waiting too long" ("Past SLA", only when `anySla(catalogue)`, red-tinted). A "Waiting the longest" table (top 5 open records by `hoursOnLayer`: reference + subject, With, Step "x of y", age lozenge) with "Open board" → Submissions board view.
+- Test runs view: pick a form, then open `TestRunLauncher` or `TestRunPanel` (props `{ open, onClose, form: { Title, Slug } }`).
+- People, History and Smoking log render inside `ManageLayout`; their tables use `Pager`.
+- Account (canvas `Account`): identity card (avatar, name, email, role pill), Appearance (existing control), "Open the app on" (Your work / Submissions → `prefs.startScreen`), Privacy notice, Refresh my data, red-outlined Sign out.
+
+- [ ] Step 1: failing tests — admin sidebar lists Overview, People and approvers, Smoking log, History; auditor sidebar has History and no Test runs; "Waiting for a signature" card calls `setScreen("subs", null, "open", "all")`; History with 80 entries shows a pager. Step 2 FAIL → 3 → 4 PASS → Step 5 commit `Gather admin tools under a Manage sidebar and simplify Account`.
 
 ### Task 11: Retire legacy routes
 
@@ -249,3 +234,14 @@
 - [ ] `npm run dev`; open `/preview.html` for each screen (home, subs, manage, people, audit, smoking) in the default and `contrast=midnight` themes, at 1360px and 390px wide; open `/native/demo`. Fix anything unreadable or overflowing.
 - [ ] `npm run build && npm run lint && npx vitest run` green.
 - [ ] Commit fixes `Polish the redesign after a browser pass`.
+
+### Task 14: Corporate Memphis art (replaces the clipboard mascot drawings; run before the Task 6 rework)
+
+**Files:** Modify `src/components/simple/Mascot.tsx`, `src/components/simple/Mascot.test.tsx`.
+
+**Interfaces:**
+- Keeps the exact public API from Task 2: `type MascotMood` (same 11 moods) and `Mascot({ mood, size = 120, className })` rendering one `<svg viewBox="0 0 200 200" aria-hidden="true" focusable="false">` with width/height = size. Every caller keeps working.
+- Art: port the 11 Corporate Memphis scenes from `.superpowers/sdd/2026-11-16-simple-redesign/memphis/memphis-<mood>.svg` (flat, no outlines: a blob backdrop, confetti shapes, one long-limbed figure, one prop). Shared parts (blob, confetti, figure-by-pose, clipboard) are functions; moods are a table — not 11 pasted copies. Colours are the fixed illustration palette (allowed by the mascot exception in constraints.md).
+
+- [ ] Step 1: update tests — viewBox is now "0 0 200 200"; every mood renders a backdrop path and at least one figure group; moods still render distinct markup.
+- [ ] Step 2: run → FAIL. Step 3: implement. Step 4: `npx vitest run src/components/simple && npx tsc -b` → PASS. Step 5: commit `Draw the message art in a Corporate Memphis style`.
