@@ -3,6 +3,7 @@ import {
   queryListItemById,
   updateListItemFields,
 } from "./graphClient.js";
+import { logWarn } from "./logger.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
@@ -407,16 +408,29 @@ export async function deliverWorkflowEmail(
   const outgoing = context.testRun ? redirectTestMessage(message, context.testRun) : message;
   const recipient = typeof outgoing.to === "string" ? outgoing.to : outgoing.to.join(", ");
   const attemptedAt = new Date().toISOString();
+  // Sending the email and noting it on the response row are separate steps, and
+  // only the first is the email. A note that cannot be written must not turn a
+  // delivered email into a failure (the caller would retry and mail the approver
+  // twice), nor replace the reason a send failed with its own.
+  const note = async (attempt: WorkflowEmailAttempt): Promise<WorkflowEmailEntry> => {
+    try {
+      return await persistWorkflowEmailAttempt(token, context, attempt);
+    } catch (noteError) {
+      logWarn("workflow-email", "Could not record the email attempt on the response row", {
+        listTitle: context.listTitle,
+        responseItemId: String(context.responseItemId),
+        layer: context.layer,
+        emailStatus: attempt.status,
+        errorMessage: noteError instanceof Error ? noteError.message : String(noteError),
+      });
+      return recordWorkflowEmailAttempt(undefined, attempt)[String(attempt.layer)];
+    }
+  };
+
   try {
     await sendGraphEmail(token, outgoing);
-    return await persistWorkflowEmailAttempt(token, context, {
-      layer: context.layer,
-      recipient,
-      status: "sent",
-      attemptedAt,
-    });
   } catch (error) {
-    await persistWorkflowEmailAttempt(token, context, {
+    await note({
       layer: context.layer,
       recipient,
       status: "failed",
@@ -425,6 +439,7 @@ export async function deliverWorkflowEmail(
     });
     throw error;
   }
+  return note({ layer: context.layer, recipient, status: "sent", attemptedAt });
 }
 
 function escapeHtml(value: string): string {
