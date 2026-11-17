@@ -20,7 +20,7 @@ import type { PortalRecord } from "../../types";
  * was sitting on is closed so nobody is chased for a signature that is no
  * longer wanted.
  *
- * Shared by the record drawer and the dashboard's waiting table: the copy here
+ * Shared by the record page and the dashboard's waiting table: the copy here
  * is the promise the action makes, and two screens making different promises
  * about the same write is how a reader learns not to trust either.
  */
@@ -31,7 +31,7 @@ export default function WithdrawDialog({
 }: {
   record: PortalRecord | null;
   onClose: () => void;
-  /** Fired after the write lands — the drawer uses it to close itself. */
+  /** Fired after the write lands — the record page uses it to leave itself. */
   onDone?: () => void;
 }) {
   const { spClient, userName, userEmail, applyPatch, appendAudit, toast } = usePortal();

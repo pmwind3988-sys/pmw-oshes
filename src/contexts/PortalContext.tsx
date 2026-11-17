@@ -79,9 +79,11 @@ export interface PortalContextValue {
   prefs: PortalPrefs;
   setPrefs: (changes: Partial<PortalPrefs>) => void;
 
-  /** Reference of the record whose drawer is open, or null. */
+  /** Key of the record the record page shows, or null. */
   drawerRef: string | null;
+  /** Opens a record on the record page, remembering the screen it was opened from. */
   openDrawer: (reference: string) => void;
+  /** Leaves the record page for the screen it was opened from. */
   closeDrawer: () => void;
   /** Records whose drawer was opened this session, newest first, no repeats, at most 8. */
   recentRefs: string[];

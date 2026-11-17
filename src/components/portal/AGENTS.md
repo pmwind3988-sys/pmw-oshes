@@ -8,8 +8,8 @@
 | Context assembly | `PortalContainer.tsx` | Builds catalogue → records → access, and owns `screen` / `focusForm` / `focusStatus` / the search seed. The only place portal state is held. |
 | Nav column, sticky bar, profile | `PortalShell.tsx` | pmw-it's shell: a branded column of labelled destinations (an off-canvas drawer below 1024px, sticky above — switched in `../../styles/shell.css`, not by a width check), a sticky bar carrying search and the account, and the canvas below. |
 | Record detail — layout | `RecordDetail.tsx` | `OverviewTab`, `AnswersTab`, `ApprovalsTab`, `TimelineTab`, plus `DetailRow` / `SoftCard`. No actions here. |
-| Record detail — actions | `SubmissionDrawer.tsx` | Tabbed drawer: gating, sign/return, the PDF split control, and the pinned action bar. |
-| Withdraw / delete confirmations | `WithdrawDialog.tsx`, `DeleteRecordDialog.tsx` | Shared by the drawer and `TodayScreen`'s waiting table, so one write has one set of promises. |
+| Record page — actions and page | `RecordPage.tsx` | The record as a page (screen `"record"`): the action row, the side panel, gating, sign/return, and the PDF split control. `openDrawer(ref)` opens it and `closeDrawer()` returns to where it was opened from. |
+| Withdraw / delete confirmations | `WithdrawDialog.tsx`, `DeleteRecordDialog.tsx` | Shared by the record page and `TodayScreen`'s waiting table, so one write has one set of promises. |
 | Interactive statistics | `PortalStats.tsx` | `StatTile`, `StatTileRow`, `StatusMix`, `IntakeChart`, `BarRows`, `DonutGauge`, `axisTicks`. |
 | Card, page header, table, task row | `../Widget.tsx` | Shared with `src/components/dashboard/`. See "One card shape" below. |
 | Radii and card recipes | `../../theme/surfaces.ts` | `radius`, `panelSx`, `sunkenSx`, `liftSx`, `gridline`. |
@@ -56,10 +56,10 @@ is the honest drawing.
 - **A statistic is a button.** Every count rendered by `PortalStats.tsx` takes an `onClick` that opens the rows it counted, via `setScreen(screen, formScope, statusScope)`. A count with no list behind it is a dead end — don't add one.
 - **Counts and filters share one vocabulary.** Both are `StatFilter` (`src/types/portal.ts`), so a tile cannot count one way and filter another. `portalStats()` in `src/utils/portalStats.ts` is the single pass that produces them.
 - **Navigation states its own scope.** `setScreen` takes the form and status scope as arguments and clears them when they are not passed, so a nav click cannot inherit a form hub's filter. `PortalPage` keys `RecordsScreen` on that scope so it remounts with the filters seeded.
-- **Layout and actions are separate files.** `RecordDetail.tsx` decides how a record *reads*; `SubmissionDrawer.tsx` decides what this account may *do* with it. That is what lets the same detail serve an approver with three buttons and an audit account with none.
-- **One write, one dialog.** `WithdrawDialog` and `DeleteRecordDialog` own the copy and the call for those two actions, and both the drawer and `TodayScreen` render them. The drawer used to carry its own inline pair, which is how the same delete came to be described two ways.
+- **Layout and actions are separate files.** `RecordDetail.tsx` decides how a record *reads* (the answers, the timeline, the summary tables); `RecordPage.tsx` lays the page out and decides what this account may *do* with it. That is what lets the same detail serve an approver with three buttons and an audit account with none.
+- **One write, one dialog.** `WithdrawDialog` and `DeleteRecordDialog` own the copy and the call for those two actions, and both the record page and `TodayScreen` render them. The page used to carry its own inline pair, which is how the same delete came to be described two ways.
 - **Who may withdraw, cancel or delete is decided once.** `canWithdrawRecord()`, `withdrawLabel()` and `canDeleteRecord()` in `src/utils/portalRole.ts`. Written out per screen, these drifted — one offered a withdraw the other refused.
-- **Nudge and reassign have no button.** `nudgeApprover()` / `reassignLayer()` and `ReassignDialog` are still in the tree, and `access.canChase` still resolves, but nothing renders them since the waiting table's two slots went to withdraw and delete. Wire them somewhere before advertising them again.
+- **Reassign is "Change who signs" on the record page.** `ReassignDialog` is rendered there for `access.canChase && !record.done`. `nudgeApprover()` is still in the tree with no button; wire it somewhere before advertising it again.
 - **Cancel keeps the record; delete ends it.** `cancelSubmission()` marks the record void and leaves it readable — that is the answer for a duplicate or a withdrawn filing. `deleteSubmission()` is administrators only and removes the item with every signature, photo, attachment, PDF and matrix row belonging to it (`hardDeleteSubmission` in `sharepointClient.ts` does the sweep). It is gated behind typing the reference, and its audit row is the only thing left afterwards — so it always writes one.
 
 ## A withdrawal has to close the layer, not just relabel the record
@@ -86,7 +86,7 @@ download button should do.
 ## SLA is opt-in — do not reintroduce a default
 A form has an SLA only where its layer or its `LayerConfig` sets `slaDays`. `layerSlaDays()` returns **0** otherwise, `hasSla` is false on both `CatalogueEntry` and `PortalRecord`, and every SLA affordance is then absent — not zero, not "none", absent:
 
-- no SLA card in `OverviewTab`, no header stat in the drawer
+- no SLA card or header stat on the record page; the Details list shows a "Due" row only when `hasSla`
 - no "Past SLA" tile, status bucket, or filter option
 - `slaNote` is empty; screens use `waitNote`, which falls back to the plain age on the layer
 - `TodayScreen`'s stuck panel becomes "Longest waits"

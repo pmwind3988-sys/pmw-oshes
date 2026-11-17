@@ -7,7 +7,7 @@ import { buildTheme } from "../theme";
 import { CONTRAST_THEMES, DEFAULT_APPEARANCE, applyAppearance, type AppearanceSetting } from "../theme/appearance";
 import { PortalProvider } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
-import SubmissionDrawer from "../components/portal/SubmissionDrawer";
+import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "../pages/portal/HomeScreen";
 import RecordsScreen from "../pages/portal/RecordsScreen";
 import PeopleScreen from "../pages/portal/PeopleScreen";
@@ -38,6 +38,7 @@ const SCREENS = {
   manage: <HomeScreen />,
   people: <PeopleScreen />,
   audit: <AuditScreen />,
+  record: <RecordPage />,
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
   // MSAL session. Nothing here can stand in for that.
   // The smoking log itself reads SharePoint directly; its Totals dashboard is
@@ -69,8 +70,14 @@ function Harness() {
       if (next in SCREENS) setScreen(next as ScreenKey);
     },
     drawerRef,
-    openDrawer: (reference) => setDrawerRef(reference),
-    closeDrawer: () => setDrawerRef(null),
+    openDrawer: (reference) => {
+      setDrawerRef(reference);
+      setScreen("record");
+    },
+    closeDrawer: () => {
+      setDrawerRef(null);
+      setScreen("home");
+    },
   });
 
   const chip = (on: boolean) => ({
@@ -113,7 +120,6 @@ function Harness() {
       <MemoryRouter>
         <PortalProvider {...value}>
           <PortalShell>{SCREENS[screen]}</PortalShell>
-          <SubmissionDrawer />
         </PortalProvider>
       </MemoryRouter>
     </ThemeProvider>

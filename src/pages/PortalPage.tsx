@@ -1,7 +1,7 @@
 import { Alert, Snackbar } from "@mui/material";
 import { usePortal } from "../contexts/PortalContext";
 import PortalShell from "../components/portal/PortalShell";
-import SubmissionDrawer from "../components/portal/SubmissionDrawer";
+import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "./portal/HomeScreen";
 import RecordsScreen from "./portal/RecordsScreen";
 import PeopleScreen from "./portal/PeopleScreen";
@@ -12,6 +12,8 @@ import SettingsScreen from "./portal/SettingsScreen";
 function ScreenBody() {
   const { screen, focusForm, focusStatus, focusSubsScope, searchSeedAt } = usePortal();
   switch (screen) {
+    case "record":
+      return <RecordPage />;
     case "people":
       return <PeopleScreen />;
     case "audit":
@@ -37,8 +39,8 @@ function ScreenBody() {
 }
 
 /**
- * The portal: sidebar, the current role screen, the detail drawer, and a single
- * toast slot shared by every action.
+ * The portal: sidebar, the current screen (a record opens as one of them), and a
+ * single toast slot shared by every action.
  */
 export default function PortalPage({ toastMessage, onCloseToast }: { toastMessage: string; onCloseToast: () => void }) {
   return (
@@ -46,7 +48,6 @@ export default function PortalPage({ toastMessage, onCloseToast }: { toastMessag
       <PortalShell>
         <ScreenBody />
       </PortalShell>
-      <SubmissionDrawer />
       <Snackbar
         open={Boolean(toastMessage)}
         autoHideDuration={3400}

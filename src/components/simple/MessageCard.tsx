@@ -26,7 +26,7 @@ export function MessageCard({
   mood: MascotMood;
   title: string;
   body: ReactNode;
-  primary?: MessageAction & { tone?: "primary" | "danger" };
+  primary?: MessageAction & { tone?: "primary" | "danger"; disabled?: boolean };
   secondary?: MessageAction;
   details?: string;
   fullPage?: boolean;
@@ -63,6 +63,7 @@ export function MessageCard({
           color={primary.tone === "danger" ? "error" : "primary"}
           href={primary.href}
           onClick={primary.onClick}
+          disabled={primary.disabled}
           fullWidth
           sx={{ mt: 3, height: 48, borderRadius: radius.full, textTransform: "none", fontWeight: 600, fontSize: 16 }}
         >
