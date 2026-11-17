@@ -2,7 +2,7 @@
  * resolveAssignee.ts — turns one layer's `assignee` into the people who may act.
  *
  * This logic previously existed three times over (`api/submit-form.ts`,
- * `src/pages/DynamicFormPage.tsx`, `src/components/builder/ApprovalDashboard.tsx`)
+ * `src/pages/DynamicFormPage.tsx`, the portal approval flow)
  * and had already drifted between the copies. It lives here once, as a pure
  * function: everything that needs the network — the directory lookup and
  * distribution-list expansion — arrives through `ports`, because the browser

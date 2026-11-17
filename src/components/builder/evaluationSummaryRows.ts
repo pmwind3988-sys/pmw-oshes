@@ -2,7 +2,7 @@
  * evaluationSummaryRows.ts — which rows an evaluation layer's summary shows.
  *
  * Kept apart from the component so it can be tested directly, the same way
- * `approvalDashboardLayerProgress.ts` sits beside `ApprovalDashboard.tsx`.
+ * like the other helpers in this folder that have unit tests beside them.
  */
 
 export interface EvaluationFieldDefinition {

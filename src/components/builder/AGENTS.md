@@ -10,10 +10,8 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Per-item reassignment UI | `WorkflowAssignmentEditor.tsx` | Layer picker + reason. Written to `WorkflowAssignmentData`; `L{n}_Email` remains authoritative. No screen renders it since the approval workspace was retired. |
 | Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results. Used by `EvaluationPage` |
 | Read-only submission preview | `ReadOnlySubmissionPreview.tsx` | Used by `EvaluationPage` so a reviewer sees what was submitted |
-| Layer progress derivation | `approvalDashboardLayerProgress.ts` | Pure — has unit tests |
 | Test run launcher | `TestRunLauncher.tsx` | "Test workflow" on each form card in Manage, for form builders (`canRunTestRuns`, i.e. `resolveFormBuilderAccess`). Mints a signed ticket (`mint-test-ticket` on `/api/submit-form`) and opens `/form/{slug}?testTicket=…` ("Fill in myself") or `…&simulate=1` ("Simulate submission"): the form fills itself with `sampleAnswersFor` (signature pads signed with `SAMPLE_SIGNATURE`, file uploads never invented), ticks consent, submits once and then offers a link to step 1. A form needing a real file stops with the gaps highlighted instead of retrying. `simulate` is ignored without a ticket, so a real link cannot submit itself. Not an authoring tool: it only rehearses an already-published form. |
 | Test run panel | `TestRunPanel.tsx` | "Test runs" on the same card. Lists `IsTest` rows with each run's checklist (`TestRunLog` merged with the row via `testRunProgress.ts`), renders the PDF in the browser (`record-test-run-step`), deletes through `delete-test-runs`, which re-checks `IsTest` server-side. |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |

@@ -5,7 +5,8 @@ import { TINTS } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
 import type { BoardColumn, BoardColumnId } from "../../utils/boardColumns";
-import { formTint, personInitials, recordTone } from "../../utils/boardColumns";
+import { formTint, recordTone } from "../../utils/boardColumns";
+import { initialsOf } from "../../utils/portalPeople";
 import { recordKey } from "../../utils/portalRecords";
 import { toneColors, type StatusTone } from "../../utils/portalWork";
 import type { PortalRecord } from "../../types";
@@ -61,7 +62,7 @@ export function PersonAvatar({ name, isYou = false, size = 26 }: { name: string;
         justifyContent: "center",
       }}
     >
-      {personInitials(name)}
+      {initialsOf(name)}
     </Box>
   );
 }

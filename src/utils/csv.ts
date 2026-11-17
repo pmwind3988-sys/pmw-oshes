@@ -3,7 +3,7 @@
  *
  * Quoting follows RFC 4180: every cell is quoted and embedded quotes are
  * doubled. Writing `"${value}"` without that doubling silently corrupts any row
- * containing a quote character, which is what ResponseViewer used to do.
+ * containing a quote character, which is what the old per-screen exports used to do.
  */
 
 /** Byte-order mark. Built from its code point so the source stays plain ASCII. */

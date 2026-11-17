@@ -31,14 +31,6 @@ export function formTint(listTitle: string): string {
   return FORM_TINTS[hash % FORM_TINTS.length];
 }
 
-/** "Hafiz Mustafa" becomes "HM"; a single word takes its first two letters. */
-export function personInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return "?";
-}
-
 /** The record's tone: a record on this account's layer reads as waiting for you, whatever its status word. */
 export function recordTone(record: PortalRecord, userEmail: string): StatusTone {
   return isOnYourLayer(record, userEmail) ? "waiting" : statusTone(record.status);

@@ -30,8 +30,8 @@
 | Public form uploads | `publicFileUpload.ts` | `uploadPublicAttachments()` — sends a guest submission's files ahead of it in pieces, then swaps each answer for the stored addresses |
 | PDF letterhead identity | `../config/company.ts` | `COMPANY` — name/address/contact/logo from `VITE_COMPANY_*`. Blank fields are omitted from the page, never guessed |
 | CSV response export | `formResponseCsv.ts` | `buildFormResponseCsv()` — pure. Every answer in form order, per-layer approval columns, Malaysian times, numbers bare, pictures as base64-or-link, plus `extra` for the columns a screen derives. **The one place a cell's shape is decided** — do not format for CSV anywhere else |
-| CSV export (per form) | `formResponseExport.ts` | `buildFormResponseExport()` — re-reads the response list in full (no `$select`), the schema per version, and matrix child rows grouped by parent. Used by `ResponseViewer` |
-| CSV export (dashboard) | `dashboardResponseCsv.ts` | `submissionToCsvRow()` translates a `Submission` into the shared export shape; `buildDashboardSubmissionExport()` adds the fetched pictures. Used by `AdminHomePage`, and by `portalExport.ts` for the same submissions |
+| CSV export (per form) | `formResponseExport.ts` | `buildFormResponseExport()` — re-reads the response list in full (no `$select`), the schema per version, and matrix child rows grouped by parent. |
+| CSV export (dashboard) | `dashboardResponseCsv.ts` | `submissionToCsvRow()` translates a `Submission` into the shared export shape; `buildDashboardSubmissionExport()` adds the fetched pictures. Used by `portalExport.ts` for the same submissions |
 | CSV export (portal) | `portalExport.ts` | `buildPortalRecordsCsv()` / `buildAuditCsv()` pure, `exportRecordsCsv()` / `exportAuditCsv()` download. Records go out whole — the portal's derived columns (stage, age on layer, SLA) ride in `extra`, and the chain is read through `recordLayerResults` so a layer still waiting appears |
 | Export pictures | `exportImageData.ts` | `collectExportImageData(token, rows)` — walks answers, matrix rows, signatures and evaluation answers, fetches each source once, returns `source → base64` for `ResponseCsvOptions.imageData`. Capped, and says what it could not carry |
 | Image → base64 | `sharepointImageData.ts` | `imageSourceToDataUrl()`, `hydrateImageValue()`, `imageSourceFromString()`, the byte sniffers. Shared by the PDF and the CSV so one signature cannot render two ways |
@@ -39,14 +39,13 @@
 | Layer sign-off wording | `signOff.ts` | `signOffVerdictFromStatus()`, `signOffLabel()`, `signOffName()`, `signOffPosition()` — "Approved By / Evaluated By / Rejected By", name, post. Shared by the review page, My Submissions and the PDF. UI block: `components/SignOffBlock.tsx`. See "Who signed a layer" below |
 | Signed-in signer stamp | `layerSigner.ts` | `readSignerIdentity()` / `stampLayerSigner()` — writes `L{n}_ActedBy`, `L{n}_ActedByName`, `L{n}_ActedByPosition` for decisions made from the signed-in review page (public links are stamped by `api/evaluate.ts`) |
 | Layer sequence | `layerSequence.ts` | `layerSequenceFromConfig()` — which layers a submission went through, manual branches resolved. Shared by the PDF and the CSV so they cannot disagree |
-| Question name / stored key | `responseKeys.ts` | `createResponseKeyResolver()` (name to key) and `createQuestionNameResolver()` (key back to name) — the one place that knows a SharePoint column's internal name stops at 32 characters, so `workPerformerNameInternalExternal` is stored as `workPerformerNameInternalExterna`. Used by `formSubmissionLayout.ts`, `ReadOnlySubmissionPreview.tsx` and `answerClassification.ts` |
+| Question name / stored key | `responseKeys.ts` | `createResponseKeyResolver()` (name to key) and `createQuestionNameResolver()` (key back to name) — the one place that knows a SharePoint column's internal name stops at 32 characters, so `workPerformerNameInternalExternal` is stored as `workPerformerNameInternalExterna`. Used by `formSubmissionLayout.ts` and `ReadOnlySubmissionPreview.tsx` |
 | Answer vs. plumbing | `responseSystemFields.ts` | `responseAnswerFields()`, `isResponseSystemField()` — the one list of workflow/SharePoint columns. Layer columns match by pattern, so a fourth layer is not mistaken for a question |
 | Job apply PDF | `JobApplyPdfDocument.tsx` | React-PDF document for job application PDF |
 
 ## Test runs (browser side)
 - `testRun.ts` (`isTestRow`), `testRunTrail.ts` (byte-for-byte twin of `api/_utils/testRunTrail.ts` — keep in step), `testRunProgress.ts` (checklist + verdict derived from the row as well as the trail), `testRunLaunch.ts` (`sampleAnswersFor`, `testRunFormUrl`, `testRunSharePointScope`), `testColumnProbeCache.ts` (`readTestRowIds`, the optional `IsTest` read).
 - The browser never asserts test-ness. It forwards the ticket (`testTicket`) to `submit-form`, `next-reference` and `send-email`; `sendSpEmail`/`triggerApprovalNotification` also name the response row (`workflow` or `row`) so `send-email` can read `IsTest` off the row itself. See `api/AGENTS.md` → Gotchas.
-- `submissionFilters.ts` hides `isTest` rows unless `includeTestRuns`; `App.tsx` passes the portal real submissions only.
 
 ## Dual SharePoint Client Pattern
 ```
@@ -95,7 +94,7 @@ has to be something the data supports:
 Every personally decided layer closes like a paper form: "Approved By / Evaluated By /
 Rejected By", then the signer's name, their post, and the date — on the review page
 (`/eval/...`, including its Previous Layers list and a link opened after the fact), in
-My Submissions (`DetailModal`) and in the PDF's layer cards.
+My Submissions (the record page, `components/portal/RecordPage.tsx`) and in the PDF's layer cards.
 
 - **Response columns** (text, all optional — provisioned in `layerColumnSpecs` here and
   `workflowColumns` in `api/_utils/provisioning.ts`):
