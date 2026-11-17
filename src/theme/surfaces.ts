@@ -9,19 +9,23 @@ import { editorial } from "./editorial";
    `appearanceBoot` and the other app-specific glue DESIGN.md names.
 
    Every panel in the portal and the admin dashboard used to carry its own
-   `borderRadius: "14px"` string — thirty-odd copies of one decision, which is
+   hand-typed `borderRadius` string — thirty-odd copies of one decision, which is
    why the radius scale in DESIGN.md and the radius in the code had quietly
    stopped matching in a few places. Import `radius` instead of typing a pixel
    value, and the scale stays one thing.
 --------------------------------------------------------------------------- */
 
 /**
- * The radius scale from DESIGN.md (16 / 24 / 32 / 999). Nothing should type a
- * pixel radius by hand.
+ * The radius scale from DESIGN.md (6 / 10 / 16 / 24 / 32 / 999). Nothing should
+ * type a pixel radius by hand.
  */
 export const radius = {
   /** MUI buttons, and anywhere a deliberate hard corner is wanted. */
   none: "0",
+  /** Status lozenges and small count tags. */
+  tag: "6px",
+  /** Jira-style controls: top-bar buttons, search, filter chips, table action buttons. */
+  xs: "10px",
   /** Rows, menu items, small tiles. */
   sm: "16px",
   /** Multi-line fields and recessed wells. */
