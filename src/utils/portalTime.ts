@@ -51,7 +51,6 @@ export function formatAuditWhen(value: string | Date | null | undefined): string
   return `${pad(date.getDate())} ${date.toLocaleString("en-GB", { month: "short" })} ${time}`;
 }
 
-
 /** "02:05 PM" — the public confirmation's "Received ...". */
 export function formatClockTime(now: Date = new Date()): string {
   return formatClock(now);

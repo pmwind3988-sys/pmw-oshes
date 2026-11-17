@@ -37,14 +37,17 @@ export function statusTone(status: PortalStatus): StatusTone {
   }
 }
 
-/** The tabs an account may see. Read-only accounts have nothing to act on, so no Needs you. */
-export function visibleWorkTabs(readOnly: boolean): WorkTab[] {
-  return readOnly ? ["mine", "viewed"] : ["needs", "mine", "viewed"];
+/**
+ * The tabs an account may see. Needs you appears only where the account has
+ * something to act on: `showNeeds` is `subsScopes(access).includes("needs")`.
+ */
+export function visibleWorkTabs(showNeeds: boolean): WorkTab[] {
+  return showNeeds ? ["needs", "mine", "viewed"] : ["mine", "viewed"];
 }
 
 /** The tab that opens first: Needs you when something is waiting, otherwise Filed by you. */
-export function defaultWorkTab(queueLength: number, readOnly: boolean): WorkTab {
-  return !readOnly && queueLength > 0 ? "needs" : "mine";
+export function defaultWorkTab(queueLength: number, showNeeds: boolean): WorkTab {
+  return showNeeds && queueLength > 0 ? "needs" : "mine";
 }
 
 /** What an empty tab says. */

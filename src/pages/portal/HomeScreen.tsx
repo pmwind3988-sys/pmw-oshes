@@ -12,6 +12,7 @@ import FormPickerDialog from "../../components/portal/FormPickerDialog";
 import { MessageCard } from "../../components/simple/MessageCard";
 import { usePortal } from "../../contexts/PortalContext";
 import { recordKey } from "../../utils/portalRecords";
+import { subsScopes } from "../../utils/portalRole";
 import {
   defaultWorkTab,
   emptyWorkCopy,
@@ -136,9 +137,7 @@ function WorkRow({ record, tab, onOpen }: { record: PortalRecord; tab: WorkTab; 
   const needs = tab === "needs";
   const tone: StatusTone = needs ? "waiting" : statusTone(record.status);
   const Icon = record.returned ? ReplayOutlinedIcon : needs ? PendingActionsOutlinedIcon : DescriptionOutlinedIcon;
-  const filed = record.filedAt
-    ? record.filedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kuala_Lumpur" })
-    : "";
+  const filed = record.filedLabel;
 
   return (
     <Box
@@ -154,14 +153,14 @@ function WorkRow({ record, tab, onOpen }: { record: PortalRecord; tab: WorkTab; 
         py: 1.5,
         border: 0,
         borderBottom: "1px solid",
-        borderColor: "#EEF1F6",
+        borderColor: "divider",
         backgroundColor: "transparent",
         color: "text.primary",
         font: "inherit",
         textAlign: "left",
         cursor: "pointer",
         "&:last-child": { borderBottom: 0 },
-        "&:hover": { backgroundColor: "#F4F6FA" },
+        "&:hover": { backgroundColor: "action.hover" },
       }}
     >
       <Box
@@ -200,11 +199,11 @@ function WorkRow({ record, tab, onOpen }: { record: PortalRecord; tab: WorkTab; 
           component="span"
           sx={{
             flex: "none",
-            display: { xs: "none", sm: "flex" },
+            display: "flex",
             alignItems: "center",
             justifyContent: "center",
             height: 34,
-            px: 2,
+            px: { xs: 1.25, sm: 2 },
             borderRadius: radius.xs,
             backgroundColor: "primary.main",
             color: "primary.contrastText",
@@ -232,9 +231,11 @@ export default function HomeScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chosenTab, setChosenTab] = useState<WorkTab | null>(null);
 
-  const tabs = visibleWorkTabs(access.readOnly);
-  const tab: WorkTab =
-    chosenTab && tabs.includes(chosenTab) ? chosenTab : defaultWorkTab(queue.length, access.readOnly);
+  // Needs you follows the same rule as the Submissions tab: read-only accounts and
+  // accounts not named on any layer have nothing to act on, so no tab.
+  const showNeeds = subsScopes(access).includes("needs");
+  const tabs = visibleWorkTabs(showNeeds);
+  const tab: WorkTab = chosenTab && tabs.includes(chosenTab) ? chosenTab : defaultWorkTab(queue.length, showNeeds);
 
   const rows =
     tab === "needs" ? queue : tab === "mine" ? myRecords : recentlyViewed(records, recentRefs);
@@ -259,7 +260,7 @@ export default function HomeScreen() {
             Your work
           </Typography>
           <Typography sx={{ mt: 0.5, fontSize: 14.5, fontWeight: 500, color: "text.secondary" }}>
-            {workGreeting(firstName, queue.length)}
+            {workGreeting(firstName, showNeeds ? queue.length : 0)}
           </Typography>
         </Box>
         <Button
@@ -276,7 +277,7 @@ export default function HomeScreen() {
             fontSize: 14,
             fontWeight: 700,
             textTransform: "none",
-            "&:hover": { borderWidth: 1.5, borderColor: "divider", backgroundColor: "#F4F6FA" },
+            "&:hover": { borderWidth: 1.5, borderColor: "divider", backgroundColor: "action.hover" },
           }}
         >
           View all submissions

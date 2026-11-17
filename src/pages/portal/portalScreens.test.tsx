@@ -181,7 +181,8 @@ describe("HomeScreen", () => {
       toPortalRecord(submission(), entry(), {}, {}, NOW),
       toPortalRecord(submission({ id: "143", title: "Second permit" }), entry(), {}, {}, NOW),
     ];
-    const html = render(<HomeScreen />, contextValue({ queue }));
+    const base = contextValue();
+    const html = render(<HomeScreen />, contextValue({ queue, access: { ...base.access, isAssignee: true } }));
     expect(html).toContain("2 forms are waiting for your signature.");
     expect(html).toContain("Review");
   });
@@ -191,6 +192,18 @@ describe("HomeScreen", () => {
     const html = render(<HomeScreen />, contextValue({ access: { ...base.access, readOnly: true } }));
     expect(html).not.toContain("Needs you");
     expect(html).toContain("Viewed recently");
+  });
+
+  it("hides Needs you from an account that is named on no layer, even with a queue", () => {
+    const base = contextValue();
+    const queue = [toPortalRecord(submission(), entry(), {}, {}, NOW)];
+    const html = render(
+      <HomeScreen />,
+      contextValue({ queue, access: { ...base.access, readOnly: false, isAssignee: false } }),
+    );
+    expect(html).not.toContain("Needs you");
+    expect(html).not.toContain("waiting for your signature");
+    expect(html).toContain("Filed by you");
   });
 
   it("drops the statistics the page used to carry", () => {

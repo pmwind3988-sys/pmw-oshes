@@ -32,25 +32,25 @@ describe("statusTone", () => {
 
 describe("defaultWorkTab", () => {
   it("opens Needs you when something is waiting", () => {
-    expect(defaultWorkTab(2, false)).toBe("needs");
+    expect(defaultWorkTab(2, true)).toBe("needs");
   });
 
   it("opens Filed by you when nothing is waiting", () => {
-    expect(defaultWorkTab(0, false)).toBe("mine");
+    expect(defaultWorkTab(0, true)).toBe("mine");
   });
 
-  it("never opens Needs you for a read-only account", () => {
-    expect(defaultWorkTab(3, true)).toBe("mine");
+  it("never opens Needs you when the account has no Needs you tab", () => {
+    expect(defaultWorkTab(3, false)).toBe("mine");
   });
 });
 
 describe("visibleWorkTabs", () => {
-  it("hides Needs you from a read-only account", () => {
-    expect(visibleWorkTabs(true)).toEqual(["mine", "viewed"]);
+  it("hides Needs you where the account has nothing to act on", () => {
+    expect(visibleWorkTabs(false)).toEqual(["mine", "viewed"]);
   });
 
-  it("shows all three tabs otherwise", () => {
-    expect(visibleWorkTabs(false)).toEqual(["needs", "mine", "viewed"]);
+  it("shows all three tabs where it does", () => {
+    expect(visibleWorkTabs(true)).toEqual(["needs", "mine", "viewed"]);
   });
 });
 
