@@ -146,7 +146,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 width: 34,
                 height: 34,
                 boxSizing: "border-box",
-                borderRadius: radius.full,
+                borderRadius: radius.xs,
                 bgcolor: SUN,
                 border: "2px solid",
                 borderColor: "text.primary",
@@ -167,6 +167,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   type="button"
                   onClick={() => pick(tab.screen)}
                   aria-current={active ? "page" : undefined}
+                  aria-label={tab.badge > 0 ? `${tab.label}, ${tab.badge} need you` : undefined}
                   sx={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -190,13 +191,13 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   {tab.badge > 0 && (
                     <Box
                       component="span"
-                      aria-label={`${tab.badge} need you`}
+                      aria-hidden="true"
                       sx={{
                         minWidth: 20,
                         height: 20,
                         px: 0.75,
                         boxSizing: "border-box",
-                        borderRadius: radius.tag,
+                        borderRadius: radius.full,
                         bgcolor: "error.main",
                         color: "common.white",
                         fontSize: 11,
@@ -357,7 +358,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           onClose={() => setMenuAnchor(null)}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340, borderRadius: "16px" } } }}
+          slotProps={{ paper: { sx: { minWidth: 280, maxWidth: 340, borderRadius: radius.sm } } }}
         >
           {/* The identity is stated once, in full, before any action — so signing
               out is never done from a guess about which account this is. */}

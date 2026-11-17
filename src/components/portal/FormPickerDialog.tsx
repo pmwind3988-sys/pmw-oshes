@@ -119,7 +119,7 @@ export default function FormPickerDialog({ open, onClose }: { open: boolean; onC
       slotProps={{ paper: { sx: { borderRadius: radius.xl } } }}
     >
       <DialogTitle id="form-picker-title" sx={{ fontWeight: 800, pb: 0.5 }}>
-        File a form
+        Start a form
       </DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: 14, color: "text.secondary", mb: 2 }}>
