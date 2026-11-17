@@ -17,8 +17,8 @@ import {
 import { keyframes } from "@mui/material/styles";
 import { smokingMsal } from "../auth/smokingMsal";
 import Logo from "../components/Logo";
+import { MessageCard } from "../components/simple/MessageCard";
 import {
-  AlertCircle,
   AlertTriangle,
   Ban,
   Clock,
@@ -755,32 +755,13 @@ export default function SmokingScanPage() {
           )}
 
           {stage === "error" && (
-            <Stack role="alert" sx={{ alignItems: "center", textAlign: "center", gap: 1.5, py: 2 }}>
-              <Box
-                sx={{
-                  display: "grid",
-                  placeItems: "center",
-                  width: 56,
-                  height: 56,
-                  borderRadius: radius.full,
-                  backgroundColor: editorial.errorWash,
-                  color: editorial.error,
-                }}
-              >
-                <AlertCircle size={28} />
-              </Box>
-              <Heading>That didn't go through</Heading>
-              <Typography sx={{ fontSize: 15, color: editorial.muted, lineHeight: 1.55, maxWidth: "34ch" }}>{error}</Typography>
-              <Button
-                variant="contained"
-                size="large"
-                disabled={busy}
-                onClick={retry}
-                sx={{ ...TAP, width: "100%", mt: 1.5 }}
-              >
-                Try again
-              </Button>
-            </Stack>
+            <MessageCard
+              fullPage={false}
+              mood="error"
+              title="That didn't go through"
+              body={error}
+              primary={{ label: "Try again", onClick: retry }}
+            />
           )}
         </Box>
 

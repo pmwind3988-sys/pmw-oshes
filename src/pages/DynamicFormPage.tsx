@@ -3,7 +3,7 @@
  * Route: /form/:formId
  */
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useMsal, useIsAuthenticated } from "@azure/msal-react";
 import { InteractionStatus } from "@azure/msal-browser";
@@ -30,7 +30,11 @@ import { resolveEvaluationSubmitterRouting } from "../utils/evaluationSubmitterR
 import { loginRequest } from "../auth/msalConfig";
 import { clearStoredAuthDecision } from "../utils/authDecision";
 import { acquireAccessTokenSilentOrRedirect, fetchWithAuthRecovery } from "../utils/authRecovery";
-import { Share as IosShareIcon, Lock as LockIcon, Clock as ClockIcon, CalendarDays as CalendarIcon, Search as SearchIcon, Hourglass as HourglassIcon, RefreshCw as RefreshIcon } from "../components/ui/Icons";
+import { Share as IosShareIcon } from "../components/ui/Icons";
+import { MessageCard, type MessageAction } from "../components/simple/MessageCard";
+import { FORM_STATE_COPY, type FormStateKind } from "./publicStates";
+import { radius } from "../theme/surfaces";
+import { alpha, useTheme } from "@mui/material/styles";
 import Logo from "../components/Logo";
 import type { PdfFormData } from "../utils/FormPdfDocument";
 import { getPdpaRetentionUntil, PDPA_CONSENT_LABEL, PDPA_NOTICE_VERSION, PDPA_SUMMARY } from "../utils/pdpa";
@@ -409,7 +413,7 @@ async function resolveLayerAssignee(
   }
   return { email: resolveLayerEmail(layer, submittedData), name: "" };
 }
-const APP_FONT_FAMILY = "'Figtree',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+const APP_FONT_FAMILY = "'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
 const MONO_FONT_FAMILY = "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace";
 
 // Theme tokens. Soft UI palette: ground, white sheets, filled inputs, one blue
@@ -424,18 +428,28 @@ const LIGHT = {
   shadow: "0 1px 3px rgba(22,27,36,0.08)", shadowLg: "0 10px 40px rgba(22,27,36,0.06)", shadowFab: "0 6px 16px rgba(26,95,208,0.28)",
 };
 
-const DARK = {
-  ...LIGHT, purple: "#7AA7F0", purpleLight: "#9DBDF5", purplePale: "#1B2E4D", purpleMid: "#2F4A75", purpleDark: "#C9DAF8",
-  onPrimary: "#0B1220", focus: "#4F7FD0",
-  bg: "#101923", cardBg: "#17212B", offWhite: "#111B25", chip: "#243140", border: "#2F3B47",
-  textPrimary: "#F8FAFC", textSecond: "#CBD5E1", textMuted: "#94A3B8",
-  green: "#3DBE85", greenPale: "#052e16", greenText: "#86EFAC", greenBorder: "#166534",
-  red: "#F2A29C", redPale: "#3b0707", amber: "#F5C36B", amberPale: "#2d1b00",
-  shadow: "0 1px 3px rgba(0,0,0,.4)", shadowLg: "0 8px 40px rgba(0,0,0,.5)", shadowFab: "0 6px 16px rgba(0,0,0,.4)",
-};
+/**
+ * This page's colour tokens, read from the app theme so the contrast themes
+ * carry through. The fields the theme does not name keep the LIGHT values.
+ */
+function useFormTokens(): typeof LIGHT {
+  const p = useTheme().palette;
+  return useMemo(() => ({
+    ...LIGHT,
+    purple: p.primary.main, purpleLight: p.primary.light, purplePale: alpha(p.primary.main, 0.12),
+    purpleMid: alpha(p.primary.main, 0.3), purpleDark: p.primary.dark,
+    onPrimary: p.primary.contrastText, focus: p.primary.light,
+    bg: p.background.default, cardBg: p.background.paper, offWhite: p.background.default,
+    chip: alpha(p.text.primary, 0.06), border: p.divider,
+    textPrimary: p.text.primary, textSecond: p.text.secondary, textMuted: p.text.secondary,
+    green: p.success.main, greenPale: alpha(p.success.main, 0.12), greenText: p.success.dark, greenBorder: p.success.main,
+    red: p.error.main, redPale: alpha(p.error.main, 0.1),
+    amber: p.warning.dark, amberPale: alpha(p.warning.main, 0.14),
+  }), [p]);
+}
 
 const globalCss = (t: typeof LIGHT) => `
-  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;font-family:${APP_FONT_FAMILY}!important}
   body{font-family:${APP_FONT_FAMILY};background:${t.bg};color:${t.textPrimary};transition:background .3s,color .3s}
   .dfp-mono{font-family:${MONO_FONT_FAMILY}!important;font-variant-numeric:tabular-nums}
@@ -451,6 +465,11 @@ const globalCss = (t: typeof LIGHT) => `
   .dfp-link:hover{text-decoration:underline}
   button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid ${t.focus};outline-offset:2px}
   .dfp-header{flex-wrap:nowrap}
+  .dfp-steps{display:none}
+  @media(min-width:900px){
+    .dfp-form-layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start}
+    .dfp-steps{display:block;position:sticky;top:96px}
+  }
   .dfp-banner-logo img{max-height:48px!important}
   .dfp-doc-control{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1px solid ${t.border};border-bottom:1px solid ${t.border};background:${t.cardBg}}
   .dfp-doc-cell{min-height:42px;padding:7px 8px;border-right:1px solid ${t.border};display:flex;align-items:center;justify-content:center;gap:4px;text-align:center;font-size:12px;color:${t.textPrimary};line-height:1.35}
@@ -495,8 +514,8 @@ const globalCss = (t: typeof LIGHT) => `
 /** Button looks: one filled per view, the rest tonal or ghost. Pills throughout. */
 const pillBase = {
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-  minHeight: 52, padding: "0 28px", borderRadius: 999, border: "none",
-  fontFamily: APP_FONT_FAMILY, fontSize: 16, fontWeight: 700, lineHeight: 1.2,
+  minHeight: 44, padding: "0 20px", borderRadius: radius.xs, border: "none",
+  fontFamily: APP_FONT_FAMILY, fontSize: 15, fontWeight: 700, lineHeight: 1.2,
   whiteSpace: "nowrap" as const, textDecoration: "none",
 };
 const pillFilled = (t: typeof LIGHT) => ({ ...pillBase, background: t.purple, color: t.onPrimary });
@@ -551,53 +570,33 @@ const ScrollProgress = ({ t }: { t: typeof LIGHT }) => {
   );
 };
 
-/** The centred white card every state screen uses: one icon, a title, one sentence, pill actions. */
-function StateCard({
-  t, tone, icon, title, body, actions, role,
+/** The one action every public state offers: back to the portal's home. */
+const BACK_HOME: MessageAction = { label: "Back to home", href: "/" };
+
+/** A full-page state for a public form link: one message card with its own copy. */
+function FormState({
+  t, kind, body, primary, secondary, details,
 }: {
   t: typeof LIGHT;
-  tone: "amber" | "neutral" | "primary";
-  icon: ReactNode;
-  title: string;
-  body: ReactNode;
-  actions: ReactNode;
-  role?: "alert";
+  kind: FormStateKind;
+  body?: ReactNode;
+  primary?: MessageAction;
+  secondary?: MessageAction;
+  details?: string;
 }) {
-  const palette = tone === "amber"
-    ? { background: t.amberPale, color: t.amber }
-    : tone === "primary"
-      ? { background: t.purplePale, color: t.purple }
-      : { background: t.chip, color: t.textSecond };
+  const copy = FORM_STATE_COPY[kind];
   return (
-    <div style={{ minHeight: "100dvh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: APP_FONT_FAMILY }}>
+    <>
       <style>{globalCss(t)}</style>
-      <section
-        role={role}
-        className="dfp-state-card"
-        style={{
-          width: "100%", maxWidth: 480, background: t.cardBg, borderRadius: 32, boxShadow: t.shadowLg,
-          padding: "40px 32px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 24,
-          animation: "fadeUp .3s ease",
-        }}
-      >
-        <div aria-hidden="true" style={{ width: 112, height: 112, borderRadius: 999, background: palette.background, color: palette.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {icon}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.25, color: t.textPrimary, textWrap: "balance" } as CSSProperties}>{title}</h1>
-          <div style={{ fontSize: 16, lineHeight: 1.55, color: t.textSecond, maxWidth: 380, overflowWrap: "anywhere", textWrap: "pretty" } as CSSProperties}>{body}</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, width: "100%" }}>
-          {actions}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function BackToHomeLink({ t }: { t: typeof LIGHT }) {
-  return (
-    <a href="/" className="dfp-pill" style={{ ...pillGhost(t), width: "100%" }}>Back to home</a>
+      <MessageCard
+        mood={copy.mood}
+        title={copy.title}
+        body={body ?? copy.body}
+        primary={primary}
+        secondary={secondary}
+        details={details}
+      />
+    </>
   );
 }
 
@@ -611,73 +610,53 @@ const SuccessScreen = ({ formTitle, referenceNo, onReset, t, isTestRun, testEmai
   const copyReference = () => {
     navigator.clipboard?.writeText(referenceNo).then(() => setReferenceCopied(true)).catch(() => {});
   };
+  const primary: MessageAction = isTestRun && testRunReview
+    ? testRunReview
+    : referenceNo
+      ? { label: "Track this form", href: `/track?ref=${encodeURIComponent(referenceNo)}` }
+      : BACK_HOME;
 
   return (
-    <div style={{ textAlign: "center", padding: "40px 12px 24px", animation: "fadeUp .3s ease", display: "flex", flexDirection: "column", alignItems: "center" }}>
-      {isTestRun && (
-        <div role="status" style={{ maxWidth: 440, width: "100%", margin: "0 auto 24px", padding: "10px 16px", background: t.amberPale, color: t.amber, borderRadius: 16, fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
-          Test run: this was a rehearsal, not a real submission. Every email it sends goes only to {testEmailDisplay || "the nominated test address"}.
-        </div>
-      )}
-      <div className="dfp-pop" aria-hidden="true" style={{ width: 112, height: 112, borderRadius: 999, background: t.green, color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-        <svg width={56} height={56} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      </div>
-      <h1 style={{ fontSize: 28, fontWeight: 800, color: t.textPrimary, marginBottom: 10, lineHeight: 1.2 }}>Submitted</h1>
-      <p style={{ color: t.textSecond, fontSize: 16, lineHeight: 1.6, maxWidth: 420, margin: 0 }}>Your response for <strong style={{ color: t.textPrimary }}>{formTitle}</strong> has been recorded.</p>
-      {referenceNo && (
-        <div style={{ marginTop: 28, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
-            <span
-              className="dfp-mono"
-              style={{ background: t.chip, color: t.textPrimary, borderRadius: 999, padding: "12px 22px", fontSize: 20, fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", userSelect: "all" }}
-            >
-              {referenceNo}
-            </span>
-            <button type="button" onClick={copyReference} className="dfp-pill" style={{ ...pillGhost(t), minHeight: 44, padding: "0 18px", fontSize: 14, color: referenceCopied ? t.greenText : t.textSecond, background: referenceCopied ? t.greenPale : t.chip }}>
-              {referenceCopied ? <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>Copied</> : <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>Copy</>}
-            </button>
-          </div>
-          <p style={{ color: t.textSecond, fontSize: 14, lineHeight: 1.6, maxWidth: 420, margin: 0 }}>Keep this number — you can check progress at /track</p>
-          <a href={`/track?ref=${encodeURIComponent(referenceNo)}`} className="dfp-pill" style={pillTonal(t)}>Track this report</a>
-        </div>
-      )}
-      {isTestRun && testRunReview && (
-        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <a href={testRunReview.href} className="dfp-pill" style={pillFilled(t)}>
-            {testRunReview.label}
-          </a>
-          <div style={{ fontSize: 13, color: t.textSecond }}>A signed-in step opens only for whoever it is assigned to.</div>
-        </div>
-      )}
-      <button type="button" onClick={onReset} className="dfp-pill" style={{ ...pillGhost(t), marginTop: 28 }}>Submit another response</button>
+    <div style={{ display: "flex", justifyContent: "center", padding: "24px 0 8px" }}>
+      <MessageCard
+        fullPage={false}
+        mood="success"
+        title="All done!"
+        primary={primary}
+        secondary={referenceNo ? BACK_HOME : undefined}
+        body={
+          <>
+            {isTestRun && (
+              <div role="status" style={{ margin: "0 auto 16px", padding: "10px 14px", background: t.amberPale, color: t.amber, borderRadius: radius.xs, fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+                Test run: this was a rehearsal, not a real submission. Every email it sends goes only to {testEmailDisplay || "the nominated test address"}.
+              </div>
+            )}
+            <div>Your response for <strong style={{ color: t.textPrimary }}>{formTitle}</strong> has been recorded.</div>
+            {referenceNo && (
+              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                <div style={{ fontSize: 13, color: t.textSecond, fontWeight: 600 }}>Your reference</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span
+                    className="dfp-mono"
+                    style={{ background: t.chip, color: t.textPrimary, borderRadius: radius.xs, padding: "8px 14px", fontSize: 18, fontWeight: 500, letterSpacing: "0.02em", whiteSpace: "nowrap", userSelect: "all" }}
+                  >
+                    {referenceNo}
+                  </span>
+                  <button type="button" onClick={copyReference} className="dfp-pill" style={{ ...pillGhost(t), minHeight: 40, padding: "0 16px", fontSize: 14, color: referenceCopied ? t.greenText : t.textSecond, background: referenceCopied ? t.greenPale : t.chip }}>
+                    {referenceCopied ? <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>Copied</> : <><svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>Copy</>}
+                  </button>
+                </div>
+                <div style={{ fontSize: 13, color: t.textSecond, lineHeight: 1.5 }}>Keep this number. You can check progress on the Track page.</div>
+              </div>
+            )}
+            <button type="button" onClick={onReset} className="dfp-pill" style={{ ...pillGhost(t), marginTop: 20 }}>Submit another response</button>
+          </>
+        }
+      />
     </div>
   );
 };
 
-const PrivateGate = ({ formTitle, onSignIn, t }: { formTitle: string; onSignIn: () => void; t: typeof LIGHT }) => (
-  <StateCard
-    t={t}
-    tone="primary"
-    icon={<LockIcon size={48} />}
-    title="Sign in to open this form"
-    body={<><strong style={{ color: t.textPrimary }}>{formTitle || "This form"}</strong> is for PMW staff only. Sign in with your work account to continue.</>}
-    actions={
-      <>
-        <button type="button" onClick={onSignIn} className="dfp-pill" style={{ ...pillFilled(t), width: "100%", minHeight: 56, gap: 12 }}>
-          <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 999, background: "#FFFFFF", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <MsIcon size={15} />
-          </span>
-          Sign in with Microsoft 365
-        </button>
-        <p style={{ margin: "6px 0 0", fontSize: 14, color: t.textMuted, lineHeight: 1.5 }}>
-          Need to report something? <a href="/report" className="dfp-link" style={{ color: t.purple, fontWeight: 700 }}>Report something without signing in</a>
-        </p>
-      </>
-    }
-  />
-);
 
 export default function DynamicFormPage() {
   const { formId } = useParams<{ formId: string }>();
@@ -700,7 +679,7 @@ export default function DynamicFormPage() {
   const isAuthenticated = useIsAuthenticated();
 
   const [dark, _setDark] = useState(() => { try { return localStorage.getItem("dfp_dark") === "1"; } catch { return false; } });
-  const t = dark ? DARK : LIGHT;
+  const t = useFormTokens();
 
   useEffect(() => { document.body.style.background = t.bg; document.body.style.color = t.textPrimary; return () => { document.body.style.background = ""; document.body.style.color = ""; }; }, [t]);
 
@@ -1882,72 +1861,34 @@ export default function DynamicFormPage() {
 
   // A form that loaded without survey content can never be filled in or submitted —
   // say so instead of sitting on a spinner forever.
-  if (!error && !formData?.surveyJson) return (
-    <StateCard
-      t={t}
-      tone="neutral"
-      role="alert"
-      icon={<HourglassIcon size={48} />}
-      title="This form isn't ready yet"
-      body="This link has no published form content. Please ask an OSHES Forms Owner to republish the form and share the link again."
-      actions={<BackToHomeLink t={t} />}
-    />
-  );
+  // A form that loaded without survey content can never be filled in or submitted —
+  // say so instead of sitting on a spinner forever.
+  if (!error && !formData?.surveyJson) return <FormState t={t} kind="notReady" secondary={BACK_HOME} />;
 
   if (error) {
     const kind = formErrorKind(error);
-    if (kind === "closed") return (
-      <StateCard
+    if (kind === "failed") return (
+      <FormState
         t={t}
-        tone="amber"
-        role="alert"
-        icon={<ClockIcon size={48} />}
-        title="This form is closed"
-        body="It isn't taking responses right now. Ask the OSHES team if you think it should be open."
-        actions={<BackToHomeLink t={t} />}
+        kind="failed"
+        details={error}
+        primary={{ label: "Try again", onClick: () => window.location.reload() }}
+        secondary={BACK_HOME}
       />
     );
-    if (kind === "expired") return (
-      <StateCard
-        t={t}
-        tone="amber"
-        role="alert"
-        icon={<CalendarIcon size={48} />}
-        title="This form has expired"
-        body="Its publishing period has ended. Ask the OSHES team for a current link."
-        actions={<BackToHomeLink t={t} />}
-      />
-    );
-    if (kind === "notFound") return (
-      <StateCard
-        t={t}
-        tone="neutral"
-        role="alert"
-        icon={<SearchIcon size={48} />}
-        title="We couldn't find this form"
-        body="Check the link, or scan the poster again."
-        actions={<BackToHomeLink t={t} />}
-      />
-    );
-    return (
-      <StateCard
-        t={t}
-        tone="neutral"
-        role="alert"
-        icon={<RefreshIcon size={48} />}
-        title="We couldn't load this form"
-        body={<span style={{ fontSize: 13, color: t.textMuted, overflowWrap: "anywhere" }}>{error}</span>}
-        actions={
-          <>
-            <button type="button" onClick={() => window.location.reload()} className="dfp-pill" style={{ ...pillFilled(t), width: "100%" }}>Try again</button>
-            <BackToHomeLink t={t} />
-          </>
-        }
-      />
-    );
+    return <FormState t={t} kind={kind} secondary={BACK_HOME} />;
   }
 
-  if (!isPublicForm && !isAuthenticated) return (<><style>{globalCss(t)}</style><PrivateGate formTitle={formTitle} onSignIn={handleSignIn} t={t} /></>);
+  if (!isPublicForm && !isAuthenticated) return (
+    <FormState
+      t={t}
+      kind="signIn"
+      body={<><strong style={{ color: t.textPrimary }}>{formTitle || "This form"}</strong> is for PMW staff only. Sign in with your work account to continue.</>}
+      primary={{ label: "Sign in with Microsoft 365", onClick: handleSignIn }}
+      secondary={{ label: "Report something without signing in", href: "/report" }}
+    />
+  );
+
 
   return (
     <div style={{ minHeight: "100dvh", background: t.bg, fontFamily: APP_FONT_FAMILY }}>
@@ -2026,8 +1967,37 @@ export default function DynamicFormPage() {
         {submitStatus === "success" ? (
           <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} testRunReview={testRunReview} />
         ) : (
-          <div>
+          <div className="dfp-form-layout">
+            {formReady && runtime.pageCount > 1 && (
+              <nav className="dfp-steps" aria-label="Form steps">
+                <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {runtime.form.pages.map((page, index) => {
+                    const current = index === runtime.pageIndex;
+                    return (
+                      <li
+                        key={page.id}
+                        aria-current={current ? "step" : undefined}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: radius.xs,
+                          background: current ? t.purplePale : "transparent",
+                          color: current ? t.purpleDark : t.textSecond,
+                          fontWeight: current ? 700 : 600, fontSize: 14, lineHeight: 1.3,
+                        }}
+                      >
+                        <span aria-hidden="true" style={{
+                          width: 26, height: 26, borderRadius: 999, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 800, background: current ? t.purple : t.chip, color: current ? t.onPrimary : t.textSecond,
+                        }}>{index + 1}</span>
+                        <span style={{ overflowWrap: "anywhere" }}>{page.title || `Page ${index + 1}`}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </nav>
+            )}
+            <div className="dfp-form-main" style={{ minWidth: 0 }}>
             {!isPublicForm && isAuthenticated && (
+
               <div style={{ background: t.greenPale, borderRadius: 24, padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 12 }}>
                 <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: "50%", background: t.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 700, color: t.greenText }}>Submitting as yourself</div><div style={{ fontSize: 12, color: t.textSecond, overflowWrap: "anywhere" }}>{userEmail}</div></div>
@@ -2083,6 +2053,7 @@ export default function DynamicFormPage() {
               {submitError && <div style={{ fontWeight: 400, lineHeight: 1.6, wordBreak: "break-word", color: t.textSecond, fontSize: 13 }}>{submitError}</div>}
               <button type="button" onClick={handleSubmit} className="dfp-pill" style={{ ...pillTonal(t), alignSelf: "flex-start", minHeight: 40, padding: "0 18px", fontSize: 14 }}>Retry submission</button>
             </div>}
+            </div>
           </div>
         )}
         <div style={{ marginTop: 32, textAlign: "center", fontSize: 12, color: t.textMuted }}>PMW International Berhad OSHES Forms</div>

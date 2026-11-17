@@ -3,7 +3,8 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Box, Button, Skeleton, Stack, TextField, Typography } from "@mui/material";
 import { keyframes } from "@mui/material/styles";
 import { editorial, editorialShadow } from "../theme/editorial";
-import { FileText, Search, WifiOff } from "../components/ui/Icons";
+import { FileText, Search } from "../components/ui/Icons";
+import { MessageCard } from "../components/simple/MessageCard";
 
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY as string | undefined;
 
@@ -239,35 +240,27 @@ export default function PublicReportPage() {
         </Typography>
 
         {formsError && forms.length === 0 ? (
-          <Box
-            role="alert"
-            sx={{ textAlign: "center", borderRadius: "24px", backgroundColor: editorial.paper, p: 3, mb: 1 }}
-          >
-            <RoundIcon tone="amber">
-              <WifiOff size={44} />
-            </RoundIcon>
-            <Typography sx={{ fontSize: 17, fontWeight: 700, color: editorial.ink }}>
-              We couldn't load the form list.
-            </Typography>
-            <Typography sx={{ fontSize: 13, color: editorial.muted, mt: 1, mb: 2.5 }}>
-              You can still report this by phone — call the duty safety officer.
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => void loadForms()}
-              sx={{ minHeight: 48, px: 3.5, borderRadius: 999 }}
-            >
-              Try again
-            </Button>
-          </Box>
+          <MessageCard
+            fullPage={false}
+            mood="error"
+            title="We couldn't load the form list."
+            body="You can still report this by phone. Call the duty safety officer."
+            primary={{ label: "Try again", onClick: () => void loadForms() }}
+          />
         ) : formCount === 0 ? (
+          formsLoaded ? (
+            <MessageCard
+              fullPage={false}
+              mood="empty"
+              title="No forms to report yet"
+              body="No form can be filed from a poster yet. Call the duty safety officer instead."
+            />
+          ) : (
           <Box
             sx={{ borderRadius: "24px", backgroundColor: editorial.paper, p: 2.5 }}
           >
             <Typography sx={{ fontSize: 13, color: editorial.muted, textAlign: "center" }}>
-              {formsLoaded
-                ? "No form can be filed from a poster yet. Call the duty safety officer instead."
-                : "Loading the form list…"}
+              Loading the form list…
             </Typography>
             {!formsLoaded && (
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mt: 1.5 }}>
@@ -277,6 +270,7 @@ export default function PublicReportPage() {
               </Box>
             )}
           </Box>
+          )
         ) : (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 1, borderRadius: "32px", backgroundColor: editorial.paper }}>
             {forms.filter((form) => form.slug).map((form) => (

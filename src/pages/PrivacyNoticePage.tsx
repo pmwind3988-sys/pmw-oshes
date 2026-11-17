@@ -22,7 +22,7 @@ export default function PrivacyNoticePage() {
   const navigate = useNavigate();
 
   return (
-    <Box sx={{ minHeight: "100dvh", background: "linear-gradient(180deg, #BFDDF4 0%, #DCECF8 42%, #F7F5EF 100%)", py: { xs: 3, md: 5 } }}>
+    <Box sx={{ minHeight: "100dvh", backgroundColor: "background.default", py: { xs: 3, md: 5 } }}>
       <Container maxWidth="md">
         <Button
           startIcon={<ArrowBackIcon />}

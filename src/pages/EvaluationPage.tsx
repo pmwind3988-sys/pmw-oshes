@@ -30,18 +30,15 @@ import { SignatureCapture } from "../utils/signatureCapture";
 import { getSelectedCompany } from "../utils/companySelection";
 import ReadOnlySubmissionPreview from "../components/builder/ReadOnlySubmissionPreview";
 import Logo from "../components/Logo";
-import { Box, Button, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
+import { Button, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
 import type { SxProps, Theme } from "@mui/material";
 import {
-  AlertTriangle as WarningIcon,
   Check as CheckIcon,
-  CheckCircle as CheckCircleIcon,
   Lock as LockIcon,
-  ShieldAlert as ShieldAlertIcon,
   X as CloseIcon,
 } from "../components/ui/Icons";
 import { editorial } from "../theme/editorial";
-import LoadingScreen, { AUTH_FONT, authCardSx, authPageSx, authPill, authSoft } from "../components/auth/LoadingScreen";
+import LoadingScreen, { AUTH_FONT, authPill, authSoft } from "../components/auth/LoadingScreen";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { canActOnLayer, claimLayerEmail, layerRecipients } from "../utils/layerAssignees";
 import { formatDisplayDateTime } from "../utils/displayDateTime";
@@ -57,6 +54,9 @@ import {
   signOffVerdictFromStatus,
 } from "../utils/signOff";
 import SignOffBlock from "../components/SignOffBlock";
+import { MessageCard, type MessageAction } from "../components/simple/MessageCard";
+import type { MascotMood } from "../components/simple/Mascot";
+import { NOT_YOURS_COPY } from "./publicStates";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_SECRET_KEY || "";
@@ -265,64 +265,23 @@ function JourneyNode({ kind, layerNumber }: { kind: JourneyKind; layerNumber: nu
 }
 
 /**
- * A result screen: a 112px tinted circle with one glyph, a title, one sentence,
- * and at most one pill action. The same shape as the auth error screen.
+ * A full-page result for an approval link: one message card with a picture,
+ * a title, one sentence and at most one action.
  */
 function StateScreen({
-  tone,
-  icon,
+  mood,
   title,
   message,
-  children,
+  primary,
+  details,
 }: {
-  tone: StateTone;
-  icon: React.ReactNode;
+  mood: MascotMood;
   title: string;
   message?: string;
-  children?: React.ReactNode;
+  primary?: MessageAction;
+  details?: string;
 }) {
-  const palette = STATE_TONES[tone];
-  const isAlert = tone === "warning" || tone === "danger";
-  return (
-    <Box sx={authPageSx}>
-      <Stack
-        component="section"
-        role={isAlert ? "alert" : "status"}
-        spacing={3}
-        sx={{ ...authCardSx, maxWidth: 480, alignItems: "center" }}
-      >
-        <Box
-          sx={{
-            width: 112,
-            height: 112,
-            borderRadius: 999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: palette.bg,
-            color: palette.fg,
-            flexShrink: 0,
-          }}
-        >
-          {icon}
-        </Box>
-        <Stack spacing={1.25} sx={{ alignItems: "center" }}>
-          <Typography
-            component="h1"
-            sx={{ fontFamily: AUTH_FONT, fontSize: 24, fontWeight: 800, lineHeight: 1.2, color: authSoft.ink, textWrap: "balance" }}
-          >
-            {title}
-          </Typography>
-          {message && (
-            <Typography sx={{ fontSize: 16, lineHeight: 1.55, color: authSoft.muted, maxWidth: 380, overflowWrap: "anywhere", textWrap: "pretty" }}>
-              {message}
-            </Typography>
-          )}
-        </Stack>
-        {children && <Stack spacing={1.25} sx={{ width: "100%", alignItems: "center" }}>{children}</Stack>}
-      </Stack>
-    </Box>
-  );
+  return <MessageCard mood={mood} title={title} body={message ?? ""} primary={primary} details={details} />;
 }
 
 function valueToText(value: unknown): string {
@@ -942,48 +901,34 @@ export default function EvaluationPage() {
   if (authState === "unauthorized") {
     return (
       <StateScreen
-        tone="primary"
-        icon={<LockIcon size={48} />}
-        title="Sign in required"
-        message="You need to sign in with your Microsoft 365 account to access this evaluation."
-      >
-        <Button
-          variant="contained"
-          onClick={() => instance.loginRedirect({ ...loginRequest })}
-          sx={{ ...primaryPill, width: "100%" }}
-        >
-          Sign in with Microsoft 365
-        </Button>
-      </StateScreen>
+        mood="locked"
+        title="Sign in to open this approval"
+        message="You need to sign in with your Microsoft 365 account to access this approval."
+        primary={{ label: "Sign in with Microsoft 365", onClick: () => instance.loginRedirect({ ...loginRequest }) }}
+      />
     );
   }
 
   if (error) {
     if (error === NOT_ASSIGNED_MESSAGE) {
-      return (
-        <StateScreen tone="neutral" icon={<ShieldAlertIcon size={48} />} title="This layer isn't yours" message={error} />
-      );
+      return <StateScreen mood="locked" title={NOT_YOURS_COPY.title} message={NOT_YOURS_COPY.body} />;
     }
     return (
       <StateScreen
-        tone="warning"
-        icon={<WarningIcon size={48} />}
+        mood="error"
         title={isPublic ? "This link can't be used" : "Something went wrong"}
-        message={error}
-      >
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ ...primaryPill, width: "100%" }}>
-          Try again
-        </Button>
-      </StateScreen>
+        message={isPublic ? "Check the link, or ask for a new one." : "We couldn't load this approval."}
+        details={error}
+        primary={{ label: "Try again", onClick: () => window.location.reload() }}
+      />
     );
   }
 
   if (actionState === "success") {
     return (
       <StateScreen
-        tone="success"
-        icon={<CheckCircleIcon size={52} />}
-        title={nextStepName ? `Signed — sent to ${nextStepName}` : "Your decision is recorded"}
+        mood="success"
+        title={nextStepName ? `Signed — sent to ${nextStepName}` : "All done!"}
         message="Your response has been recorded. You may close this page."
       />
     );

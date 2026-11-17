@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import { Check as CheckIcon, Copy as ContentCopyIcon, Mail as ForwardToInboxIcon, Link2 as LinkIcon, ExternalLink as OpenInNewIcon } from "../components/ui/Icons";
 import { editorial, editorialHairline } from "../theme/editorial";
+import { MessageCard } from "../components/simple/MessageCard";
 import { appBaseUrl } from "../config/appBaseUrl";
 
 /**
@@ -145,10 +146,12 @@ export default function ShareLinkPage() {
 
           <Box sx={{ px: { xs: 3, md: 4 }, py: { xs: 3, md: 3.5 } }}>
             {!reviewLink ? (
-              <Alert severity="warning" sx={{ borderRadius: "12px" }}>
-                This page did not receive a valid PMW OSHES review link. Open the copy button in
-                the workflow email again, or copy the link printed in that email by hand.
-              </Alert>
+              <MessageCard
+                fullPage={false}
+                mood="notfound"
+                title="We couldn't find a review link"
+                body="This page did not receive a valid PMW OSHES review link. Open the copy button in the workflow email again, or copy the link printed in that email by hand."
+              />
             ) : (
               <Stack spacing={2.5}>
                 <Typography sx={{ fontSize: 14.5, lineHeight: 1.7, color: editorial.muted }}>
