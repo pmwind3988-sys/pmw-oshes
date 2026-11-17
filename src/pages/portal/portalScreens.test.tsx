@@ -202,18 +202,81 @@ describe("HomeScreen", () => {
   });
 });
 
+/** The page's words, without the markup or the comments React leaves between text pieces. */
+function visibleText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/g, "")
+    .replace(/<!--.*?-->/g, "")
+    .replace(/<[^>]+>/g, "");
+}
+
 describe("RecordsScreen", () => {
-  it("opens pre-filtered to the form and status it was sent with", () => {
+  it("opens pre-filtered to the form it was sent with", () => {
     const html = render(
-      <RecordsScreen scope="all" />,
+      <RecordsScreen />,
       contextValue({ focusForm: "Permit To Work", focusStatus: "open" }),
     );
-    expect(html).toContain("All Permit To Work");
+    expect(html).toContain("Submissions");
+    expect(visibleText(html)).toContain("Permit To Work");
   });
 
   it("drops the Past SLA filter option where no form has an SLA", () => {
-    const html = render(<RecordsScreen scope="all" />, contextValue());
+    const html = render(<RecordsScreen />, contextValue());
     expect(html).not.toContain("Past SLA");
+  });
+
+  it("shows the list as a table with a Reference column", () => {
+    const html = render(<RecordsScreen />, contextValue());
+    expect(html).toContain("<table");
+    expect(html).toContain("Reference");
+    expect(html).toContain("Updated");
+  });
+
+  it("pages 60 records 25 at a time", () => {
+    const many = Array.from({ length: 60 }, (_, index) =>
+      toPortalRecord(submission({ id: String(200 + index), title: `Permit ${index}` }), entry(), {}, {}, NOW),
+    );
+    const html = render(<RecordsScreen />, contextValue({ records: many }));
+    expect(visibleText(html)).toContain("Showing 1–25 of 60");
+  });
+
+  it("hides Needs me from an auditor", () => {
+    const base = contextValue();
+    const auditor = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: true,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const html = render(<RecordsScreen />, contextValue({ access: auditor }));
+    expect(html).not.toContain("Needs me");
+    expect(html).toContain("All");
+    expect(html).toContain("Mine");
+  });
+
+  it("offers Needs me to an account that sits on a layer", () => {
+    const onMyLayer = entry({ layers: [layer(1, ME, "Approver")] });
+    const records = [toPortalRecord(submission(), onMyLayer, {}, {}, NOW)];
+    const access = derivePortalAccess({ userEmail: ME, isAdmin: false, isAuditor: false, catalogue: [onMyLayer], records });
+    const html = render(<RecordsScreen />, contextValue({ access, catalogue: [onMyLayer], records, queue: records }));
+    expect(html).toContain("Needs me");
+  });
+
+  it("draws the board with its four columns when the view is set to board", () => {
+    const html = render(
+      <RecordsScreen />,
+      contextValue({ prefs: { ...DEFAULT_PORTAL_PREFS, subsView: "board" } }),
+    );
+    expect(html).not.toContain("<table");
+    for (const title of ["Waiting for you", "In approval", "Returned", "Done"]) {
+      expect(html).toContain(title);
+    }
+  });
+
+  it("says nothing matches when the search finds nothing", () => {
+    const html = render(<RecordsScreen />, contextValue({ searchSeed: "no-such-record-xyz" }));
+    expect(html).toContain("Nothing matches");
   });
 });
 

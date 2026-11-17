@@ -18,12 +18,23 @@ export interface PortalPrefs {
   compactTables: boolean;
   /** Records tables default to open items rather than everything. */
   hideSettled: boolean;
+  /** Submissions opens as a list or as a board. */
+  subsView: SubsView;
+  /** Rows per page in the submissions list. */
+  pageSize: number;
 }
+
+export type SubsView = "list" | "board";
+
+/** The page sizes the submissions pager offers. */
+export const PAGE_SIZES = [25, 50, 100] as const;
 
 export const DEFAULT_PORTAL_PREFS: PortalPrefs = {
   startScreen: "home",
   compactTables: false,
   hideSettled: false,
+  subsView: "list",
+  pageSize: 25,
 };
 
 const STORAGE_KEY = "pmw_oshes_portal_prefs";
@@ -53,6 +64,10 @@ export function parsePortalPrefs(raw: string | null): PortalPrefs {
       startScreen,
       compactTables: parsed.compactTables === true,
       hideSettled: parsed.hideSettled === true,
+      subsView: parsed.subsView === "board" ? "board" : "list",
+      pageSize: (PAGE_SIZES as readonly number[]).includes(parsed.pageSize as number)
+        ? (parsed.pageSize as number)
+        : DEFAULT_PORTAL_PREFS.pageSize,
     };
   } catch {
     return DEFAULT_PORTAL_PREFS;

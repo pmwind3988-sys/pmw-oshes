@@ -33,7 +33,7 @@ installSmokingStub(NOW, SMOKING_WEEK.from, new URLSearchParams(location.search).
 
 const SCREENS = {
   home: <HomeScreen />,
-  subs: <RecordsScreen scope="all" />,
+  subs: <RecordsScreen />,
   // Manage opens Home in the portal, which links to the pages inside it.
   manage: <HomeScreen />,
   people: <PeopleScreen />,

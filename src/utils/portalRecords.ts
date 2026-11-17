@@ -104,6 +104,25 @@ export function recordKey(record: { listTitle: string; itemId: string }): string
   return `${record.listTitle}::${record.itemId}`;
 }
 
+/** The filed-date choices on the submissions filter bar. */
+export type FiledRange = "any" | "today" | "7d" | "30d";
+
+/**
+ * Whether a record was filed inside a range. "Today" is the local calendar day;
+ * the others count back from `now`. A record with no filing date only passes
+ * "any".
+ */
+export function filedWithin(record: Pick<PortalRecord, "filedAt">, range: FiledRange, now: Date = new Date()): boolean {
+  if (range === "any") return true;
+  if (!record.filedAt) return false;
+  if (range === "today") {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return record.filedAt.getTime() >= startOfToday;
+  }
+  const days = range === "7d" ? 7 : 30;
+  return now.getTime() - record.filedAt.getTime() <= days * 86_400_000;
+}
+
 /** Strips separators so punctuation in a pasted reference does not matter. */
 function compact(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");

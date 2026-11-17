@@ -24,17 +24,12 @@ function ScreenBody() {
     // of the pages inside it.
     case "manage":
       return <HomeScreen />;
-    // The submissions table. Keyed on the scope it was opened with, so arriving
-    // from a pressed statistic, the shell's search box or a Home card remounts
-    // the table with those filters seeded. Without the key React reuses the
-    // mounted instance and keeps the filter state from wherever you were last.
+    // Submissions. Keyed on the scope it was opened with, so arriving from a
+    // pressed statistic, the shell's search box or a Home card remounts it with
+    // those filters seeded. Without the key React reuses the mounted instance
+    // and keeps the filter state from wherever you were last.
     case "subs":
-      return (
-        <RecordsScreen
-          key={`${focusSubsScope}-${focusForm}-${focusStatus}-${searchSeedAt}`}
-          scope={focusSubsScope === "mine" ? "mine" : "all"}
-        />
-      );
+      return <RecordsScreen key={`${focusSubsScope}-${focusForm}-${focusStatus}-${searchSeedAt}`} />;
     case "home":
     default:
       return <HomeScreen />;
