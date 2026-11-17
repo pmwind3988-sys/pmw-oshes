@@ -131,6 +131,7 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     focusForm: null,
     focusStatus: null,
     focusSubsScope: null,
+    focusFiled: null,
     searchSeed: "",
     searchSeedAt: 0,
     submitSearch: () => {},
@@ -398,6 +399,24 @@ describe("ManageLayout", () => {
     for (const item of ["Overview", "People and approvers", "Smoking log", "History", "Test runs"]) {
       expect(text).toContain(item);
     }
+  });
+
+  it("links Approval routing to an administrator, but not to someone with only the builder grant", () => {
+    const admin = render(<ManageLayout active="overview"><span /></ManageLayout>, contextValue({ canRunTestRuns: true }));
+    expect(admin).toContain('href="/admin/routing"');
+    const base = contextValue();
+    const notAdmin = derivePortalAccess({
+      userEmail: ME,
+      isAdmin: false,
+      isAuditor: false,
+      catalogue: base.catalogue,
+      records: base.records,
+    });
+    const builderOnly = render(
+      <ManageLayout active="overview"><span /></ManageLayout>,
+      contextValue({ access: notAdmin, isAdmin: false, canRunTestRuns: true }),
+    );
+    expect(builderOnly).not.toContain('href="/admin/routing"');
   });
 
   it("gives an auditor History and the smoking log, but no People or Test runs", () => {

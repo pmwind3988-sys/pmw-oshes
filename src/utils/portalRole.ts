@@ -168,8 +168,8 @@ function showsManage(access: PortalAccess): boolean {
   return access.canSeeOperations || access.canSeePeople || access.canSeeAudit || access.isAdmin;
 }
 
-/** The pages inside Manage that this account may open. */
-function manageScreens(access: PortalAccess): PortalScreen[] {
+/** The pages inside Manage that this account may open. The sidebar and allowedScreens both read this. */
+export function manageScreens(access: PortalAccess): PortalScreen[] {
   const screens: PortalScreen[] = [];
   if (access.canSeePeople) screens.push("people");
   if (access.canSeeAudit) screens.push("audit");

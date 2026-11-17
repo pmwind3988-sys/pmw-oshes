@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type {
   AuditEntry,
   CatalogueEntry,
+  FiledScope,
   ManageView,
   PortalAccess,
   PortalRecord,
@@ -54,6 +55,7 @@ export interface PortalContextValue {
     formScope?: string | null,
     statusScope?: StatFilter | null,
     subsScope?: SubsScope | null,
+    filedScope?: FiledScope | null,
   ) => void;
   /** List title the current screen is scoped to, or null for every form. */
   focusForm: string | null;
@@ -61,6 +63,8 @@ export interface PortalContextValue {
   focusStatus: StatFilter | null;
   /** Which framing of the submissions screen is open — everything, mine, or needs me. */
   focusSubsScope: SubsScope | null;
+  /** Filed-date window the submissions list opens on, or null for any date. */
+  focusFiled: FiledScope | null;
 
   /**
    * Text the shell's search box was submitted with, which the records table

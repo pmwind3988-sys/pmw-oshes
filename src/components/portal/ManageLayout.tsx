@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Box, Divider, Stack, Typography } from "@mui/material";
 import { usePortal } from "../../contexts/PortalContext";
+import { manageScreens } from "../../utils/portalRole";
 import { builderUrl } from "../../config/oshes";
 import { TINTS } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
@@ -39,8 +40,9 @@ const activeSx = { bgcolor: TINTS.blue, color: "primary.main", fontWeight: 800, 
  * tables it sits beside.
  */
 export default function ManageLayout({ active, children }: { active: ManageSection; children: ReactNode }) {
-  const { access, isAdmin, canRunTestRuns, setScreen, setManageView } = usePortal();
+  const { access, canRunTestRuns, setScreen, setManageView } = usePortal();
   const builder = builderUrl();
+  const pages = manageScreens(access);
 
   const row = (
     key: ManageSection,
@@ -76,8 +78,8 @@ export default function ManageLayout({ active, children }: { active: ManageSecti
         </Typography>
         <Stack component="ul" spacing={0.25} sx={{ listStyle: "none", m: 0, p: 0 }}>
           {row("overview", "Overview", LayoutGrid, () => setScreen("manage"))}
-          {access.canSeePeople && row("people", "People and approvers", Users, () => setScreen("people"))}
-          {canRunTestRuns && (
+          {pages.includes("people") && row("people", "People and approvers", Users, () => setScreen("people"))}
+          {access.isAdmin && (
             <li>
               <Box component="a" href="/admin/routing" sx={itemSx}>
                 <GitBranch size={18} aria-hidden="true" />
@@ -85,8 +87,8 @@ export default function ManageLayout({ active, children }: { active: ManageSecti
               </Box>
             </li>
           )}
-          {(isAdmin || access.isAuditor) && row("smoking", "Smoking log", SmokingRoomsOutlined, () => setScreen("smoking"))}
-          {access.canSeeAudit && row("audit", "History", History, () => setScreen("audit"))}
+          {pages.includes("smoking") && row("smoking", "Smoking log", SmokingRoomsOutlined, () => setScreen("smoking"))}
+          {pages.includes("audit") && row("audit", "History", History, () => setScreen("audit"))}
           {canRunTestRuns && row("tests", "Test runs", Wrench, () => {
             setScreen("manage");
             setManageView("tests");

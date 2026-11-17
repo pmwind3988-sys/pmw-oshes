@@ -13,6 +13,7 @@ import { SUN } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
 import { usePortal } from "../../contexts/PortalContext";
 import { portalTabs, roleLabel } from "../../utils/portalRole";
+import { initialsOf } from "../../utils/portalPeople";
 import { builderUrl } from "../../config/oshes";
 import Logo from "../Logo";
 import FormPickerDialog from "./FormPickerDialog";
@@ -33,14 +34,6 @@ import "../../styles/shell.css";
 
 /** The pages that sit under the Manage tab, so the tab stays lit while one is open. */
 const MANAGE_SCREENS: PortalScreen[] = ["manage", "people", "audit", "smoking"];
-
-/** Two letters from the display name, or one from the email when there is no name yet. */
-function initialsOf(name: string, email: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (email.trim()[0] ?? "?").toUpperCase();
-}
 
 /** True when a keystroke is already going somewhere that takes text. */
 function isTypingTarget(target: EventTarget | null): boolean {

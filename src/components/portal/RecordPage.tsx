@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import { Ban as BlockIcon, Check as CheckIcon, ChevronDown as ArrowDropDownIcon, Trash2 as DeleteForeverIcon } from "../ui/Icons";
 import { usePortal } from "../../contexts/PortalContext";
-import { normalizeEmail } from "../../utils/portalPeople";
+import { initialsOf, normalizeEmail } from "../../utils/portalPeople";
 import { regenerateSubmissionPdf, returnForInformation, signLayer } from "../../utils/portalActions";
 import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
 import {
@@ -66,16 +66,6 @@ const CARD_HEADING_SX = {
 } as const;
 
 const DT_SX = { fontWeight: 700, color: "text.secondary" } as const;
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
 
 /**
  * One submission, as a page.

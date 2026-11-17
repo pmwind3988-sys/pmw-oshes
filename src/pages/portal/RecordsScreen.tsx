@@ -182,6 +182,7 @@ export default function RecordsScreen() {
     focusForm,
     focusStatus,
     focusSubsScope,
+    focusFiled,
     searchSeed,
   } = usePortal();
 
@@ -196,7 +197,7 @@ export default function RecordsScreen() {
     // see no reason for. Only a plain visit honours the "hide settled" pref.
     focusStatus ?? (searchSeed ? "all" : prefs.hideSettled ? "open" : "all"),
   );
-  const [filedRange, setFiledRange] = useState<FiledRange>("any");
+  const [filedRange, setFiledRange] = useState<FiledRange>(focusFiled ?? "any");
   // Seeded from the shell's search bar, then owned here. PortalPage keys this
   // component on `searchSeedAt`, so each submitted search remounts it.
   const [query, setQuery] = useState(searchSeed);

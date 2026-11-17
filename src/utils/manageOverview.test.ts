@@ -34,11 +34,23 @@ describe("overviewCards", () => {
     expect(value("late")).toBe(1);
   });
 
-  it("sends each count to the list it counted, by status", () => {
+  it("sends each count to the list it counted: the waiting card opens open items for all forms", () => {
     const cards = overviewCards([record({})], withSla, NOW);
-    expect(cards.find((card) => card.key === "waiting")?.status).toBe("open");
-    expect(cards.find((card) => card.key === "late")?.status).toBe("Past SLA");
-    expect(cards.find((card) => card.key === "filed")?.status).toBe("all");
+    expect(cards.find((card) => card.key === "waiting")?.target).toEqual({
+      status: "open",
+      subsScope: "all",
+      filedScope: null,
+    });
+    expect(cards.find((card) => card.key === "late")?.target.status).toBe("Past SLA");
+  });
+
+  it("opens Filed today on today's filings, the same window the Filed filter uses", () => {
+    const today = record({ filedAt: NOW });
+    const older = record({ filedAt: new Date(NOW.getTime() - 3 * DAY) });
+    const cards = overviewCards([today, older], withSla, NOW);
+    const filed = cards.find((card) => card.key === "filed");
+    expect(filed?.target).toEqual({ status: "all", subsScope: "all", filedScope: "today" });
+    expect(filed?.value).toBe(1);
   });
 
   it("drops the late count where no form declares an SLA", () => {

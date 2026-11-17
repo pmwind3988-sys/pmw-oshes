@@ -58,7 +58,7 @@ function OverviewSection() {
               key={card.key}
               component="button"
               type="button"
-              onClick={() => setScreen("subs", null, card.status, "all")}
+              onClick={() => setScreen("subs", null, card.target.status, card.target.subsScope, card.target.filedScope)}
               sx={{
                 textAlign: "left",
                 fontFamily: "inherit",

@@ -11,7 +11,7 @@ import SmokingLogScreen from "./portal/SmokingLogScreen";
 import SettingsScreen from "./portal/SettingsScreen";
 
 function ScreenBody() {
-  const { screen, focusForm, focusStatus, focusSubsScope, searchSeedAt } = usePortal();
+  const { screen, focusForm, focusStatus, focusSubsScope, focusFiled, searchSeedAt } = usePortal();
   switch (screen) {
     case "record":
       return <RecordPage />;
@@ -30,7 +30,7 @@ function ScreenBody() {
     // those filters seeded. Without the key React reuses the mounted instance
     // and keeps the filter state from wherever you were last.
     case "subs":
-      return <RecordsScreen key={`${focusSubsScope}-${focusForm}-${focusStatus}-${searchSeedAt}`} />;
+      return <RecordsScreen key={`${focusSubsScope}-${focusForm}-${focusStatus}-${focusFiled}-${searchSeedAt}`} />;
     case "home":
     default:
       return <HomeScreen />;

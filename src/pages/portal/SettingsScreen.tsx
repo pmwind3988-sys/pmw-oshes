@@ -9,6 +9,7 @@ import { useAppearance } from "../../contexts/AppearanceContext";
 import AppearancePicker from "../../components/dashboard/AppearancePicker";
 import { findDashboardBackground } from "../../utils/dashboardBackgrounds";
 import { accessSummary, roleLabel } from "../../utils/portalRole";
+import { initialsOf } from "../../utils/portalPeople";
 import type { PortalScreen } from "../../types";
 
 /** The pages the account may open the portal on. Home shows the rest; Submissions is the list of work. */
@@ -16,13 +17,6 @@ const START_OPTIONS: { screen: PortalScreen; label: string }[] = [
   { screen: "home", label: "Your work" },
   { screen: "subs", label: "Submissions" },
 ];
-
-/** Two letters for the avatar, from the name. */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-  return (words[0] ?? "?").slice(0, 2).toUpperCase();
-}
 
 /** A secondary action: a quiet outline, sized like the rest of the controls. */
 const controlSx = { minHeight: 40, px: 2, borderRadius: radius.xs, fontWeight: 700, textTransform: "none" } as const;
@@ -72,7 +66,7 @@ export default function SettingsScreen() {
                 color: "text.primary",
               }}
             >
-              {initialsOf(name)}
+              {initialsOf(userName, userEmail)}
             </Box>
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontSize: 18, fontWeight: 800 }} noWrap>

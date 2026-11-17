@@ -1,6 +1,7 @@
 export type {
   AuditEntry,
   CatalogueEntry,
+  FiledScope,
   FormVisibility,
   ManageView,
   PortalAccess,

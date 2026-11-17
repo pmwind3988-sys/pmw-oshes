@@ -48,6 +48,9 @@ export type PortalScreen = "home" | "subs" | "manage" | "people" | "audit" | "sm
  */
 export type SubsScope = "all" | "mine" | "needs";
 
+/** A Filed-date window a Submissions list can open on. Same vocabulary as the Filed filter. */
+export type FiledScope = "today" | "7d" | "30d";
+
 /** The sections of Manage: its overview, or the test-run tools. */
 export type ManageView = "overview" | "tests";
 

@@ -6,16 +6,9 @@ import { DataCell, DataRow, DataTable, PageHeader, Widget, WidgetEmpty } from ".
 import ManageLayout from "../../components/portal/ManageLayout";
 import { Pager } from "../../components/simple/Pager";
 import { usePortal } from "../../contexts/PortalContext";
-import { displayName, normalizeEmail } from "../../utils/portalPeople";
+import { displayName, initialsOf, normalizeEmail } from "../../utils/portalPeople";
 import { paginate } from "../../utils/paginate";
 import type { PortalPerson } from "../../types";
-
-/** Two letters, so a table of names scans as faces rather than as a column of text. */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
-  return (words[0] ?? "?").slice(0, 2).toUpperCase();
-}
 
 /**
  * People and approvers.

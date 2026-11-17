@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   CatalogueEntry,
   DiscoveredList,
+  FiledScope,
   LoadedConfig,
   ManageView,
   PortalRecord,
@@ -20,7 +21,7 @@ import { buildCatalogue, findCatalogueEntry } from "../../utils/portalCatalogue"
 import { recordKey, toPortalRecord, queueFor } from "../../utils/portalRecords";
 import { allowedScreens, derivePortalAccess, portalHome } from "../../utils/portalRole";
 import { readPortalDeepLink } from "../../utils/portalDeepLink";
-import { DEFAULT_PORTAL_PREFS, readPortalPrefs, writePortalPrefs, type PortalPrefs } from "../../utils/portalPrefs";
+import { DEFAULT_PORTAL_PREFS, readPortalPrefs, startScreenOf, writePortalPrefs, type PortalPrefs } from "../../utils/portalPrefs";
 import { deriveAuditFromRecords, readAuditTrail, sortAudit } from "../../utils/portalAudit";
 import { applySubmissionPatch } from "../../utils/portalPatch";
 import { displayName, normalizeEmail, type PeopleDirectory } from "../../utils/portalPeople";
@@ -48,6 +49,7 @@ interface ReturnPoint {
   formScope: string | null;
   statusScope: StatFilter | null;
   subsScope: SubsScope | null;
+  filedScope: FiledScope | null;
 }
 
 /** Per-submission layer reassignments, keyed by layer number. */
@@ -108,6 +110,7 @@ export default function PortalContainer({
   const [focusForm, setFocusForm] = useState<string | null>(() => deepLink.form ?? null);
   const [focusStatus, setFocusStatus] = useState<StatFilter | null>(null);
   const [focusSubsScope, setFocusSubsScope] = useState<SubsScope | null>(() => deepLink.scope ?? null);
+  const [focusFiled, setFocusFiled] = useState<FiledScope | null>(null);
   const [search, setSearch] = useState<{ query: string; at: number }>({ query: "", at: 0 });
   const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
     typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
@@ -233,7 +236,8 @@ export default function PortalContainer({
   // A screen this account cannot reach — a stale preference, or a link shared
   // between two different kinds of account — lands on Home instead.
   const permitted = allowedScreens(access);
-  const preferredStart = permitted.includes(prefs.startScreen) ? prefs.startScreen : portalHome();
+  const start = startScreenOf(prefs.startScreen);
+  const preferredStart = permitted.includes(start) ? start : portalHome();
   const activeScreen = screen && permitted.includes(screen) ? screen : preferredStart;
 
   const setPrefs = (changes: Partial<PortalPrefs>) =>
@@ -249,6 +253,7 @@ export default function PortalContainer({
     setFocusForm(returnTo?.formScope ?? null);
     setFocusStatus(returnTo?.statusScope ?? null);
     setFocusSubsScope(returnTo?.subsScope ?? null);
+    setFocusFiled(returnTo?.filedScope ?? null);
     setReturnTo(null);
     setDrawerChoice({ ref: null });
   };
@@ -275,12 +280,14 @@ export default function PortalContainer({
       formScope: string | null = null,
       statusScope: StatFilter | null = null,
       subsScope: SubsScope | null = null,
+      filedScope: FiledScope | null = null,
     ) => {
       setScreenState(next);
       setManageView("overview");
       setFocusForm(formScope);
       setFocusStatus(statusScope);
       setFocusSubsScope(subsScope);
+      setFocusFiled(filedScope);
       // A deliberate navigation is not a way back from a record, and it closes any open one.
       setReturnTo(null);
       setDrawerChoice({ ref: null });
@@ -294,6 +301,7 @@ export default function PortalContainer({
     focusForm: focusForm && catalogue.some((entry) => entry.listTitle === focusForm) ? focusForm : null,
     focusStatus,
     focusSubsScope,
+    focusFiled,
     searchSeed: search.query,
     searchSeedAt: search.at,
     // Searching is a navigation: it takes you to the table that can answer,
@@ -307,6 +315,7 @@ export default function PortalContainer({
       setFocusForm(null);
       setFocusStatus(null);
       setFocusSubsScope(null);
+      setFocusFiled(null);
       setReturnTo(null);
       setDrawerChoice({ ref: null });
     },
@@ -317,7 +326,13 @@ export default function PortalContainer({
     // record page keeps the list the reader came from in the first place.
     openDrawer: (reference: string) => {
       if (activeScreen !== "record") {
-        setReturnTo({ screen: activeScreen, formScope: focusForm, statusScope: focusStatus, subsScope: focusSubsScope });
+        setReturnTo({
+          screen: activeScreen,
+          formScope: focusForm,
+          statusScope: focusStatus,
+          subsScope: focusSubsScope,
+          filedScope: focusFiled,
+        });
       }
       setScreenState("record");
       setDrawerChoice({ ref: reference });

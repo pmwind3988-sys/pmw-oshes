@@ -1,7 +1,6 @@
 import type { PortalScreen } from "../types";
 
 /** Every page a preference may name as its landing page. */
-const PORTAL_SCREENS: readonly PortalScreen[] = ["home", "subs", "manage", "people", "audit", "smoking", "settings"];
 
 /**
  * Per-browser portal preferences.
@@ -52,16 +51,20 @@ function storage(): Storage | null {
  * (a page since removed from the portal) falls back to Home, as does anything
  * unreadable.
  */
+/** The pages an account may open the portal on. Anything else opens on Home. */
+export const START_SCREENS: readonly PortalScreen[] = ["home", "subs"];
+
+/** Keeps a landing page only if it is one of START_SCREENS; anything else (a removed or stale page) is Home. */
+export function startScreenOf(value: unknown): PortalScreen {
+  return (START_SCREENS as readonly unknown[]).includes(value) ? (value as PortalScreen) : "home";
+}
+
 export function parsePortalPrefs(raw: string | null): PortalPrefs {
   if (!raw) return DEFAULT_PORTAL_PREFS;
   try {
     const parsed = JSON.parse(raw) as Partial<PortalPrefs>;
-    const startScreen =
-      typeof parsed.startScreen === "string" && (PORTAL_SCREENS as readonly string[]).includes(parsed.startScreen)
-        ? (parsed.startScreen as PortalScreen)
-        : DEFAULT_PORTAL_PREFS.startScreen;
     return {
-      startScreen,
+      startScreen: startScreenOf(parsed.startScreen),
       compactTables: parsed.compactTables === true,
       hideSettled: parsed.hideSettled === true,
       subsView: parsed.subsView === "board" ? "board" : "list",
