@@ -936,7 +936,7 @@ export default function DynamicFormPage() {
     const baseJson = formData?.surveyJson;
     if (!baseJson) { setEnrichedSurveyJson(null); return; }
 
-    const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Figtree" });
+    const withAppFont = (json: Record<string, unknown>): Record<string, unknown> => ({ ...json, fontFamily: "Plus Jakarta Sans" });
     const applyPrefill = (json: Record<string, unknown>): Record<string, unknown> =>
       cloneAndApplyPrefilledQr(withAppFont(json), prefilledQrPayload);
     // When the direct SharePoint reads are unavailable the config already arrived
