@@ -467,7 +467,7 @@ const globalCss = (t: typeof LIGHT) => `
   .dfp-header{flex-wrap:nowrap}
   .dfp-steps{display:none}
   @media(min-width:900px){
-    .dfp-form-layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start}
+    .dfp-form-layout.has-steps{display:grid;grid-template-columns:200px minmax(0,1fr);gap:28px;align-items:start}
     .dfp-steps{display:block;position:sticky;top:96px}
   }
   .dfp-banner-logo img{max-height:48px!important}
@@ -1964,11 +1964,11 @@ export default function DynamicFormPage() {
         </div>
       )}
 
-      <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
+      <div className="dfp-content" style={{ maxWidth: formReady && runtime.pageCount > 1 ? 1088 : 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
         {submitStatus === "success" ? (
           <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} onReset={handleReset} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} testRunReview={testRunReview} />
         ) : (
-          <div className="dfp-form-layout">
+          <div className={formReady && runtime.pageCount > 1 ? "dfp-form-layout has-steps" : "dfp-form-layout"}>
             {formReady && runtime.pageCount > 1 && (
               <nav className="dfp-steps" aria-label="Form steps">
                 <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
