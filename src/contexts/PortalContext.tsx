@@ -83,6 +83,8 @@ export interface PortalContextValue {
   drawerRef: string | null;
   openDrawer: (reference: string) => void;
   closeDrawer: () => void;
+  /** Records whose drawer was opened this session, newest first, no repeats, at most 8. */
+  recentRefs: string[];
 
   /** Nudges are idempotent per session — the button becomes "Nudged". */
   nudged: Record<string, boolean>;

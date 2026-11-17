@@ -140,6 +140,7 @@ function contextValue(overrides: Partial<PortalContextValue> = {}): PortalContex
     removeRecord: () => {},
     appendAudit: () => {},
     updateCatalogue: () => {},
+    recentRefs: [],
     toast: () => {},
     onSignOut: () => {},
     ...overrides,
@@ -155,28 +156,48 @@ function render(node: React.ReactNode, value: PortalContextValue): string {
 }
 
 describe("HomeScreen", () => {
-  it("lists each form type as a way in", () => {
+  it("offers each form to start, with its sign-off count", () => {
     const html = render(<HomeScreen />, contextValue());
-    expect(html).toContain("Your forms");
+    expect(html).toContain("Start a form");
     expect(html).toContain("Permit To Work");
-    expect(html).toContain("PTW");
+    expect(html).toContain("1 sign-off");
   });
 
-  it("renders for an account with nothing filed and no forms published", () => {
+  it("opens Filed by you with an empty state for an account with nothing filed", () => {
     const html = render(<HomeScreen />, contextValue({ catalogue: [], records: [], myRecords: [] }));
-    expect(html).toContain("No form types are published yet");
+    expect(html).toContain("Nothing here yet");
+    expect(html).not.toContain("Start a form");
   });
 
-  it("shows no SLA statistic when no form declares one", () => {
+  it("greets the signed-in person by first name with nothing waiting", () => {
     const html = render(<HomeScreen />, contextValue());
-    expect(html).not.toContain("Past SLA");
+    expect(html).toContain("Good morning, Sazali.");
+    expect(html).not.toContain("waiting for your signature");
   });
 
-  it("shows the SLA statistic once a form declares one", () => {
+  it("says how many forms are waiting and opens Needs you when there are some", () => {
+    const queue = [
+      toPortalRecord(submission(), entry(), {}, {}, NOW),
+      toPortalRecord(submission({ id: "143", title: "Second permit" }), entry(), {}, {}, NOW),
+    ];
+    const html = render(<HomeScreen />, contextValue({ queue }));
+    expect(html).toContain("2 forms are waiting for your signature.");
+    expect(html).toContain("Review");
+  });
+
+  it("hides Needs you from a read-only account", () => {
+    const base = contextValue();
+    const html = render(<HomeScreen />, contextValue({ access: { ...base.access, readOnly: true } }));
+    expect(html).not.toContain("Needs you");
+    expect(html).toContain("Viewed recently");
+  });
+
+  it("drops the statistics the page used to carry", () => {
     const withSla = entry({ slaDays: 3 });
     const records = [toPortalRecord(submission(), withSla, {}, {}, NOW)];
     const html = render(<HomeScreen />, contextValue({ catalogue: [withSla], records }));
-    expect(html).toContain("Past SLA");
+    expect(html).not.toContain("Where records stand");
+    expect(html).not.toContain("Intake, last 14 days");
   });
 });
 

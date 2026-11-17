@@ -25,6 +25,7 @@ import { applySubmissionPatch } from "../../utils/portalPatch";
 import { displayName, normalizeEmail, type PeopleDirectory } from "../../utils/portalPeople";
 import { parseWorkflowAssignmentData } from "../../utils/workflowAssignmentData";
 import { readDevRole } from "../../utils/devRoleOverride";
+import { pushRecentRef } from "../../utils/portalWork";
 
 interface PortalContainerProps {
   userEmail: string;
@@ -83,6 +84,7 @@ export default function PortalContainer({
 
   /** Null until the drawer is used; then the reference it shows, or null when closed. */
   const [drawerChoice, setDrawerChoice] = useState<{ ref: string | null } | null>(null);
+  const [recentRefs, setRecentRefs] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState("");
   const [screen, setScreenState] = useState<PortalScreen | null>(() => deepLink.screen ?? null);
   const [focusForm, setFocusForm] = useState<string | null>(() => deepLink.form ?? null);
@@ -277,8 +279,12 @@ export default function PortalContainer({
     prefs,
     setPrefs,
     drawerRef,
-    openDrawer: (reference: string) => setDrawerChoice({ ref: reference }),
+    openDrawer: (reference: string) => {
+      setDrawerChoice({ ref: reference });
+      setRecentRefs((current) => pushRecentRef(current, reference));
+    },
     closeDrawer: () => setDrawerChoice({ ref: null }),
+    recentRefs,
     nudged,
     markNudged: (reference: string) => setNudged((current) => ({ ...current, [reference]: true })),
     applyPatch: (record: PortalRecord, fields: Record<string, unknown>) =>

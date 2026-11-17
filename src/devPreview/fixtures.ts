@@ -238,6 +238,7 @@ export function fixtureContext(role: PortalRole, overrides: Partial<PortalContex
     drawerRef: null,
     openDrawer: () => {},
     closeDrawer: () => {},
+    recentRefs: [],
     nudged: {},
     markNudged: () => {},
     applyPatch: () => {},
