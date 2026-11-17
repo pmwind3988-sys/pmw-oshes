@@ -10,24 +10,22 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Approval workspace | `ApprovalDashboard.tsx` | Routes `/admin/submissions` and `/admin/approvals`. Admin-only. Per-item layer reassignment written to `WorkflowAssignmentData`; `L{n}_Email` remains authoritative |
-| Per-item reassignment UI | `WorkflowAssignmentEditor.tsx` | Layer picker + reason, used by `ApprovalDashboard` |
-| Response viewer | `ResponseViewer.tsx` | Route `/admin/responses/:formTitle`. Renders submissions read-only through the native engine, plus matrix tables and a link to the stored PDF. **Export CSV** goes through `formResponseExport.ts` → `formResponseCsv.ts`; it re-reads the list because the seven columns this screen loads are not the export |
-| Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results. Used by `DetailModal` and `EvaluationPage` |
+| Per-item reassignment UI | `WorkflowAssignmentEditor.tsx` | Layer picker + reason. Written to `WorkflowAssignmentData`; `L{n}_Email` remains authoritative. No screen renders it since the approval workspace was retired. |
+| Evaluation summary | `EvaluationSummary.tsx` | Read-only display of completed evaluation results. Used by `EvaluationPage` |
 | Read-only submission preview | `ReadOnlySubmissionPreview.tsx` | Used by `EvaluationPage` so a reviewer sees what was submitted |
 | Layer progress derivation | `approvalDashboardLayerProgress.ts` | Pure — has unit tests |
-| Test run launcher | `TestRunLauncher.tsx` | "Test workflow" on each dashboard form card, for form builders (`canRunTestRuns`, i.e. `resolveFormBuilderAccess`). Mints a signed ticket (`mint-test-ticket` on `/api/submit-form`) and opens `/form/{slug}?testTicket=…` ("Fill in myself") or `…&simulate=1` ("Simulate submission"): the form fills itself with `sampleAnswersFor` (signature pads signed with `SAMPLE_SIGNATURE`, file uploads never invented), ticks consent, submits once and then offers a link to step 1. A form needing a real file stops with the gaps highlighted instead of retrying. `simulate` is ignored without a ticket, so a real link cannot submit itself. Not an authoring tool: it only rehearses an already-published form. |
+| Test run launcher | `TestRunLauncher.tsx` | "Test workflow" on each form card in Manage, for form builders (`canRunTestRuns`, i.e. `resolveFormBuilderAccess`). Mints a signed ticket (`mint-test-ticket` on `/api/submit-form`) and opens `/form/{slug}?testTicket=…` ("Fill in myself") or `…&simulate=1` ("Simulate submission"): the form fills itself with `sampleAnswersFor` (signature pads signed with `SAMPLE_SIGNATURE`, file uploads never invented), ticks consent, submits once and then offers a link to step 1. A form needing a real file stops with the gaps highlighted instead of retrying. `simulate` is ignored without a ticket, so a real link cannot submit itself. Not an authoring tool: it only rehearses an already-published form. |
 | Test run panel | `TestRunPanel.tsx` | "Test runs" on the same card. Lists `IsTest` rows with each run's checklist (`TestRunLog` merged with the row via `testRunProgress.ts`), renders the PDF in the browser (`record-test-run-step`), deletes through `delete-test-runs`, which re-checks `IsTest` server-side. |
 | Barrel exports | `index.ts` | Only barrel export in the entire app |
 | Shared page chrome | `WorkspaceLayout.tsx` | `WorkspacePage`, `WorkspaceHeader`, `WorkspaceNotice`, `WorkspacePanelHeader`, `WorkspacePill`, `WorkspaceTag` |
 
 ## Test runs in the listings
-- A test run is hidden from `ApprovalDashboard`, `ResponseViewer`, the dashboard (cards, stats, table, export) and the portal unless "Show test runs" is ticked; the portal never shows them. `IsTest` is read in its own optional query (`readTestRowIds` in `src/utils/testColumnProbeCache.ts`) on every tier — never inside a required `$select`, which would 400 every form that was never rehearsed.
+- A test run is kept out of the portal entirely: `App.tsx` filters `IsTest` rows out before the portal sees them, and the only list that shows them is Manage's test-run panel. `IsTest` is read in its own optional query (`readTestRowIds` in `src/utils/testColumnProbeCache.ts`) on every tier — never inside a required `$select`, which would 400 every form that was never rehearsed.
 
 ## Conventions
 - **State**: Local `useState` only — no context or external store
 - **Styling**: MUI components plus `editorial` tokens from `src/theme/editorial.ts`, same as
-  the portal screens and `AdminHomePage`. There is no private palette in this folder — the
+  the portal screens. There is no private palette in this folder — the
   grey/emerald `C` object these files arrived with (and `constants.ts`) has been removed.
   Panels 14px, inputs 12px, small surfaces 8–10px, pills 999px, MUI buttons square. See
   `DESIGN.md`.
