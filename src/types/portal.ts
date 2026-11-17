@@ -35,8 +35,10 @@ export interface PortalAccess {
   canExport: boolean;
 }
 
-/** The pages the portal can show. Which ones an account may reach comes from `PortalAccess`. */
-/** "record" is one submission's page, reached from a list and left back to where it was opened from. */
+/**
+ * The pages the portal can show. Which ones an account may reach comes from `PortalAccess`.
+ * "record" is one submission's page, reached from a list and left back to where it was opened from.
+ */
 export type PortalScreen = "home" | "subs" | "manage" | "people" | "audit" | "smoking" | "settings" | "record";
 
 /**

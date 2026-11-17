@@ -37,6 +37,18 @@ describe("record page actions", () => {
     expect(markup).toContain("Change who signs");
   });
 
+  it("does not offer Change who signs on a record with no approval step", () => {
+    const noWorkflow = fixtureRecords("admin").find((record) => !record.hasWorkflow);
+    expect(noWorkflow).toBeDefined();
+    expect(pageFor("admin", noWorkflow!)).not.toContain("Change who signs");
+  });
+
+  it("does not offer Change who signs on a returned record", () => {
+    const returned = fixtureRecords("admin").find((record) => record.returned);
+    expect(returned).toBeDefined();
+    expect(pageFor("admin", returned!)).not.toContain("Change who signs");
+  });
+
   it("offers an auditor no action buttons at all", () => {
     expect(inFlight).toBeDefined();
     const markup = pageFor("auditor", inFlight!);

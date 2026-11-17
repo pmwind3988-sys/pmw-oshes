@@ -32,7 +32,7 @@ import { recordKey } from "../../utils/portalRecords";
 import { formatDisplayDayMonthTime } from "../../utils/displayDateTime";
 import { DEFAULT_PDF_STYLE, PDF_STYLE_LABELS, type PdfStyle } from "../../utils/pdfStyle";
 import { radius } from "../../theme/surfaces";
-import { SUN } from "../../theme/simple";
+import { SUN, TINTS } from "../../theme/simple";
 import { MessageCard } from "../simple/MessageCard";
 import { StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
@@ -154,7 +154,10 @@ function RecordView({ record }: { record: PortalRecord }) {
   // waiting table offer the same two actions on the same record.
   const canCancel = canWithdrawRecord(record, access, userEmail);
   const canDelete = canDeleteRecord(access);
-  const canReassign = access.canChase && !record.done;
+  // Only a record with a live approval layer has someone to move: reassigning a
+  // record with no approval step, or one that was returned, would write a layer
+  // that is not the current one.
+  const canReassign = access.canChase && record.hasWorkflow && !record.done && !record.returned;
   const hasMoreActions = canCancel || canDelete;
   const cancelLabel = withdrawLabel(record, userEmail);
   const isEvaluation = record.chain[record.at]?.type === "evaluation";
@@ -346,7 +349,7 @@ function RecordView({ record }: { record: PortalRecord }) {
             ) : showAllAnswers ? (
               <AnswersTab record={record} surveyJson={surveyJsonByForm[record.listTitle] ?? null} />
             ) : (
-              <Box component="dl" sx={{ m: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px 28px" }}>
+              <Box component="dl" sx={{ m: 0, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" }, gap: "14px 28px" }}>
                 {answerFields.slice(0, SUMMARY_ANSWERS).map((field) => (
                   <Box key={field.key} sx={{ minWidth: 0 }}>
                     <Typography component="dt" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
@@ -373,7 +376,7 @@ function RecordView({ record }: { record: PortalRecord }) {
                       height: 88,
                       p: 1,
                       borderRadius: radius.xs,
-                      bgcolor: "background.default",
+                      bgcolor: TINTS.grey,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
