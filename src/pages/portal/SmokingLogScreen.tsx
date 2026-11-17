@@ -330,7 +330,7 @@ export default function SmokingLogScreen() {
         actions={
           (tab === "log" || tab === "totals") && (
             <>
-              <OnBreakButton outNow={outNow} />
+              {!access.readOnly && <OnBreakButton outNow={outNow} />}
               <RefreshStatus updatedAt={updatedAt} failed={refreshFailed} short={phone} />
               <Button
                 variant="outlined"

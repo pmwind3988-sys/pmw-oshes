@@ -105,15 +105,30 @@ describe("lastMovedAt", () => {
 });
 
 describe("filedWithin", () => {
-  const now = new Date(2026, 10, 17, 15, 0); // local 17 Nov 2026, 15:00
+  // 15:00 on 17 Nov in Malaysia (UTC+8). Fixed instants, so the machine's own zone does not matter.
+  const now = new Date("2026-11-17T07:00:00.000Z");
 
   it("accepts anything under Any time", () => {
     expect(filedWithin(record({ id: "10", filedAt: new Date(2020, 0, 1) }), "any", now)).toBe(true);
   });
 
   it("keeps a record filed earlier today under Today, and drops yesterday's", () => {
-    expect(filedWithin(record({ id: "11", filedAt: new Date(2026, 10, 17, 8, 0) }), "today", now)).toBe(true);
-    expect(filedWithin(record({ id: "12", filedAt: new Date(2026, 10, 16, 23, 0) }), "today", now)).toBe(false);
+    // 08:00 MYT on 17 Nov is today; 22:00 MYT on 16 Nov is yesterday.
+    expect(filedWithin(record({ id: "11", filedAt: new Date("2026-11-17T00:00:00.000Z") }), "today", now)).toBe(true);
+    expect(filedWithin(record({ id: "12", filedAt: new Date("2026-11-16T14:00:00.000Z") }), "today", now)).toBe(false);
+  });
+
+  it("starts Today at midnight Malaysian time, not UTC midnight", () => {
+    // 00:00 MYT on 17 Nov is 16:00 UTC on 16 Nov.
+    expect(filedWithin(record({ id: "16", filedAt: new Date("2026-11-16T16:00:00.000Z") }), "today", now)).toBe(true);
+    expect(filedWithin(record({ id: "17", filedAt: new Date("2026-11-16T15:59:59.999Z") }), "today", now)).toBe(false);
+  });
+
+  it("treats a 23:30 UTC filing as tomorrow in Malaysia, so it is not Today", () => {
+    // 23:30 UTC on 17 Nov is 07:30 MYT on 18 Nov, after today has ended in Malaysia.
+    const lateUtc = record({ id: "18", filedAt: new Date("2026-11-17T23:30:00.000Z") });
+    expect(filedWithin(lateUtc, "today", new Date("2026-11-17T09:00:00.000Z"))).toBe(false);
+    expect(filedWithin(lateUtc, "7d", new Date("2026-11-17T09:00:00.000Z"))).toBe(true);
   });
 
   it("keeps the last 7 and 30 days, and drops older filings", () => {

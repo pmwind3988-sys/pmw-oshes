@@ -39,7 +39,7 @@ export const authSoft = {
   cardShadow: "0 10px 40px rgba(22, 27, 36, 0.06)",
 } as const;
 
-export const AUTH_FONT = 'Figtree, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const AUTH_FONT = 'var(--pmw-font-main, "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif)';
 
 const pillBase = {
   minHeight: 52,

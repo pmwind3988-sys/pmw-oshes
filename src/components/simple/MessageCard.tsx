@@ -7,6 +7,8 @@ export interface MessageAction {
   label: string;
   onClick?: () => void;
   href?: string;
+  /** Optional mark drawn before the label, such as the Microsoft logo on a sign-in button. */
+  icon?: ReactNode;
 }
 
 /**
@@ -68,6 +70,7 @@ export function MessageCard({
           href={primary.href}
           onClick={primary.onClick}
           disabled={primary.disabled}
+          startIcon={primary.icon}
           fullWidth
           sx={{ mt: 3, height: 48, borderRadius: radius.full, textTransform: "none", fontWeight: 600, fontSize: 16 }}
         >

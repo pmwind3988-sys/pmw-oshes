@@ -585,7 +585,7 @@ function PublicState({
   const button = (b?: StateButton): MessageAction | undefined => {
     if (!b) return undefined;
     if (b.action === "tryAgain") return { label: b.label, onClick: onTryAgain };
-    if (b.action === "signIn") return { label: b.label, onClick: onSignIn };
+    if (b.action === "signIn") return { label: b.label, onClick: onSignIn, icon: <MsIcon size={20} /> };
     if (b.action === "report") return { label: b.label, href: "/report" };
     return { label: b.label, href: "/" };
   };

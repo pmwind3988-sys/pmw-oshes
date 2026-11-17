@@ -15,6 +15,7 @@ import { formatAgo, formatHours, hoursBetween, parseDate } from "./portalTime";
 import { formatDisplayDayMonthTime } from "./displayDateTime";
 import { coerceFieldDisplayText, isPlaceholderDisplayValue } from "./submissionDisplay";
 import { malaysiaDateKey } from "./referenceNumber";
+import { malaysiaDateStamp } from "./malaysiaTime";
 
 function normalizeFieldKey(key: string): string {
   return key.replace(/_x[0-9a-f]{4}_/gi, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -129,16 +130,19 @@ export function matchesStatusChoice(
 export type FiledRange = "any" | "today" | "7d" | "30d";
 
 /**
- * Whether a record was filed inside a range. "Today" is the local calendar day;
- * the others count back from `now`. A record with no filing date only passes
- * "any".
+ * Whether a record was filed inside a range. "Today" is the Malaysian calendar
+ * day (UTC+8, like every other portal date); the others count back from `now`.
+ * A record with no filing date only passes "any".
  */
 export function filedWithin(record: Pick<PortalRecord, "filedAt">, range: FiledRange, now: Date = new Date()): boolean {
   if (range === "any") return true;
   if (!record.filedAt) return false;
   if (range === "today") {
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    return record.filedAt.getTime() >= startOfToday;
+    // Malaysia has no daylight saving, so midnight MYT is always a fixed +08:00 instant.
+    const startOfToday = Date.parse(`${malaysiaDateStamp(now)}T00:00:00+08:00`);
+    const startOfTomorrow = startOfToday + 86_400_000;
+    const filed = record.filedAt.getTime();
+    return filed >= startOfToday && filed < startOfTomorrow;
   }
   const days = range === "7d" ? 7 : 30;
   return now.getTime() - record.filedAt.getTime() <= days * 86_400_000;
