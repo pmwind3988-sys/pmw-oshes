@@ -47,6 +47,7 @@ export function MessageCard({
         p: { xs: 3, sm: 4 },
         width: "100%",
         maxWidth: 440,
+        mx: "auto",
         textAlign: "center",
       }}
     >
