@@ -30,11 +30,13 @@ function fixtureRecords(role: PortalRole): PortalRecord[] {
 describe("record page actions", () => {
   const inFlight = fixtureRecords("admin").find((record) => record.hasWorkflow && !record.done && !record.returned);
 
-  it("offers an administrator Change who signs on a record still in flight", () => {
+  it("offers an administrator the More actions menu on a record still in flight", () => {
     expect(inFlight).toBeDefined();
     const markup = pageFor("admin", inFlight!);
 
-    expect(markup).toContain("Change who signs");
+    // "Change who signs" lives inside the ⋯ menu, which is closed in static markup,
+    // so the menu's trigger is what can be asserted here.
+    expect(markup).toContain('aria-label="More actions"');
   });
 
   it("does not offer Change who signs on a record with no approval step", () => {

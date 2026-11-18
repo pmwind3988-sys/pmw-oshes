@@ -17,17 +17,28 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Ban as BlockIcon, Check as CheckIcon, ChevronDown as ArrowDropDownIcon, Trash2 as DeleteForeverIcon } from "../ui/Icons";
+import {
+  Ban as BlockIcon,
+  Check as CheckIcon,
+  ChevronDown,
+  FileText,
+  ImageIcon,
+  Trash2 as DeleteForeverIcon,
+  UserCog,
+} from "../ui/Icons";
 import { usePortal } from "../../contexts/PortalContext";
 import { initialsOf, normalizeEmail } from "../../utils/portalPeople";
 import { regenerateSubmissionPdf, returnForInformation, signLayer } from "../../utils/portalActions";
 import { canDeleteRecord, canWithdrawRecord, withdrawLabel } from "../../utils/portalRole";
+import { statusTone, toneColors } from "../../utils/portalWork";
 import {
   attachmentDownloadMessage,
   downloadRecordPdf,
   downloadRecordPdfWithAttachments,
   recordAttachments,
 } from "../../utils/portalPdf";
+import { absoluteAttachmentUrl } from "../../utils/fileAttachments";
+import { displayLabel, formDisplayName, isMeaningfulSubject, stepCaption } from "../../utils/recordDisplay";
 import { recordKey } from "../../utils/portalRecords";
 import { formatDisplayDayMonthTime } from "../../utils/displayDateTime";
 import { DEFAULT_PDF_STYLE, PDF_STYLE_LABELS, type PdfStyle } from "../../utils/pdfStyle";
@@ -38,20 +49,20 @@ import { StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
 import DeleteRecordDialog from "./DeleteRecordDialog";
 import ReassignDialog from "./ReassignDialog";
-import { AnswersTab, TimelineTab, answerValueText, recordAnswerSections } from "./RecordDetail";
+import { AnswerTable, TimelineTab, answerValueText, recordAnswerSections } from "./RecordDetail";
 import type { PortalRecord } from "../../types";
 
-/** Pictures are shown as tiles; anything else attached is reached from the PDF. */
+/** Pictures get a picture icon in the files list; anything else gets the file icon. */
 const PICTURE_FILE = /\.(png|jpe?g|gif|webp|heic|bmp)$/i;
 
-/** How many answers the "What was filed" summary shows before "Show all". */
-const SUMMARY_ANSWERS = 6;
+/** An answer longer than this, or with a line break in it, takes the whole row of its card. */
+const WIDE_ANSWER_CHARS = 80;
 
 const CARD_SX = {
   bgcolor: "background.paper",
   border: 1,
   borderColor: "divider",
-  borderRadius: radius.sm,
+  borderRadius: radius.lg,
   minWidth: 0,
 } as const;
 
@@ -61,11 +72,24 @@ const CARD_HEADING_SX = {
   py: 1.5,
   borderBottom: 1,
   borderColor: "divider",
-  fontSize: 14,
+  fontSize: 15,
   fontWeight: 800,
 } as const;
 
 const DT_SX = { fontWeight: 700, color: "text.secondary" } as const;
+
+/** Every header button: 40px, the xs radius, plain words rather than a pill. */
+const HEADER_BUTTON_SX = {
+  minHeight: 40,
+  height: 40,
+  px: 2,
+  borderRadius: radius.xs,
+  textTransform: "none",
+  fontSize: 14,
+  fontWeight: 800,
+} as const;
+
+const NEUTRAL_BUTTON_SX = { ...HEADER_BUTTON_SX, color: "text.primary", borderColor: "divider" } as const;
 
 /**
  * One submission, as a page.
@@ -127,7 +151,8 @@ function RecordView({ record }: { record: PortalRecord }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [activity, setActivity] = useState<"all" | "notes" | "history">("all");
-  const [showAllAnswers, setShowAllAnswers] = useState(false);
+  /** Answer sections the reader has folded away. Every section starts open. */
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   /** Every PDF is drawn in the classic layout unless an administrator picks the new one here. */
   const [pdfStyle, setPdfStyle] = useState<PdfStyle>(DEFAULT_PDF_STYLE);
 
@@ -148,7 +173,7 @@ function RecordView({ record }: { record: PortalRecord }) {
   // record with no approval step, or one that was returned, would write a layer
   // that is not the current one.
   const canReassign = access.canChase && record.hasWorkflow && !record.done && !record.returned;
-  const hasMoreActions = canCancel || canDelete;
+  const hasMoreActions = canReassign || canCancel || canDelete;
   const cancelLabel = withdrawLabel(record, userEmail);
   const isEvaluation = record.chain[record.at]?.type === "evaluation";
 
@@ -159,9 +184,7 @@ function RecordView({ record }: { record: PortalRecord }) {
     () => recordAnswerSections(record, surveyJsonByForm[record.listTitle] ?? null),
     [record, surveyJsonByForm],
   );
-  const answerFields = useMemo(() => sections.flatMap((section) => section.fields), [sections]);
   const attachments = useMemo(() => recordAttachments(record, formSurveyJson), [record, formSurveyJson]);
-  const pictures = useMemo(() => attachments.filter((file) => PICTURE_FILE.test(file.name)), [attachments]);
   const notes = useMemo(() => record.chain.filter((step) => step.note.trim() !== ""), [record.chain]);
 
   const actor = { spClient, actorName: userName || userEmail, actorEmail: userEmail };
@@ -246,144 +269,306 @@ function RecordView({ record }: { record: PortalRecord }) {
   const filedText = record.filedAt ? formatDisplayDayMonthTime(record.filedAt) : "—";
   const updatedText = trail[0]?.whenLabel ?? record.filedLabel;
   const stepCount = record.chain.length;
+  const signedCount = record.chain.filter((step) => step.state === "signed").length;
+  const hasSteps = record.hasWorkflow && stepCount > 0;
+  const showStepInMeta = hasSteps && !record.done;
+  const metaLine = [
+    `Filed by ${record.submitter}`,
+    filedText,
+    showStepInMeta ? `Step ${record.at + 1} of ${stepCount}` : "",
+  ]
+    .filter((part) => part !== "")
+    .join(" · ");
+  const lozenge = toneColors[statusTone(record.status)];
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, maxWidth: 1180, mx: "auto", minWidth: 0 }}>
-      <Stack
-        component="nav"
-        aria-label="Breadcrumb"
-        direction="row"
-        sx={{ flexWrap: "wrap", gap: 0.75, alignItems: "center", fontSize: 13.5, fontWeight: 600, color: "text.secondary" }}
-      >
-        <Link component="button" type="button" underline="hover" color="inherit" onClick={() => setScreen("subs")} sx={{ fontWeight: 600, fontSize: 13.5 }}>
-          Submissions
-        </Link>
-        <span aria-hidden="true">/</span>
-        <Link
-          component="button"
-          type="button"
-          underline="hover"
-          color="inherit"
-          onClick={() => setScreen("subs", record.listTitle)}
-          sx={{ fontWeight: 600, fontSize: 13.5 }}
+      <Box component="section" aria-label="Record summary" sx={{ ...CARD_SX, p: { xs: 2.5, sm: 3 }, display: "flex", flexDirection: "column", gap: 2 }}>
+        <Stack
+          component="nav"
+          aria-label="Breadcrumb"
+          direction="row"
+          sx={{ flexWrap: "wrap", gap: 0.75, alignItems: "center", fontSize: 13, fontWeight: 600, color: "text.secondary" }}
         >
-          {record.formName}
-        </Link>
-        <span aria-hidden="true">/</span>
-        <Box component="span" aria-current="page" sx={{ color: "text.primary", fontWeight: 800 }}>
-          {record.reference}
-        </Box>
-      </Stack>
+          <Link component="button" type="button" underline="hover" color="inherit" onClick={() => setScreen("subs")} sx={{ fontWeight: 600, fontSize: 13 }}>
+            Submissions
+          </Link>
+          <span aria-hidden="true">/</span>
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            color="inherit"
+            onClick={() => setScreen("subs", record.listTitle)}
+            sx={{ fontWeight: 600, fontSize: 13 }}
+          >
+            {formDisplayName(record)}
+          </Link>
+          <span aria-hidden="true">/</span>
+          <Box component="span" aria-current="page" sx={{ color: "text.primary", fontWeight: 700 }}>
+            {record.reference}
+          </Box>
+        </Stack>
 
-      <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 3, alignItems: "flex-start" }}>
-        <Stack spacing={2.5} sx={{ flex: "1 1 0", minWidth: 0, width: "100%" }}>
-          <Stack spacing={1.5}>
-            <Typography component="h1" sx={{ fontSize: { xs: 21, sm: 26 }, fontWeight: 800, lineHeight: 1.25, wordBreak: "break-word" }}>
-              {record.subject}
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, alignItems: "flex-start", justifyContent: "space-between" }}>
+          <Box sx={{ minWidth: 0, flex: "1 1 320px" }}>
+            <Typography
+              sx={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "text.secondary" }}
+            >
+              {formDisplayName(record)}
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1, alignItems: "center" }}>
-              {/* One control, two jobs: the press downloads what the record says
-                  now, the arrow offers to rebuild the copy SharePoint is storing.
-                  Keeping the rebuild behind the arrow is deliberate: it deletes a
-                  file, and that is not what a stray click on "Download" should do. */}
-              <ButtonGroup variant="outlined">
-                <Button onClick={() => void handlePdf()} disabled={Boolean(pdfBusy)} sx={{ minHeight: 40 }}>
-                  {pdfBusy === "download" || pdfBusy === "attachments"
-                    ? "Preparing…"
-                    : styleFor === "soft"
-                      ? "Download PDF · new design"
-                      : "Download PDF"}
-                </Button>
-                {(canRegenerate || canDownloadWithAttachments || canChooseStyle) && (
-                  <Button
-                    aria-label="Other PDF actions"
-                    aria-haspopup="menu"
-                    aria-expanded={Boolean(pdfMenu)}
-                    onClick={(event) => setPdfMenu(event.currentTarget)}
-                    disabled={Boolean(pdfBusy)}
-                    sx={{ minHeight: 40, minWidth: 34, px: 0.25 }}
-                  >
-                    <ArrowDropDownIcon fontSize="small" />
-                  </Button>
-                )}
-              </ButtonGroup>
-
-              {canReassign && (
-                <Button variant="outlined" onClick={() => setReassignOpen(true)} sx={{ minHeight: 40 }}>
-                  Change who signs
-                </Button>
-              )}
-
-              {hasMoreActions && (
-                <IconButton
-                  aria-label="More actions"
-                  aria-haspopup="menu"
-                  aria-expanded={Boolean(moreMenu)}
-                  onClick={(event) => setMoreMenu(event.currentTarget)}
-                  sx={{ width: 40, height: 40, border: 1, borderColor: "divider", borderRadius: radius.xs, fontSize: 18, fontWeight: 800 }}
-                >
-                  ⋯
-                </IconButton>
-              )}
-            </Stack>
-            {pdfBusy === "regenerate" && <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Rebuilding the stored PDF…</Typography>}
-            {pdfBusy === "attachments" && <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Adding the attachments…</Typography>}
-          </Stack>
-
-          <Box component="section" sx={{ ...CARD_SX, p: { xs: 2, sm: 2.5 }, display: "flex", flexDirection: "column", gap: 2 }}>
-            <Typography component="h2" sx={{ fontSize: 15, fontWeight: 800 }}>
-              What was filed
-            </Typography>
-            {answerFields.length === 0 ? (
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>No answers were stored against this submission.</Typography>
-            ) : showAllAnswers ? (
-              <AnswersTab record={record} surveyJson={surveyJsonByForm[record.listTitle] ?? null} />
-            ) : (
-              <Box component="dl" sx={{ m: 0, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" }, gap: "14px 28px" }}>
-                {answerFields.slice(0, SUMMARY_ANSWERS).map((field) => (
-                  <Box key={field.key} sx={{ minWidth: 0 }}>
-                    <Typography component="dt" sx={{ fontSize: 12, fontWeight: 700, color: "text.secondary" }}>
-                      {field.label}
-                    </Typography>
-                    <Typography component="dd" sx={{ m: "2px 0 0", fontSize: 14.5, fontWeight: 700, wordBreak: "break-word" }}>
-                      {answerValueText(field)}
-                    </Typography>
-                  </Box>
-                ))}
+            <Typography component="h1" sx={{ mt: 0.5, fontSize: { xs: 22, sm: 26 }, fontWeight: 800, lineHeight: 1.2, wordBreak: "break-word" }}>
+              {record.reference}
+              <Box
+                component="span"
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  ml: 1.25,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: radius.tag,
+                  bgcolor: lozenge.bg,
+                  color: lozenge.fg,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  verticalAlign: "middle",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {record.status}
               </Box>
+            </Typography>
+            {isMeaningfulSubject(record) && (
+              <Typography sx={{ mt: 0.75, fontSize: 16, color: "text.primary", wordBreak: "break-word" }}>{record.subject}</Typography>
             )}
-            {answerFields.length > SUMMARY_ANSWERS && (
-              <Button variant="text" onClick={() => setShowAllAnswers((open) => !open)} sx={{ alignSelf: "flex-start", minHeight: 36, fontWeight: 800 }}>
-                {showAllAnswers ? "Show fewer answers" : `Show all ${answerFields.length} answers`}
+            <Typography sx={{ mt: 0.75, fontSize: 13.5, color: "text.secondary" }}>{metaLine}</Typography>
+          </Box>
+
+          <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1, alignItems: "center", justifyContent: "flex-end", ml: "auto" }}>
+            {canSign && (
+              <>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => void handleSign()}
+                  disabled={busy}
+                  startIcon={<CheckIcon fontSize="small" />}
+                  sx={{ ...HEADER_BUTTON_SX }}
+                >
+                  {isEvaluation ? "Evaluate and release" : "Approve and sign"}
+                </Button>
+                <Button variant="outlined" onClick={() => void handleReturn()} disabled={busy} sx={{ ...NEUTRAL_BUTTON_SX }}>
+                  Return
+                </Button>
+              </>
+            )}
+
+            {/* One control, two jobs: the press downloads what the record says
+                now, the arrow offers to rebuild the copy SharePoint is storing.
+                Keeping the rebuild behind the arrow is deliberate: it deletes a
+                file, and that is not what a stray click on "Download" should do. */}
+            <ButtonGroup variant="outlined">
+              <Button onClick={() => void handlePdf()} disabled={Boolean(pdfBusy)} sx={{ ...NEUTRAL_BUTTON_SX }}>
+                {pdfBusy === "download" || pdfBusy === "attachments"
+                  ? "Preparing…"
+                  : styleFor === "soft"
+                    ? "Download PDF · new design"
+                    : "Download PDF"}
               </Button>
+              {(canRegenerate || canDownloadWithAttachments || canChooseStyle) && (
+                <Button
+                  aria-label="Other PDF actions"
+                  aria-haspopup="menu"
+                  aria-expanded={Boolean(pdfMenu)}
+                  onClick={(event) => setPdfMenu(event.currentTarget)}
+                  disabled={Boolean(pdfBusy)}
+                  sx={{ ...NEUTRAL_BUTTON_SX, px: 0.5, minWidth: 34 }}
+                >
+                  <ChevronDown size={16} />
+                </Button>
+              )}
+            </ButtonGroup>
+
+            {hasMoreActions && (
+              <IconButton
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={Boolean(moreMenu)}
+                onClick={(event) => setMoreMenu(event.currentTarget)}
+                sx={{ width: 40, height: 40, border: 1, borderColor: "divider", borderRadius: radius.xs, color: "text.primary", fontSize: 18, fontWeight: 800 }}
+              >
+                ⋯
+              </IconButton>
             )}
-            {pictures.length > 0 && (
-              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 1.25 }}>
-                {pictures.map((file) => (
-                  <Box
-                    key={file.url}
+          </Stack>
+        </Box>
+
+        {canSign && (
+          <TextField
+            label={isEvaluation ? "Evaluation note" : "Note for the record"}
+            placeholder="Optional for approval, required if you return it"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            multiline
+            minRows={2}
+            fullWidth
+          />
+        )}
+
+        {readOnly && (
+          <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
+            Audit accounts cannot sign, chase or cancel. Everything here is a record of what others did.
+          </Typography>
+        )}
+        {pdfBusy === "regenerate" && <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Rebuilding the stored PDF…</Typography>}
+        {pdfBusy === "attachments" && <Typography sx={{ fontSize: 12, color: "text.secondary" }}>Adding the attachments…</Typography>}
+      </Box>
+
+      <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 2.5, alignItems: "flex-start" }}>
+        <Stack spacing={2.5} sx={{ flex: { md: "999 1 560px" }, minWidth: 0, width: "100%" }}>
+          {sections.length === 0 && (
+            <Box component="section" sx={CARD_SX}>
+              <Typography component="h2" sx={CARD_HEADING_SX}>
+                Answers
+              </Typography>
+              <Typography sx={{ px: 2.25, py: 2, fontSize: 13, color: "text.secondary" }}>
+                No answers were stored against this submission.
+              </Typography>
+            </Box>
+          )}
+
+          {sections.map((section) => {
+            const open = !collapsed[section.id];
+            const bodyId = `record-section-${section.id}`;
+            return (
+              <Box component="section" key={section.id} sx={CARD_SX}>
+                <Box component="h2" sx={{ m: 0 }}>
+                  <Button
+                    fullWidth
+                    aria-expanded={open}
+                    aria-controls={bodyId}
+                    onClick={() => setCollapsed((current) => ({ ...current, [section.id]: open }))}
+                    endIcon={<ChevronDown size={18} style={{ transform: open ? "none" : "rotate(-90deg)", transition: "transform 0.16s ease" }} />}
                     sx={{
-                      height: 88,
-                      p: 1,
-                      borderRadius: radius.xs,
-                      bgcolor: TINTS.grey,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "text.secondary",
-                      textAlign: "center",
-                      overflow: "hidden",
-                      wordBreak: "break-word",
+                      justifyContent: "space-between",
+                      textAlign: "left",
+                      px: 2.25,
+                      py: 1.5,
+                      borderRadius: 0,
+                      borderBottom: open ? 1 : 0,
+                      borderColor: "divider",
+                      color: "text.primary",
+                      textTransform: "none",
+                      fontSize: 15,
+                      fontWeight: 800,
                     }}
                   >
-                    {file.name}
+                    {section.title}
+                  </Button>
+                </Box>
+                {open && (
+                  <Box
+                    id={bodyId}
+                    component="dl"
+                    sx={{
+                      m: 0,
+                      p: 2.25,
+                      display: "grid",
+                      gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" },
+                      gap: "16px 28px",
+                    }}
+                  >
+                    {section.fields.map((field) => {
+                      if (field.kind === "matrix") {
+                        return (
+                          <Box key={field.key} sx={{ gridColumn: "1 / -1", minWidth: 0 }}>
+                            <AnswerTable field={field} />
+                          </Box>
+                        );
+                      }
+                      const value = answerValueText(field);
+                      const wide = value.length > WIDE_ANSWER_CHARS || value.includes("\n");
+                      return (
+                        <Box key={field.key} sx={{ minWidth: 0, gridColumn: wide ? "1 / -1" : undefined }}>
+                          <Typography component="dt" sx={{ fontSize: 12.5, fontWeight: 600, color: "text.secondary" }}>
+                            {field.label}
+                          </Typography>
+                          <Typography
+                            component="dd"
+                            sx={{ m: "2px 0 0", fontSize: 15, fontWeight: 600, whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+                          >
+                            {value}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
                   </Box>
-                ))}
+                )}
               </Box>
-            )}
-          </Box>
+            );
+          })}
+
+          {attachments.length > 0 && (
+            <Box component="section" sx={CARD_SX}>
+              <Typography component="h2" sx={CARD_HEADING_SX}>
+                Files and photos ({attachments.length})
+              </Typography>
+              <Stack component="ul" sx={{ m: 0, p: 0, listStyle: "none" }}>
+                {attachments.map((file, index) => {
+                  const picture = PICTURE_FILE.test(file.name);
+                  return (
+                    <Box
+                      component="li"
+                      key={`${index}-${file.url}`}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.25,
+                        px: 2.25,
+                        py: 1.25,
+                        borderTop: index === 0 ? 0 : 1,
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Box
+                        aria-hidden="true"
+                        sx={{
+                          flex: "none",
+                          width: 32,
+                          height: 32,
+                          borderRadius: radius.xs,
+                          bgcolor: picture ? TINTS.blue : TINTS.grey,
+                          color: "text.primary",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {picture ? <ImageIcon size={16} /> : <FileText size={16} />}
+                      </Box>
+                      <Typography
+                        title={file.name}
+                        sx={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {file.name}
+                      </Typography>
+                      <Link
+                        href={absoluteAttachmentUrl(file.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open ${file.name}`}
+                        underline="hover"
+                        sx={{ flex: "none", fontSize: 13.5, fontWeight: 700 }}
+                      >
+                        Open
+                      </Link>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
 
           <Box component="section" sx={{ ...CARD_SX, px: { xs: 2, sm: 2.5 }, pb: 2.5 }}>
             <Typography component="h2" sx={{ pt: 2, pb: 1, fontSize: 15, fontWeight: 800 }}>
@@ -429,7 +614,7 @@ function RecordView({ record }: { record: PortalRecord }) {
                       <Typography sx={{ fontSize: 13.5 }}>
                         <strong>{step.who}</strong>{" "}
                         <Box component="span" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                          · {step.roleLabel}
+                          · {displayLabel(step.roleLabel)}
                         </Box>
                       </Typography>
                       <Typography sx={{ mt: 0.5, fontSize: 14, fontWeight: 500, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -445,90 +630,13 @@ function RecordView({ record }: { record: PortalRecord }) {
           </Box>
         </Stack>
 
-        <Stack spacing={2} sx={{ width: { xs: "100%", md: 340 }, flex: { md: "0 0 340px" }, maxWidth: { md: 420 }, minWidth: 0 }}>
-          {canSign && (
-            <>
-              <TextField
-                label={isEvaluation ? "Evaluation note" : "Note for the record"}
-                placeholder="Optional for approval, required if you return it"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                multiline
-                minRows={3}
-                fullWidth
-              />
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="contained"
-                  color="success"
-                  onClick={() => void handleSign()}
-                  disabled={busy}
-                  startIcon={<CheckIcon fontSize="small" />}
-                  sx={{ flex: 1, minHeight: 44, fontWeight: 800 }}
-                >
-                  {isEvaluation ? "Evaluate and release" : "Approve and sign"}
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => void handleReturn()}
-                  disabled={busy}
-                  sx={{ minHeight: 44, px: 2.25, fontWeight: 800, color: "text.primary", borderColor: "text.primary", borderWidth: 1.5 }}
-                >
-                  Return
-                </Button>
-              </Stack>
-            </>
-          )}
-
-          {readOnly && (
-            <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
-              Audit accounts cannot sign, chase or cancel. Everything here is a record of what others did.
-            </Typography>
-          )}
-
-          <Box component="section" sx={CARD_SX}>
-            <Typography component="h2" sx={CARD_HEADING_SX}>
-              Details
-            </Typography>
-            <Box
-              component="dl"
-              sx={{ m: 0, px: 2.25, py: 1.75, display: "grid", gridTemplateColumns: "110px minmax(0, 1fr)", gap: "12px", alignItems: "center", fontSize: 13.5 }}
-            >
-              <Box component="dt" sx={DT_SX}>Status</Box>
-              <Box component="dd" sx={{ m: 0 }}>
-                <StatusPill status={record.status} />
-              </Box>
-              <Box component="dt" sx={DT_SX}>With</Box>
-              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>
-                {isMyLayer ? "You" : record.currentAssignee || "Nobody"}
-              </Box>
-              <Box component="dt" sx={DT_SX}>Filed by</Box>
-              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.submitter}</Box>
-              <Box component="dt" sx={DT_SX}>Form</Box>
-              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.formName}</Box>
-              <Box component="dt" sx={DT_SX}>Reference</Box>
-              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.reference}</Box>
-              <Box component="dt" sx={DT_SX}>Filed</Box>
-              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{filedText}</Box>
-              {/* Only a record whose form declared an SLA has a deadline to show. */}
-              {record.hasSla && (
-                <>
-                  <Box component="dt" sx={DT_SX}>Due</Box>
-                  <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.slaNote || "—"}</Box>
-                </>
-              )}
-            </Box>
-          </Box>
-
-          {record.hasWorkflow && stepCount > 0 && (
+        <Stack spacing={2.5} sx={{ width: "100%", flex: { md: "1 1 320px" }, maxWidth: { md: 400 }, minWidth: 0 }}>
+          {hasSteps && (
             <Box component="section" sx={CARD_SX}>
               <Typography component="h2" sx={CARD_HEADING_SX}>
-                Sign-off steps{" "}
-                <Box component="span" sx={{ color: "text.secondary", fontWeight: 700 }}>
-                  · {record.at + 1} of {stepCount}
-                </Box>
+                Progress · {signedCount} of {stepCount}
               </Typography>
-              <Stack component="ol" spacing={1.5} sx={{ m: 0, p: 2.25, listStyle: "none" }}>
+              <Stack component="ol" spacing={1.75} sx={{ m: 0, p: 2.25, listStyle: "none" }}>
                 {record.chain.map((step) => {
                   const signed = step.state === "signed";
                   const current = step.state === "current";
@@ -557,12 +665,12 @@ function RecordView({ record }: { record: PortalRecord }) {
                         {signed ? <CheckIcon size={14} strokeWidth={3.4} /> : step.layerNumber}
                       </Box>
                       <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontSize: 13.5, fontWeight: current ? 800 : 700, color: step.state === "pending" ? "text.secondary" : "text.primary" }}>
-                          {step.roleLabel}
+                        <Typography
+                          sx={{ fontSize: 14, fontWeight: current ? 800 : 700, color: step.state === "pending" ? "text.secondary" : "text.primary" }}
+                        >
+                          {displayLabel(step.roleLabel)}
                         </Typography>
-                        <Typography sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>
-                          {step.who} · {step.statusText}
-                        </Typography>
+                        <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: "text.secondary" }}>{stepCaption(step)}</Typography>
                       </Box>
                     </Box>
                   );
@@ -571,9 +679,46 @@ function RecordView({ record }: { record: PortalRecord }) {
             </Box>
           )}
 
-          <Typography sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>
-            Filed {filedText} · Updated {updatedText}
-          </Typography>
+          <Box component="section" sx={CARD_SX}>
+            <Typography component="h2" sx={CARD_HEADING_SX}>
+              Details
+            </Typography>
+            <Box
+              component="dl"
+              sx={{ m: 0, px: 2.25, py: 1.75, display: "grid", gridTemplateColumns: "110px minmax(0, 1fr)", gap: "12px", alignItems: "center", fontSize: 13.5 }}
+            >
+              <Box component="dt" sx={DT_SX}>Status</Box>
+              <Box component="dd" sx={{ m: 0 }}>
+                <StatusPill status={record.status} />
+              </Box>
+              {/* Only a record still moving through a chain has someone it is waiting on. */}
+              {record.hasWorkflow && !record.done && (
+                <>
+                  <Box component="dt" sx={DT_SX}>Waiting on</Box>
+                  <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>
+                    {isMyLayer ? "You" : record.currentAssignee || "Nobody"}
+                  </Box>
+                </>
+              )}
+              <Box component="dt" sx={DT_SX}>Filed by</Box>
+              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.submitter}</Box>
+              <Box component="dt" sx={DT_SX}>Form</Box>
+              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{formDisplayName(record)}</Box>
+              <Box component="dt" sx={DT_SX}>Reference</Box>
+              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.reference}</Box>
+              <Box component="dt" sx={DT_SX}>Filed</Box>
+              <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{filedText}</Box>
+              {/* Only a record whose form declared an SLA has a deadline to show. */}
+              {record.hasSla && (
+                <>
+                  <Box component="dt" sx={DT_SX}>Due</Box>
+                  <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>{record.slaNote || "—"}</Box>
+                </>
+              )}
+            </Box>
+          </Box>
+
+          <Typography sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>Updated {updatedText}</Typography>
         </Stack>
       </Box>
 
@@ -652,6 +797,21 @@ function RecordView({ record }: { record: PortalRecord }) {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
+        {canReassign && (
+          <MenuItem
+            disabled={busy}
+            onClick={() => {
+              setMoreMenu(null);
+              setReassignOpen(true);
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 30 }}>
+              <UserCog size={18} />
+            </ListItemIcon>
+            Change who signs
+          </MenuItem>
+        )}
+        {canReassign && (canCancel || canDelete) && <Divider />}
         {canCancel && (
           <MenuItem
             disabled={busy}
