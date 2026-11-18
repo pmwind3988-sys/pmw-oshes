@@ -57,6 +57,7 @@ import { StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
 import DeleteRecordDialog from "./DeleteRecordDialog";
 import ReassignDialog from "./ReassignDialog";
+import PdfPreviewDialog, { type PdfPreview } from "./PdfPreviewDialog";
 import { AnswerTable, TimelineTab, answerValueText, recordAnswerSections } from "./RecordDetail";
 import type { PortalRecord } from "../../types";
 
@@ -162,6 +163,9 @@ function RecordView({ record }: { record: PortalRecord }) {
   const [pdfBusy, setPdfBusy] = useState<"" | "download" | "attachments" | "regenerate">("");
   const [pdfMenu, setPdfMenu] = useState<HTMLElement | null>(null);
   const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
+  /** A generated PDF waiting to be read before anything is saved. */
+  const [pdfPreview, setPdfPreview] = useState<PdfPreview | null>(null);
+  const showPdf = (blob: Blob, fileName: string) => setPdfPreview({ blob, fileName });
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -254,7 +258,7 @@ function RecordView({ record }: { record: PortalRecord }) {
     if (pdfBusy) return;
     setPdfBusy("download");
     try {
-      await downloadRecordPdf(record, formSurveyJson, spClient, styleFor);
+      await downloadRecordPdf(record, formSurveyJson, spClient, styleFor, showPdf);
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not generate the PDF.");
     } finally {
@@ -266,7 +270,7 @@ function RecordView({ record }: { record: PortalRecord }) {
     if (pdfBusy || !spClient) return;
     setPdfBusy("attachments");
     try {
-      toast(attachmentDownloadMessage(await downloadRecordPdfWithAttachments(record, formSurveyJson, spClient, styleFor)));
+      toast(attachmentDownloadMessage(await downloadRecordPdfWithAttachments(record, formSurveyJson, spClient, styleFor, showPdf)));
     } catch (error) {
       toast(error instanceof Error ? error.message : "Could not build the PDF with attachments.");
     } finally {
@@ -278,7 +282,7 @@ function RecordView({ record }: { record: PortalRecord }) {
     if (pdfBusy) return;
     setPdfBusy("regenerate");
     try {
-      const result = await regenerateSubmissionPdf(actor, record, formSurveyJson, styleFor);
+      const result = await regenerateSubmissionPdf(actor, record, formSurveyJson, styleFor, showPdf);
       applyPatch(record, result.fields);
       appendAudit(result.audit);
       toast(result.toast);
@@ -396,8 +400,8 @@ function RecordView({ record }: { record: PortalRecord }) {
                 {pdfBusy === "download" || pdfBusy === "attachments"
                   ? "Preparing…"
                   : styleFor === "soft"
-                    ? "Download PDF · new design"
-                    : "Download PDF"}
+                    ? "View PDF · new design"
+                    : "View PDF"}
               </Button>
               {(canRegenerate || canDownloadWithAttachments || canChooseStyle) && (
                 <Button
@@ -766,7 +770,7 @@ function RecordView({ record }: { record: PortalRecord }) {
             }}
           >
             <ListItemText
-              primary="Download PDF with attachments"
+              primary="View PDF with attachments"
               secondary={
                 attachments.length === 0
                   ? "Nothing is attached to this record"
@@ -840,6 +844,7 @@ function RecordView({ record }: { record: PortalRecord }) {
       </Menu>
 
       <ReassignDialog record={reassignOpen ? record : null} onClose={() => setReassignOpen(false)} />
+      <PdfPreviewDialog preview={pdfPreview} onClose={() => setPdfPreview(null)} />
 
       <WithdrawDialog record={cancelOpen ? record : null} onClose={() => setCancelOpen(false)} onDone={closeDrawer} />
 

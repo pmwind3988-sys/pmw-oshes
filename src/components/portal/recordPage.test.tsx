@@ -61,7 +61,7 @@ describe("record page actions", () => {
     expect(markup).not.toContain("Evaluate and release");
     expect(markup).not.toContain("aria-label=\"More actions\"");
     // The read-only PDF download stays available.
-    expect(markup).toContain("Download PDF");
+    expect(markup).toContain("View PDF");
   });
 });
 
