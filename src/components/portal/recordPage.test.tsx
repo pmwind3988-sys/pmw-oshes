@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PortalProvider, type PortalContextValue } from "../../contexts/PortalContext";
 import { fixtureContext } from "../../devPreview/fixtures";
 import { recordKey } from "../../utils/portalRecords";
-import { allowedScreens, canConfirmDelete, derivePortalAccess } from "../../utils/portalRole";
+import { allowedScreens, derivePortalAccess } from "../../utils/portalRole";
 import type { PortalRecord, PortalRole } from "../../types";
 import RecordPage from "./RecordPage";
 
@@ -106,22 +106,6 @@ describe("record page layout", () => {
     expect(markup).toContain("We cannot find that");
     expect(markup).toContain("It may have been deleted, or you may not have access.");
     expect(markup).toContain("Back to submissions");
-  });
-});
-
-describe("delete confirmation", () => {
-  it("stays disarmed until the reference is typed", () => {
-    expect(canConfirmDelete("", "PTW-0417")).toBe(false);
-    expect(canConfirmDelete("PTW-041", "PTW-0417")).toBe(false);
-  });
-
-  it("arms once the reference is typed, ignoring case and surrounding spaces", () => {
-    expect(canConfirmDelete("PTW-0417", "PTW-0417")).toBe(true);
-    expect(canConfirmDelete("  ptw-0417 ", "PTW-0417")).toBe(true);
-  });
-
-  it("never arms against an empty reference", () => {
-    expect(canConfirmDelete("", "")).toBe(false);
   });
 });
 

@@ -141,16 +141,6 @@ export function canDeleteRecord(access: PortalAccess): boolean {
 }
 
 /**
- * Whether the typed text names this record. The delete stays disabled until it
- * does: a record with signatures and photos against it is worth more than one
- * misplaced click. Case and surrounding spaces are forgiven; nothing else is.
- */
-export function canConfirmDelete(typed: string, reference: string): boolean {
-  const target = reference.trim().toLowerCase();
-  return target !== "" && typed.trim().toLowerCase() === target;
-}
-
-/**
  * The three top-level destinations, in the order the navigation shows them.
  * Manage appears only for an account that reaches one of its pages.
  */
