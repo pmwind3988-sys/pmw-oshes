@@ -120,7 +120,11 @@ export function recordPdfData(record: PortalRecord, surveyJson: SurveyJson | nul
   };
 }
 
-function saveBlob(blob: Blob, fileName: string): void {
+/** What happens to a finished PDF: saved straight to disk, or handed to a preview first. */
+export type PdfDelivery = (blob: Blob, fileName: string) => void;
+
+/** Save a PDF to the reader’s downloads. */
+export function savePdfBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -130,7 +134,7 @@ function saveBlob(blob: Blob, fileName: string): void {
 }
 
 /**
- * "Download PDF" from the drawer: the form as submitted, with the approval
+ * "View PDF" on the record page: the form as submitted, with the approval
  * trail as far as it has got. Rendered client-side from the record already in
  * memory rather than replacing the stored copy — this button is a read.
  *
@@ -144,6 +148,7 @@ export async function downloadRecordPdf(
   surveyJson: SurveyJson | null,
   spClient?: SharePointClient,
   style: PdfStyle = DEFAULT_PDF_STYLE,
+  deliver: PdfDelivery = savePdfBlob,
 ): Promise<void> {
   const { pdf } = await import("@react-pdf/renderer");
   const FormPdfDocument = await pdfDocumentFor(style);
@@ -163,7 +168,7 @@ export async function downloadRecordPdf(
   }
 
   const pdfDocument = createElement(FormPdfDocument, data) as Parameters<typeof pdf>[0];
-  saveBlob(await pdf(pdfDocument).toBlob(), `${record.reference}.pdf`);
+  deliver(await pdf(pdfDocument).toBlob(), `${record.reference}.pdf`);
 }
 
 /** The files attached to a record, in the order they would be appended. */
@@ -180,7 +185,7 @@ export interface AttachmentDownloadSummary {
 }
 
 /**
- * "Download PDF with attachments": the same document as {@link downloadRecordPdf},
+ * "View PDF with attachments": the same document as {@link downloadRecordPdf},
  * followed by every attached file — each PDF's pages, then each picture on a page
  * of its own — in the order they were attached.
  *
@@ -193,6 +198,7 @@ export async function downloadRecordPdfWithAttachments(
   surveyJson: SurveyJson | null,
   spClient: SharePointClient,
   style: PdfStyle = DEFAULT_PDF_STYLE,
+  deliver: PdfDelivery = savePdfBlob,
 ): Promise<AttachmentDownloadSummary> {
   const { pdf } = await import("@react-pdf/renderer");
   const FormPdfDocument = await pdfDocumentFor(style);
@@ -211,7 +217,7 @@ export async function downloadRecordPdfWithAttachments(
 
   const pdfDocument = createElement(FormPdfDocument, data) as Parameters<typeof pdf>[0];
   const base = await (await pdf(pdfDocument).toBlob()).arrayBuffer();
-  return appendAndSave(token, base, attachments, `${record.reference} with attachments.pdf`);
+  return appendAndSave(token, base, attachments, `${record.reference} with attachments.pdf`, deliver);
 }
 
 /** Append the attachments to a finished PDF and hand the reader the result. */
@@ -220,6 +226,7 @@ async function appendAndSave(
   base: ArrayBuffer | Uint8Array,
   attachments: RecordAttachment[],
   fileName: string,
+  deliver: PdfDelivery = savePdfBlob,
 ): Promise<AttachmentDownloadSummary> {
   const { appendAttachmentsToPdf } = await import("./pdfAttachmentMerge");
   const { fetchSharePointFileBytes, responseToImageDataUrl } = await import("./sharepointImageData");
@@ -236,7 +243,7 @@ async function appendAndSave(
     },
   });
 
-  saveBlob(new Blob([merged.bytes as BlobPart], { type: "application/pdf" }), fileName);
+  deliver(new Blob([merged.bytes as BlobPart], { type: "application/pdf" }), fileName);
   return { total: attachments.length, included: merged.included, notIncluded: merged.notIncluded };
 }
 
@@ -251,13 +258,14 @@ export async function downloadStoredPdfWithAttachments(
   surveyJson: unknown,
   responseData: Record<string, unknown>,
   fileName: string,
+  deliver: PdfDelivery = savePdfBlob,
 ): Promise<AttachmentDownloadSummary> {
   const { fetchSharePointFileBytes } = await import("./sharepointImageData");
   const base = await fetchSharePointFileBytes(token, pdfUrl);
   if (!base) throw new Error("The stored PDF could not be opened. Try re-generating it first.");
   const attachments = collectRecordAttachments(surveyJson, responseData);
   const safeName = fileName.replace(/[\\/:*?"<>|]+/g, "_").trim() || "record";
-  return appendAndSave(token, base, attachments, `${safeName} with attachments.pdf`);
+  return appendAndSave(token, base, attachments, `${safeName} with attachments.pdf`, deliver);
 }
 
 /** What to tell the reader once a "with attachments" download is saved. */
@@ -286,6 +294,7 @@ export async function regenerateRecordPdf(
   surveyJson: SurveyJson | null,
   spClient: SharePointClient,
   style: PdfStyle = DEFAULT_PDF_STYLE,
+  deliver: PdfDelivery = savePdfBlob,
 ): Promise<string> {
   const itemId = Number(record.itemId);
   if (!Number.isFinite(itemId) || itemId <= 0) {
@@ -297,7 +306,7 @@ export async function regenerateRecordPdf(
 
   return generateAndStorePdf(token, record.listTitle, itemId, recordPdfData(record, surveyJson), {
     ...(record.submission.pdfUrl ? { replaceExistingPdfUrl: record.submission.pdfUrl } : {}),
-    onGeneratedBlob: (blob) => saveBlob(blob, `${record.reference}.pdf`),
+    onGeneratedBlob: (blob) => deliver(blob, `${record.reference}.pdf`),
     style,
   });
 }

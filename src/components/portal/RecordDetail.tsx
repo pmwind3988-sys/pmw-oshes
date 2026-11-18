@@ -199,7 +199,7 @@ function hasAnswerToShow(field: FormSubmissionField): boolean {
  * a crew of six squeezed into the right-hand column is unreadable, and this is
  * usually the part of a permit somebody opened the record to check.
  */
-function AnswerTable({ field }: { field: FormSubmissionField }) {
+export function AnswerTable({ field }: { field: FormSubmissionField }) {
   const rows = field.matrixRows ?? [];
   const columns = field.matrixColumns?.length
     ? field.matrixColumns

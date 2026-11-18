@@ -313,6 +313,14 @@ export const FileText = make("FileText", (
   </>
 ));
 
+export const ImageIcon = make("ImageIcon", (
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </>
+));
+
 export const Mail = make("Mail", (
   <>
     <rect x="2" y="4" width="20" height="16" rx="2" />
