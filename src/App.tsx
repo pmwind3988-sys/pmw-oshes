@@ -35,7 +35,6 @@ import WrongTenantScreen from "./components/auth/WrongTenantScreen";
 import RestrictedAccessScreen from "./components/auth/RestrictedAccessScreen";
 import LoadingScreen, { type LoadingStep } from "./components/auth/LoadingScreen";
 import ErrorScreen from "./components/auth/ErrorScreen";
-import AdminGuard from "./components/auth/AdminGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LazyRoute from "./components/LazyRoute";
 import { REFERENCE_NO_FIELD } from "./utils/referenceNumber";
@@ -271,7 +270,6 @@ const loadPrivacyNoticePage = () => import("./pages/PrivacyNoticePage");
 const loadPublicReportPage = () => import("./pages/PublicReportPage");
 const loadSmokingScanPage = () => import("./pages/SmokingScanPage");
 const loadShareLinkPage = () => import("./pages/ShareLinkPage");
-const loadAdminRoutingPage = () => import("./pages/AdminRoutingPage");
 const loadNativeFormPreviewPage = () => import("./pages/NativeFormPreviewPage");
 const PortalContainer = lazy(() => import("./components/portal/PortalContainer"));
 
@@ -1372,16 +1370,7 @@ export default function App() {
               </ErrorBoundary>
             }
           />
-          <Route
-            path="/admin/routing"
-            element={
-              <AdminGuard isAdmin={isAdmin}>
-                <ErrorBoundary>
-                  <LazyRoute load={loadAdminRoutingPage} fallback={<LoadingScreen status="Loading approval routing..." />} />
-                </ErrorBoundary>
-              </AdminGuard>
-            }
-          />
+          <Route path="/admin/routing" element={<LegacyRouteRedirect />} />
           <Route path="/user/dashboard" element={<LegacyRouteRedirect />} />
           <Route path="/adminhomepage" element={<LegacyRouteRedirect />} />
           <Route

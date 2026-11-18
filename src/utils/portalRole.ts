@@ -95,7 +95,6 @@ export function derivePortalAccess(input: PortalRoleInput): PortalAccess {
     canSeeEveryRecord: oversight,
     canFile: !isAuditor,
     canManageCatalogue: isAdmin,
-    canSeePeople: isAdmin,
     canSeeAudit: isAdmin || isAuditor,
     // Today is a read-only overview, and its two actions are gated by canChase
     // separately — so anyone with oversight gets it, auditors included.
@@ -165,13 +164,12 @@ export function portalTabs(access: PortalAccess, needsCount: number): PortalTab[
 }
 
 function showsManage(access: PortalAccess): boolean {
-  return access.canSeeOperations || access.canSeePeople || access.canSeeAudit || access.isAdmin;
+  return access.canSeeOperations || access.canSeeAudit || access.isAdmin;
 }
 
 /** The pages inside Manage that this account may open. The sidebar and allowedScreens both read this. */
 export function manageScreens(access: PortalAccess): PortalScreen[] {
   const screens: PortalScreen[] = [];
-  if (access.canSeePeople) screens.push("people");
   if (access.canSeeAudit) screens.push("audit");
   if (access.isAdmin || access.isAuditor) screens.push("smoking");
   return screens;

@@ -7,7 +7,7 @@
 |------|------|-------|
 | Context assembly | `PortalContainer.tsx` | Builds catalogue → records → access, and owns `screen` / `focusForm` / `focusStatus` / the search seed. The only place portal state is held. |
 | Top bar, tabs, profile | `PortalShell.tsx` | A white top bar carrying the brand, the three tabs (Your work, Submissions, and Manage for those who reach it), search, the Create button and the account menu, with the screen beneath. Tabs wrap onto their own rows on narrow screens, switched in `../../styles/shell.css`. |
-| Manage sidebar | `ManageLayout.tsx` | The left-hand list of Manage pages (People, Audit, Smoking log), shown inside the Manage tab. `manageScreens()` in `src/utils/portalRole.ts` decides which entries this account sees. |
+| Manage sidebar | `ManageLayout.tsx` | The left-hand list of Manage pages (Overview, Smoking log, History, Test runs), shown inside the Manage tab. `manageScreens()` in `src/utils/portalRole.ts` decides which entries this account sees. |
 | Board view | `../../pages/portal/SubmissionsBoard.tsx` | The board option of the Submissions tab, sharing the status lozenge and initials avatar with the list. |
 | Record detail — layout | `RecordDetail.tsx` | `OverviewTab`, `AnswersTab`, `ApprovalsTab`, `TimelineTab`, plus `DetailRow` / `SoftCard`. No actions here. |
 | Record page — actions and page | `RecordPage.tsx` | The record as a page (screen `"record"`): the action row, the side panel, gating, sign/return, and the PDF split control. `openDrawer(ref)` opens it and `closeDrawer()` returns to where it was opened from. |
@@ -56,7 +56,7 @@ is the honest drawing.
 ## Three tabs, and where a link lands
 - **Your work** (`HomeScreen`) is the landing tab for everyone.
 - **Submissions** (`RecordsScreen`) lists the records as a list or a board (`SubmissionsBoard`). `RealSubmissions` only: test runs never reach the portal.
-- **Manage** appears only for an account that reaches one of its pages. Its sidebar holds People, Audit and the smoking log (`manageScreens()` in `src/utils/portalRole.ts`).
+- **Manage** appears only for an account that reaches one of its pages. Its sidebar holds Audit (History), the smoking log and test runs (`manageScreens()` in `src/utils/portalRole.ts`).
 - The record page is screen `"record"`. `openDrawer(ref)` opens it; leaving it returns to where it was opened from.
 - A deep link `?screen=subs&form=F&item=I` opens that record directly (`readPortalDeepLink`, `src/utils/portalDeepLink.ts`). The retired `/admin/*` and dashboard addresses are rewritten to these links (`src/utils/legacyRoutes.ts`).
 

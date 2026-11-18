@@ -1,6 +1,6 @@
 import type { PortalScreen, SubsScope } from "../types";
 
-const SCREENS: readonly PortalScreen[] = ["home", "subs", "manage", "people", "audit", "smoking", "settings"];
+const SCREENS: readonly PortalScreen[] = ["home", "subs", "manage", "audit", "smoking", "settings"];
 const SCOPES: readonly SubsScope[] = ["all", "mine", "needs"];
 
 export interface PortalDeepLink {

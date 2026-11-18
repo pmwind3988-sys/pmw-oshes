@@ -6,7 +6,6 @@ export type {
   ManageView,
   PortalAccess,
   PortalChainStep,
-  PortalPerson,
   PortalRecord,
   PortalRole,
   PortalScreen,

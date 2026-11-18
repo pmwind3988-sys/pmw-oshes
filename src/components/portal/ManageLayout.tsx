@@ -5,10 +5,10 @@ import { manageScreens } from "../../utils/portalRole";
 import { builderUrl } from "../../config/oshes";
 import { TINTS } from "../../theme/simple";
 import { radius } from "../../theme/surfaces";
-import { ExternalLink, GitBranch, History, LayoutGrid, SmokingRoomsOutlined, Users, Wrench, type IconComponent } from "../ui/Icons";
+import { ExternalLink, History, LayoutGrid, SmokingRoomsOutlined, Wrench, type IconComponent } from "../ui/Icons";
 
 /** Which Manage page is showing, so the sidebar can mark it. */
-export type ManageSection = "overview" | "tests" | "people" | "smoking" | "audit";
+export type ManageSection = "overview" | "tests" | "smoking" | "audit";
 
 /** One row of the sidebar. Every row is in the same 40px hit area; the active one takes the tint. */
 const itemSx = {
@@ -78,15 +78,6 @@ export default function ManageLayout({ active, children }: { active: ManageSecti
         </Typography>
         <Stack component="ul" spacing={0.25} sx={{ listStyle: "none", m: 0, p: 0 }}>
           {row("overview", "Overview", LayoutGrid, () => setScreen("manage"))}
-          {pages.includes("people") && row("people", "People and approvers", Users, () => setScreen("people"))}
-          {access.isAdmin && (
-            <li>
-              <Box component="a" href="/admin/routing" sx={itemSx}>
-                <GitBranch size={18} aria-hidden="true" />
-                Approval routing
-              </Box>
-            </li>
-          )}
           {pages.includes("smoking") && row("smoking", "Smoking log", SmokingRoomsOutlined, () => setScreen("smoking"))}
           {pages.includes("audit") && row("audit", "History", History, () => setScreen("audit"))}
           {canRunTestRuns && row("tests", "Test runs", Wrench, () => {
