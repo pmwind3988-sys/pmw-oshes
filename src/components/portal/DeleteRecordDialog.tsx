@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Alert, Dialog, TextField, Typography } from "@mui/material";
+import { Alert, Dialog, Typography } from "@mui/material";
 import { usePortal } from "../../contexts/PortalContext";
 import { deleteSubmission } from "../../utils/portalActions";
-import { canConfirmDelete } from "../../utils/portalRole";
 import { MessageCard } from "../simple/MessageCard";
 import type { PortalRecord } from "../../types";
 
 /**
- * Delete a record and everything filed with it, behind a typed reference.
+ * Delete a record and everything filed with it, after a plain yes / no.
  *
  * This is the only action in the portal with nothing left to undo it from. The
  * copy says what goes and that it cannot come back. Shared by the record page
@@ -24,24 +23,19 @@ export default function DeleteRecordDialog({
   onDone?: () => void;
 }) {
   const { spClient, userName, userEmail, appendAudit, removeRecord, toast } = usePortal();
-  const [confirmText, setConfirmText] = useState("");
   const [confirmFor, setConfirmFor] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // The typed reference and any failure belong to one record. Derived during
-  // render rather than in an effect: closing renders null without unmounting,
-  // so a half-typed reference would otherwise be waiting in the next record's
-  // dialog — one keystroke from arming a delete nobody meant to arm.
+  // Any failure belongs to one record. Reset during render rather than in an
+  // effect: closing renders null without unmounting, so an old error would
+  // otherwise show in the next record's dialog.
   if (confirmFor !== (record?.reference ?? null)) {
     setConfirmFor(record?.reference ?? null);
-    setConfirmText("");
     setError("");
   }
 
   if (!record) return null;
-
-  const armed = canConfirmDelete(confirmText, record.reference);
 
   const close = () => {
     if (busy) return;
@@ -78,18 +72,9 @@ export default function DeleteRecordDialog({
         title={`Delete ${record.reference}?`}
         body={
           <>
-            <Typography component="span" sx={{ display: "block", mb: 2, color: "text.secondary" }}>
+            <Typography component="span" sx={{ display: "block", color: "text.secondary" }}>
               This removes the form, its signatures and photos for everyone. It cannot be undone.
             </Typography>
-            <TextField
-              label={`Type ${record.reference} to confirm`}
-              placeholder={record.reference}
-              value={confirmText}
-              onChange={(event) => setConfirmText(event.target.value)}
-              fullWidth
-              autoFocus
-              autoComplete="off"
-            />
             {error && (
               <Alert severity="error" sx={{ mt: 2, fontWeight: 700, textAlign: "left" }}>
                 {error}
@@ -98,12 +83,12 @@ export default function DeleteRecordDialog({
           </>
         }
         primary={{
-          label: busy ? "Deleting…" : "Delete for everyone",
+          label: busy ? "Deleting…" : "Yes, delete",
           tone: "danger",
-          disabled: busy || !armed,
+          disabled: busy,
           onClick: () => void confirm(),
         }}
-        secondary={{ label: "Keep it", onClick: close }}
+        secondary={{ label: "No, keep it", onClick: close }}
       />
     </Dialog>
   );
