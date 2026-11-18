@@ -26,7 +26,7 @@ Each `PageState` maps to a screen component rendered by `App.tsx`:
 | SharePoint access restriction | `RestrictedAccessScreen.tsx` | Shows site membership guidance with retry/switch/sign-out |
 | Wrong tenant | `WrongTenantScreen.tsx` | Identity mismatch — shows current vs expected tenant |
 | Error fallback | `ErrorScreen.tsx` | Catch-all error with configurable retry/re-login callback and optional visual recovery steps |
-| Admin guard | `AdminGuard.tsx` | Wraps the admin-only routes (`/admin/routing`); a non-admin sees an access-denied notice and is sent to `/portal`. The legacy dashboard redirects are not wrapped, so approvers can still follow them. |
+| Admin guard | `AdminGuard.tsx` | Wraps an admin-only route; a non-admin sees an access-denied notice and is sent to `/portal`. No route uses it today: `/admin/routing` was removed and now redirects to Manage. The legacy dashboard redirects are not wrapped, so approvers can still follow them. |
 
 ## Conventions
 

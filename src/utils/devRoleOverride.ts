@@ -35,7 +35,7 @@ export function writeDevRole(role: PortalRole | null): void {
 }
 
 export const DEV_ROLE_OPTIONS: { role: PortalRole; label: string; description: string }[] = [
-  { role: "admin", label: "Administrator", description: "Everything, plus the catalogue and roles" },
+  { role: "admin", label: "Administrator", description: "Everything, plus Manage and test runs" },
   { role: "evaluator", label: "Evaluator · Safety Officer", description: "Full dashboard, all records, can chase" },
   { role: "approver", label: "Approver", description: "Only what is on their layer" },
   { role: "submitter", label: "Staff / submitter", description: "Only the forms they filed" },
