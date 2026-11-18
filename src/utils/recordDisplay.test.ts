@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PortalChainStep, PortalRecord } from "../types";
-import { displayLabel, formDisplayName, isMeaningfulSubject, stepCaption } from "./recordDisplay";
+import { displayLabel, formDisplayName, isMeaningfulSubject, recordMenuItems, stepCaption, waitingOnForReturned } from "./recordDisplay";
 
 function record(overrides: Partial<Pick<PortalRecord, "subject" | "submitter" | "submitterEmail" | "formName" | "reference">>) {
   return {
@@ -111,5 +111,44 @@ describe("formDisplayName", () => {
   it("is the form name in sentence case", () => {
     expect(formDisplayName(record({ formName: "PERMIT TO WORK (PTW)" }))).toBe("Permit to work (PTW)");
     expect(formDisplayName(record({ formName: "Permit to Work" }))).toBe("Permit to Work");
+  });
+});
+
+describe("recordMenuItems", () => {
+  const all = { canReassign: true, canCancel: true, canDelete: true, cancelLabel: "Withdraw submission" };
+
+  it("lists reassign, cancel and delete in that order when all are allowed", () => {
+    expect(recordMenuItems(all).map((item) => item.id)).toEqual(["reassign", "cancel", "delete"]);
+  });
+
+  it("offers reassign only when reassigning is allowed", () => {
+    expect(recordMenuItems({ ...all, canReassign: false }).map((item) => item.id)).toEqual(["cancel", "delete"]);
+  });
+
+  it("uses the supplied cancel label", () => {
+    expect(recordMenuItems(all).find((item) => item.id === "cancel")?.label).toBe("Withdraw submission");
+  });
+
+  it("marks only delete as dangerous", () => {
+    const items = recordMenuItems(all);
+    expect(items.find((item) => item.id === "delete")?.danger).toBe(true);
+    expect(items.find((item) => item.id === "reassign")?.danger).toBeFalsy();
+    expect(items.find((item) => item.id === "cancel")?.danger).toBeFalsy();
+  });
+
+  it("is empty when nothing is allowed, so the menu trigger is hidden", () => {
+    expect(recordMenuItems({ canReassign: false, canCancel: false, canDelete: false, cancelLabel: "" })).toEqual([]);
+  });
+});
+
+describe("waitingOnForReturned", () => {
+  const filed = { submitter: "Sazali Ahmad", submitterEmail: "sazali@example.com" };
+
+  it("names the filer, who must fix and resend it", () => {
+    expect(waitingOnForReturned(filed, "nurul@example.com")).toBe("Sazali Ahmad (to fix and resend)");
+  });
+
+  it("says You when this account filed it, ignoring case and spaces", () => {
+    expect(waitingOnForReturned(filed, "  SAZALI@example.com ")).toBe("You (to fix and resend)");
   });
 });

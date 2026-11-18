@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -38,7 +38,15 @@ import {
   recordAttachments,
 } from "../../utils/portalPdf";
 import { absoluteAttachmentUrl } from "../../utils/fileAttachments";
-import { displayLabel, formDisplayName, isMeaningfulSubject, stepCaption } from "../../utils/recordDisplay";
+import {
+  displayLabel,
+  formDisplayName,
+  isMeaningfulSubject,
+  recordMenuItems,
+  stepCaption,
+  waitingOnForReturned,
+  type RecordMenuItem,
+} from "../../utils/recordDisplay";
 import { recordKey } from "../../utils/portalRecords";
 import { formatDisplayDayMonthTime } from "../../utils/displayDateTime";
 import { DEFAULT_PDF_STYLE, PDF_STYLE_LABELS, type PdfStyle } from "../../utils/pdfStyle";
@@ -90,6 +98,13 @@ const HEADER_BUTTON_SX = {
 } as const;
 
 const NEUTRAL_BUTTON_SX = { ...HEADER_BUTTON_SX, color: "text.primary", borderColor: "divider" } as const;
+
+/** The icon for each ⋯ menu entry. The entries and their order come from recordMenuItems. */
+const MENU_ICON: Record<RecordMenuItem["id"], React.ReactNode> = {
+  reassign: <UserCog size={18} />,
+  cancel: <BlockIcon fontSize="small" />,
+  delete: <DeleteForeverIcon fontSize="small" />,
+};
 
 /**
  * One submission, as a page.
@@ -173,8 +188,16 @@ function RecordView({ record }: { record: PortalRecord }) {
   // record with no approval step, or one that was returned, would write a layer
   // that is not the current one.
   const canReassign = access.canChase && record.hasWorkflow && !record.done && !record.returned;
-  const hasMoreActions = canReassign || canCancel || canDelete;
   const cancelLabel = withdrawLabel(record, userEmail);
+  const menuItems = recordMenuItems({ canReassign, canCancel, canDelete, cancelLabel });
+  const hasMoreActions = menuItems.length > 0;
+
+  const openMoreAction = (id: RecordMenuItem["id"]) => {
+    setMoreMenu(null);
+    if (id === "reassign") setReassignOpen(true);
+    else if (id === "cancel") setCancelOpen(true);
+    else setDeleteOpen(true);
+  };
   const isEvaluation = record.chain[record.at]?.type === "evaluation";
 
   const trail = useMemo(() => audit.filter((entry) => entry.reference === record.reference), [audit, record.reference]);
@@ -696,7 +719,11 @@ function RecordView({ record }: { record: PortalRecord }) {
                 <>
                   <Box component="dt" sx={DT_SX}>Waiting on</Box>
                   <Box component="dd" sx={{ m: 0, fontWeight: 700 }}>
-                    {isMyLayer ? "You" : record.currentAssignee || "Nobody"}
+                    {record.returned
+                      ? waitingOnForReturned(record, email)
+                      : isMyLayer
+                        ? "You"
+                        : record.currentAssignee || "Nobody"}
                   </Box>
                 </>
               )}
@@ -797,51 +824,19 @@ function RecordView({ record }: { record: PortalRecord }) {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        {canReassign && (
-          <MenuItem
-            disabled={busy}
-            onClick={() => {
-              setMoreMenu(null);
-              setReassignOpen(true);
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 30 }}>
-              <UserCog size={18} />
-            </ListItemIcon>
-            Change who signs
-          </MenuItem>
-        )}
-        {canReassign && (canCancel || canDelete) && <Divider />}
-        {canCancel && (
-          <MenuItem
-            disabled={busy}
-            onClick={() => {
-              setMoreMenu(null);
-              setCancelOpen(true);
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 30 }}>
-              <BlockIcon fontSize="small" />
-            </ListItemIcon>
-            {cancelLabel}
-          </MenuItem>
-        )}
-        {canCancel && canDelete && <Divider />}
-        {canDelete && (
-          <MenuItem
-            disabled={busy}
-            onClick={() => {
-              setMoreMenu(null);
-              setDeleteOpen(true);
-            }}
-            sx={{ color: "error.main" }}
-          >
-            <ListItemIcon sx={{ minWidth: 30, color: "inherit" }}>
-              <DeleteForeverIcon fontSize="small" />
-            </ListItemIcon>
-            Delete
-          </MenuItem>
-        )}
+        {menuItems.map((item, index) => (
+          <Fragment key={item.id}>
+            {index > 0 && <Divider />}
+            <MenuItem
+              disabled={busy}
+              onClick={() => openMoreAction(item.id)}
+              sx={item.danger ? { color: "error.main" } : undefined}
+            >
+              <ListItemIcon sx={{ minWidth: 30, color: "inherit" }}>{MENU_ICON[item.id]}</ListItemIcon>
+              {item.label}
+            </MenuItem>
+          </Fragment>
+        ))}
       </Menu>
 
       <ReassignDialog record={reassignOpen ? record : null} onClose={() => setReassignOpen(false)} />

@@ -63,3 +63,40 @@ export function stepCaption(step: Pick<PortalChainStep, "who" | "roleLabel" | "s
 export function formDisplayName(record: Pick<PortalRecord, "formName">): string {
   return displayLabel(record.formName);
 }
+
+/** One entry in the record page's ⋯ menu. */
+export interface RecordMenuItem {
+  id: "reassign" | "cancel" | "delete";
+  label: string;
+  /** Destructive actions are drawn in the error colour. */
+  danger?: boolean;
+}
+
+/**
+ * The ⋯ menu's entries, in order. The gates are decided by the caller; this only
+ * lays out what they allow. An empty list means the menu trigger is not drawn.
+ */
+export function recordMenuItems(gates: {
+  canReassign: boolean;
+  canCancel: boolean;
+  canDelete: boolean;
+  cancelLabel: string;
+}): RecordMenuItem[] {
+  const items: RecordMenuItem[] = [];
+  if (gates.canReassign) items.push({ id: "reassign", label: "Change who signs" });
+  if (gates.canCancel) items.push({ id: "cancel", label: gates.cancelLabel });
+  if (gates.canDelete) items.push({ id: "delete", label: "Delete", danger: true });
+  return items;
+}
+
+/**
+ * Who a returned form is waiting on: the filer, who has to fix it and send it
+ * again. "You" when this account is the filer.
+ */
+export function waitingOnForReturned(
+  record: Pick<PortalRecord, "submitter" | "submitterEmail">,
+  email: string,
+): string {
+  const isFiler = record.submitterEmail.trim().toLowerCase() === email.trim().toLowerCase();
+  return `${isFiler ? "You" : record.submitter} (to fix and resend)`;
+}
