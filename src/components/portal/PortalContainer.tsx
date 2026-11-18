@@ -28,6 +28,7 @@ import { displayName, normalizeEmail, type PeopleDirectory } from "../../utils/p
 import { parseWorkflowAssignmentData } from "../../utils/workflowAssignmentData";
 import { readDevRole } from "../../utils/devRoleOverride";
 import { pushRecentRef } from "../../utils/portalWork";
+import { historyStateFor, navFromHistoryState, sameNav, type PortalNav } from "../../utils/portalHistory";
 
 interface PortalContainerProps {
   userEmail: string;
@@ -41,15 +42,6 @@ interface PortalContainerProps {
   onRefresh: () => void;
   canRunTestRuns: boolean;
   formSlugs: Record<string, string>;
-}
-
-/** The screen and scopes a record page was opened from. */
-interface ReturnPoint {
-  screen: PortalScreen | null;
-  formScope: string | null;
-  statusScope: StatFilter | null;
-  subsScope: SubsScope | null;
-  filedScope: FiledScope | null;
 }
 
 /** Per-submission layer reassignments, keyed by layer number. */
@@ -93,25 +85,53 @@ export default function PortalContainer({
   const location = useLocation();
   const navigate = useNavigate();
   const [deepLink] = useState(() => readPortalDeepLink(location.search));
-  useEffect(() => {
-    if (location.search) navigate({ search: "" }, { replace: true });
-  }, [location.search, navigate]);
 
-  /** Null until a record is opened from the portal; then the record key it shows, or null when none. */
-  const [drawerChoice, setDrawerChoice] = useState<{ ref: string | null } | null>(null);
-  /** Where the record page was opened from, so leaving it returns there. Null after a deep link or a nav click. */
-  const [returnTo, setReturnTo] = useState<ReturnPoint | null>(null);
-  const [recentRefs, setRecentRefs] = useState<string[]>([]);
-  const [manageView, setManageView] = useState<ManageView>("overview");
-  const [toastMessage, setToastMessage] = useState("");
-  const [screen, setScreenState] = useState<PortalScreen | null>(() =>
-    deepLink.form && deepLink.item ? "record" : (deepLink.screen ?? null),
+  // Which page is showing. The portal has one address, so every page change is
+  // also written into the browser's history: Back and Forward then step through
+  // the portal's own pages rather than leaving the site. Coming back to the
+  // portal from a form, or reloading it, reopens the page the entry recorded.
+  const [nav, setNav] = useState<PortalNav>(
+    () =>
+      navFromHistoryState(location.state) ?? {
+        screen: deepLink.form && deepLink.item ? "record" : (deepLink.screen ?? null),
+        focusForm: deepLink.form ?? null,
+        focusStatus: null,
+        focusSubsScope: deepLink.scope ?? null,
+        focusFiled: null,
+        returnTo: null,
+        drawerChoice: null,
+        manageView: "overview",
+        search: { query: "", at: 0 },
+      },
   );
-  const [focusForm, setFocusForm] = useState<string | null>(() => deepLink.form ?? null);
-  const [focusStatus, setFocusStatus] = useState<StatFilter | null>(null);
-  const [focusSubsScope, setFocusSubsScope] = useState<SubsScope | null>(() => deepLink.scope ?? null);
-  const [focusFiled, setFocusFiled] = useState<FiledScope | null>(null);
-  const [search, setSearch] = useState<{ query: string; at: number }>({ query: "", at: 0 });
+  const { screen, focusForm, focusStatus, focusSubsScope, focusFiled, returnTo, drawerChoice, manageView, search } = nav;
+
+  // The entry the portal opened on records its first page, and loses any
+  // link address so a refresh does not repeat the link.
+  useEffect(() => {
+    navigate({ search: "" }, { replace: true, state: historyStateFor(nav) });
+    // Only the page the portal opened on; later pages are pushed by `go`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Back or Forward: show the page that history entry recorded.
+  const [seenEntry, setSeenEntry] = useState(location.key);
+  if (location.key !== seenEntry) {
+    setSeenEntry(location.key);
+    const recorded = navFromHistoryState(location.state);
+    if (recorded && !sameNav(nav, recorded)) setNav(recorded);
+  }
+
+  /** Open a page: show it, and add it to the browser's history. */
+  const go = (changes: Partial<PortalNav>) => {
+    const next = { ...nav, ...changes };
+    if (sameNav(nav, next)) return;
+    setNav(next);
+    navigate({ search: "" }, { state: historyStateFor(next) });
+  };
+
+  const [recentRefs, setRecentRefs] = useState<string[]>([]);
+  const [toastMessage, setToastMessage] = useState("");
   const [prefs, setPrefsState] = useState<PortalPrefs>(() =>
     typeof window === "undefined" ? DEFAULT_PORTAL_PREFS : readPortalPrefs(),
   );
@@ -248,15 +268,16 @@ export default function PortalContainer({
     });
 
   /** Leave the record page for the screen it was opened from. */
-  const leaveRecord = () => {
-    setScreenState(returnTo?.screen ?? null);
-    setFocusForm(returnTo?.formScope ?? null);
-    setFocusStatus(returnTo?.statusScope ?? null);
-    setFocusSubsScope(returnTo?.subsScope ?? null);
-    setFocusFiled(returnTo?.filedScope ?? null);
-    setReturnTo(null);
-    setDrawerChoice({ ref: null });
-  };
+  const leaveRecord = () =>
+    go({
+      screen: returnTo?.screen ?? null,
+      focusForm: returnTo?.formScope ?? null,
+      focusStatus: returnTo?.statusScope ?? null,
+      focusSubsScope: returnTo?.subsScope ?? null,
+      focusFiled: returnTo?.filedScope ?? null,
+      returnTo: null,
+      drawerChoice: { ref: null },
+    });
 
   const value = {
     role,
@@ -281,21 +302,22 @@ export default function PortalContainer({
       statusScope: StatFilter | null = null,
       subsScope: SubsScope | null = null,
       filedScope: FiledScope | null = null,
-    ) => {
-      setScreenState(next);
-      setManageView("overview");
-      setFocusForm(formScope);
-      setFocusStatus(statusScope);
-      setFocusSubsScope(subsScope);
-      setFocusFiled(filedScope);
-      // A deliberate navigation is not a way back from a record, and it closes any open one.
-      setReturnTo(null);
-      setDrawerChoice({ ref: null });
-      // Any deliberate navigation drops the search, for the same reason it drops
-      // the form scope: clicking "All submissions" must show all submissions,
-      // not the last thing that was typed into the bar.
-      setSearch({ query: "", at: 0 });
-    },
+    ) =>
+      go({
+        screen: next,
+        manageView: "overview",
+        focusForm: formScope,
+        focusStatus: statusScope,
+        focusSubsScope: subsScope,
+        focusFiled: filedScope,
+        // A deliberate navigation is not a way back from a record, and it closes any open one.
+        returnTo: null,
+        drawerChoice: { ref: null },
+        // Any deliberate navigation drops the search, for the same reason it drops
+        // the form scope: clicking "All submissions" must show all submissions,
+        // not the last thing that was typed into the bar.
+        search: { query: "", at: 0 },
+      }),
     // A form hub with no form is the form picker, so a stale scope can never
     // strand the screen on a form this account can no longer see.
     focusForm: focusForm && catalogue.some((entry) => entry.listTitle === focusForm) ? focusForm : null,
@@ -309,33 +331,37 @@ export default function PortalContainer({
     // `at` is what makes the same words twice count twice — see PortalContext.
     // Deliberately calls the state setters rather than `setScreen` above, which
     // would clear the very search being submitted.
-    submitSearch: (query: string) => {
-      setSearch({ query, at: Date.now() });
-      setScreenState("subs");
-      setFocusForm(null);
-      setFocusStatus(null);
-      setFocusSubsScope(null);
-      setFocusFiled(null);
-      setReturnTo(null);
-      setDrawerChoice({ ref: null });
-    },
+    submitSearch: (query: string) =>
+      go({
+        search: { query, at: Date.now() },
+        screen: "subs",
+        focusForm: null,
+        focusStatus: null,
+        focusSubsScope: null,
+        focusFiled: null,
+        returnTo: null,
+        drawerChoice: { ref: null },
+      }),
     prefs,
     setPrefs,
     drawerRef,
     // Opening a record from a list remembers that list; opening one from the
     // record page keeps the list the reader came from in the first place.
     openDrawer: (reference: string) => {
-      if (activeScreen !== "record") {
-        setReturnTo({
-          screen: activeScreen,
-          formScope: focusForm,
-          statusScope: focusStatus,
-          subsScope: focusSubsScope,
-          filedScope: focusFiled,
-        });
-      }
-      setScreenState("record");
-      setDrawerChoice({ ref: reference });
+      go({
+        returnTo:
+          activeScreen !== "record"
+            ? {
+                screen: activeScreen,
+                formScope: focusForm,
+                statusScope: focusStatus,
+                subsScope: focusSubsScope,
+                filedScope: focusFiled,
+              }
+            : returnTo,
+        screen: "record",
+        drawerChoice: { ref: reference },
+      });
       setRecentRefs((current) => pushRecentRef(current, reference));
     },
     closeDrawer: leaveRecord,
@@ -343,7 +369,7 @@ export default function PortalContainer({
     canRunTestRuns,
     formSlugs,
     manageView,
-    setManageView,
+    setManageView: (view: ManageView) => go({ manageView: view }),
     nudged,
     markNudged: (reference: string) => setNudged((current) => ({ ...current, [reference]: true })),
     applyPatch: (record: PortalRecord, fields: Record<string, unknown>) =>
