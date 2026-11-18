@@ -80,6 +80,10 @@ describe("isMeaningfulSubject", () => {
 });
 
 describe("stepCaption", () => {
+  it("does not repeat a status that only differs in case", () => {
+    expect(stepCaption(step({ statusText: "Signed", subText: "signed" }))).toBe("Nurul Huda · Signed");
+  });
+
   it("reads who, then the status", () => {
     expect(stepCaption(step({}))).toBe("Nurul Huda · Awaiting Nurul");
   });

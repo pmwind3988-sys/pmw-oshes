@@ -55,7 +55,7 @@ export function stepCaption(step: Pick<PortalChainStep, "who" | "roleLabel" | "s
   const head = [who === "" || roleRepeated ? "" : who, step.statusText.trim()].filter((part) => part !== "").join(" · ");
 
   const sub = step.subText.trim();
-  if (sub === "" || head.includes(sub)) return head;
+  if (sub === "" || head.toLowerCase().includes(sub.toLowerCase())) return head;
   return head === "" ? sub : `${head} · ${sub}`;
 }
 
