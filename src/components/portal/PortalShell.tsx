@@ -33,7 +33,7 @@ import "../../styles/shell.css";
  */
 
 /** The pages that sit under the Manage tab, so the tab stays lit while one is open. */
-const MANAGE_SCREENS: PortalScreen[] = ["manage", "people", "audit", "smoking"];
+const MANAGE_SCREENS: PortalScreen[] = ["manage", "audit", "smoking"];
 
 /** True when a keystroke is already going somewhere that takes text. */
 function isTypingTarget(target: EventTarget | null): boolean {

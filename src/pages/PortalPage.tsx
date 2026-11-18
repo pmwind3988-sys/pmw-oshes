@@ -5,7 +5,6 @@ import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "./portal/HomeScreen";
 import ManageScreen from "./portal/ManageScreen";
 import RecordsScreen from "./portal/RecordsScreen";
-import PeopleScreen from "./portal/PeopleScreen";
 import AuditScreen from "./portal/AuditScreen";
 import SmokingLogScreen from "./portal/SmokingLogScreen";
 import SettingsScreen from "./portal/SettingsScreen";
@@ -15,8 +14,6 @@ function ScreenBody() {
   switch (screen) {
     case "record":
       return <RecordPage />;
-    case "people":
-      return <PeopleScreen />;
     case "audit":
       return <AuditScreen />;
     case "smoking":

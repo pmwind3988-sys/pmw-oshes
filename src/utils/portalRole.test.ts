@@ -136,11 +136,10 @@ describe("navigation", () => {
     expect(tabs.find((tab) => tab.screen === "home")?.badge).toBe(0);
   });
 
-  it("opens Manage to an auditor, who sees the audit trail and smoking log but not people", () => {
+  it("opens Manage to an auditor, who sees the audit trail and smoking log", () => {
     expect(tabLabels(input({ userEmail: "aud@pmw.gov.my", isAuditor: true }))).toContain("Manage");
     const screens = allowedScreens(derivePortalAccess(input({ userEmail: "aud@pmw.gov.my", isAuditor: true })));
     expect(screens).toEqual(expect.arrayContaining(["manage", "audit", "smoking"]));
-    expect(screens).not.toContain("people");
   });
 
   it("offers the needs-me framing only to accounts that sign or evaluate", () => {
@@ -158,12 +157,8 @@ describe("navigation", () => {
 
   it("keeps an account out of the pages it has no way to open", () => {
     const approver = allowedScreens(derivePortalAccess(input({ userEmail: "faizal@pmw.gov.my" })));
-    expect(approver).not.toContain("people");
     expect(approver).not.toContain("audit");
     expect(approver).not.toContain("manage");
-
-    const admin = allowedScreens(derivePortalAccess(input({ userEmail: "aisyah@pmw.gov.my", isAdmin: true })));
-    expect(admin).toContain("people");
   });
 
   it("shows the smoking log to admins and auditors only", () => {

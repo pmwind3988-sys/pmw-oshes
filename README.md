@@ -7,7 +7,7 @@ The application is based on the proven `pmw-hrform` architecture. Career, recrui
 ## Included
 
 - Microsoft 365 authentication with MSAL.
-- Role-scoped portal: five derived role views (administrator, evaluator, approver, submitter, auditor), a gated submission drawer where signing advances the record to the next layer, a form catalogue with editable per-layer SLA and a read-only public/internal badge, People & roles, and an append-only audit trail.
+- Role-scoped portal: five derived role views (administrator, evaluator, approver, submitter, auditor), a gated submission drawer where signing advances the record to the next layer, a form catalogue with editable per-layer SLA and a read-only public/internal badge, and an append-only audit trail.
 - A strictly linear signed-out QR flow — poster → form → reference — with tracking reachable only by reference.
 - SharePoint form discovery, submission dashboards, approvals, evaluations, attachments, signatures, and PDF generation.
 - Workflow layers, conditional routing, SharePoint choice sources, and audit logging — all configured by the `pmw-hrform` builder and consumed here.
@@ -53,11 +53,10 @@ node node_modules\vitest\vitest.mjs run
 ## Main routes
 
 - `/` — Microsoft 365 sign-in
-- `/portal` — the portal, with three tabs: Your work (the landing page), Submissions (list or board view) and Manage (People, Audit and the smoking log, for accounts that reach them). A submission opens on its record page.
+- `/portal` — the portal, with three tabs: Your work (the landing page), Submissions (list or board view) and Manage (Audit and the smoking log, for accounts that reach them). A submission opens on its record page.
 - `/portal?screen=subs&form=F&item=I` — deep link to one record (`scope=all|mine|needs` is also read)
 - `/report` — signed-out QR poster flow (`?poster=JTY3-C&location=Jetty+3` prefills from the poster)
 - `/track` — track a report by reference, no sign-in
-- `/admin/routing` — approval routing (admin only)
 - `/form/:formId` — published form
 - `/eval/:token` — public evaluation/approval link
 - `/privacy` — PDPA privacy notice

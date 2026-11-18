@@ -35,9 +35,12 @@ describe("legacyRouteTarget", () => {
     expect(legacyRouteTarget("/adminhomepage", "")).toBe("/portal");
   });
 
+  it("sends the retired approval routing page to Manage", () => {
+    expect(legacyRouteTarget("/admin/routing", "")).toBe("/portal?screen=manage");
+  });
+
   it("returns null for anything that is not a legacy route", () => {
     expect(legacyRouteTarget("/portal", "")).toBeNull();
-    expect(legacyRouteTarget("/admin/routing", "")).toBeNull();
     expect(legacyRouteTarget("/", "")).toBeNull();
   });
 });

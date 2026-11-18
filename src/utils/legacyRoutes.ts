@@ -28,6 +28,9 @@ export function legacyRouteTarget(pathname: string, search: string): string | nu
     return `/portal?screen=subs&form=${encodeURIComponent(formTitle)}`;
   }
 
+  // Approval routing is set on each form's layers in pmw-hrform now.
+  if (pathname === "/admin/routing") return "/portal?screen=manage";
+
   if (pathname === "/admin/dashboard" || pathname === "/user/dashboard" || pathname === "/adminhomepage") {
     return "/portal";
   }

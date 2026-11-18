@@ -390,36 +390,21 @@ describe("FormPickerList", () => {
 });
 
 describe("ManageLayout", () => {
-  it("lists Overview, People and approvers, Smoking log, History and Test runs to an administrator", () => {
+  it("lists Overview, Smoking log, History and Test runs to an administrator", () => {
     const html = render(
       <ManageLayout active="overview"><span /></ManageLayout>,
       contextValue({ canRunTestRuns: true }),
     );
     const text = visibleText(html);
-    for (const item of ["Overview", "People and approvers", "Smoking log", "History", "Test runs"]) {
+    for (const item of ["Overview", "Smoking log", "History", "Test runs"]) {
       expect(text).toContain(item);
     }
+    expect(text).not.toContain("People and approvers");
+    expect(text).not.toContain("Approval routing");
   });
 
-  it("links Approval routing to an administrator, but not to someone with only the builder grant", () => {
-    const admin = render(<ManageLayout active="overview"><span /></ManageLayout>, contextValue({ canRunTestRuns: true }));
-    expect(admin).toContain('href="/admin/routing"');
-    const base = contextValue();
-    const notAdmin = derivePortalAccess({
-      userEmail: ME,
-      isAdmin: false,
-      isAuditor: false,
-      catalogue: base.catalogue,
-      records: base.records,
-    });
-    const builderOnly = render(
-      <ManageLayout active="overview"><span /></ManageLayout>,
-      contextValue({ access: notAdmin, isAdmin: false, canRunTestRuns: true }),
-    );
-    expect(builderOnly).not.toContain('href="/admin/routing"');
-  });
 
-  it("gives an auditor History and the smoking log, but no People or Test runs", () => {
+  it("gives an auditor History and the smoking log, but no Test runs", () => {
     const base = contextValue();
     const auditor = derivePortalAccess({
       userEmail: ME,
@@ -435,7 +420,6 @@ describe("ManageLayout", () => {
     const text = visibleText(html);
     expect(text).toContain("History");
     expect(text).toContain("Smoking log");
-    expect(text).not.toContain("People and approvers");
     expect(text).not.toContain("Test runs");
   });
 });

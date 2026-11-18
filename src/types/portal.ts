@@ -27,7 +27,6 @@ export interface PortalAccess {
   canSeeEveryRecord: boolean;
   canFile: boolean;
   canManageCatalogue: boolean;
-  canSeePeople: boolean;
   canSeeAudit: boolean;
   canSeeOperations: boolean;
   /** Chase an approver: nudge and reassign. */
@@ -39,7 +38,7 @@ export interface PortalAccess {
  * The pages the portal can show. Which ones an account may reach comes from `PortalAccess`.
  * "record" is one submission's page, reached from a list and left back to where it was opened from.
  */
-export type PortalScreen = "home" | "subs" | "manage" | "people" | "audit" | "smoking" | "settings" | "record";
+export type PortalScreen = "home" | "subs" | "manage" | "audit" | "smoking" | "settings" | "record";
 
 /**
  * Which slice of the submissions screen is showing. "needs" is what is waiting
@@ -228,12 +227,3 @@ export interface AuditEntry {
   event: string;
 }
 
-/** A row of the People & roles table. */
-export interface PortalPerson {
-  name: string;
-  email: string;
-  approvalRole: string;
-  systemRole: string;
-  openItems: number;
-  sees: string;
-}

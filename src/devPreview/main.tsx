@@ -11,7 +11,6 @@ import RecordPage from "../components/portal/RecordPage";
 import HomeScreen from "../pages/portal/HomeScreen";
 import ManageScreen from "../pages/portal/ManageScreen";
 import RecordsScreen from "../pages/portal/RecordsScreen";
-import PeopleScreen from "../pages/portal/PeopleScreen";
 import AuditScreen from "../pages/portal/AuditScreen";
 import SmokingTotalsDashboard from "../components/smoking/SmokingTotalsDashboard";
 import SmokingLogScreen from "../pages/portal/SmokingLogScreen";
@@ -39,7 +38,6 @@ const SCREENS = {
   subs: <RecordsScreen />,
   // The real Manage screen; its sidebar switches the harness to the other pages.
   manage: <ManageScreen />,
-  people: <PeopleScreen />,
   audit: <AuditScreen />,
   record: <RecordPage />,
   // SettingsScreen is absent: it reads AppearanceContext, which needs a real
