@@ -10,13 +10,15 @@ PMW factory staff, OSHES team members, approvers, read-only viewers, and form ow
 
 The portal is organised around **who is looking at it**. Five role views are derived — never stored on the user — from Entra group membership plus the submission set:
 
-| Role | Signal | Sidebar |
+| Role | Signal | What they see |
 |---|---|---|
-| Administrator | member of the OSHES Forms Owner group | Today · Submissions · Form catalogue · People & roles · Audit trail |
-| Evaluator (Safety Officer) | assignee of an `evaluation` layer | Today · To evaluate · Submissions |
-| Approver | assignee of an `approval` layer | My approvals · All records |
-| Staff / submitter | neither admin nor an assignee | My submissions · File a form |
-| Auditor | member of the OSHES Auditors group | Records · Audit trail |
+| Administrator | member of the OSHES Forms Owner group | Your work · Submissions · Manage (Overview, Smoking log, History, Test runs) |
+| Evaluator (Safety Officer) | assignee of an `evaluation` layer | Your work · Submissions · Manage (Overview) |
+| Approver | assignee of an `approval` layer | Your work · Submissions |
+| Staff / submitter | neither admin nor an assignee | Your work · Submissions |
+| Auditor | member of the OSHES Auditors group | Your work · Submissions · Manage (Overview, Smoking log, History) — read only |
+
+Who evaluates and approves each layer is set on the form's layers in the pmw-hrform builder. OSHES reads those assignments; it has no page of its own for viewing or editing approvers.
 
 Someone who is both an evaluator and an approver resolves to `evaluator` — the superset view — and their approval items appear in the same queue. Auditors are read-only by construction: the role never renders an action, and no write path exists for it.
 

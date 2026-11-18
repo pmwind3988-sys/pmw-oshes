@@ -4,7 +4,7 @@
  * A question sourced from a list can show one column and store another: the
  * person picks "Ali bin Ahmad", the form stores `ali@pmw-group.com`. That
  * matters wherever an answer is used as a key rather than read by a human —
- * approval routing looks a submitter up by exact email, and no amount of
+ * approver lookup looks a submitter up by exact email, and no amount of
  * careful matching rescues a name somebody typed as "ali" or "Ahmad, Ali".
  * Removing the typing removes the problem.
  *
