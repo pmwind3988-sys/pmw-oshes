@@ -467,6 +467,26 @@ export default function EvaluationPage() {
   const [matrixTables, setMatrixTables] = useState<Record<string, { columns: MatrixColumnDef[]; rows: Record<string, unknown>[]; html: string }>>({});
 
   const isPublic = !!routeToken;
+
+  // A public reviewer has no SharePoint account, so an attached file comes
+  // through the server, which hands it over only for this link's own record.
+  const loadPublicFile = useCallback(async (source: string): Promise<Blob> => {
+    const params = new URLSearchParams(window.location.search);
+    const query = new URLSearchParams({
+      token: routeToken || "",
+      responseItemId: params.get("item") || "",
+      k: params.get("k") || "",
+      file: source,
+    });
+    const res = await fetch(`/api/evaluate?${query.toString()}`, {
+      headers: { ...(API_KEY ? { "X-Api-Key": API_KEY } : {}) },
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => null) as { error?: string } | null;
+      throw new Error(json?.error || "This file could not be loaded.");
+    }
+    return res.blob();
+  }, [routeToken]);
   const displayLayerNumber = isPublic
     ? 1  // Will be resolved from token
     : parseInt(layerNumber || "0", 10);
@@ -1200,6 +1220,7 @@ export default function EvaluationPage() {
                   accessToken={token}
                   mediaSrcByField={mediaSrcByField}
                   fallbackData={getSubmissionPreviewData(responseData)}
+                  loadFile={isPublic ? loadPublicFile : undefined}
                 />
               </div>
 

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { fetchWithAuthRecovery } from "../../utils/authRecovery";
+import FilePreviewDialog, { type FilePreviewRequest } from "./FilePreviewDialog";
 import { editorial } from "../../theme/editorial";
 import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime } from "../../utils/displayDateTime";
 import { createResponseKeyResolver } from "../../utils/responseKeys";
@@ -58,7 +59,15 @@ interface ReadOnlySubmissionPreviewProps {
   mediaSrcByField?: Record<string, string | string[]>;
   fallbackData?: Record<string, unknown>;
   compact?: boolean;
+  /**
+   * Fetches an attached file for the in-page preview. A public reviewer cannot
+   * reach SharePoint, so their page passes one that goes through the server.
+   * Without it, a signed-in reader's own access token is used.
+   */
+  loadFile?: (source: string) => Promise<Blob>;
 }
+
+type OpenFile = (source: string) => void;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -370,6 +379,15 @@ async function blobToObjectUrl(blob: Blob): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
+/** A file a signed-in reader can open with their own SharePoint access. */
+async function loadSharePointFile(source: string, accessToken: string): Promise<Blob> {
+  const fileValueUrl = sharePointFileValueUrl(source);
+  if (!fileValueUrl) throw new Error("This file could not be found.");
+  const response = await fetchWithAuthRecovery(fileValueUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!response.ok) throw new Error(response.status === 404 ? "This file could not be found." : "This file could not be loaded.");
+  return response.blob();
+}
+
 function useAuthenticatedMediaSource(source: string, accessToken?: string | null): { src: string; loading: boolean } {
   const [src, setSrc] = useState(source);
   const [loading, setLoading] = useState(false);
@@ -419,7 +437,27 @@ function mediaSourcesForField(field: PreviewField, value: unknown, mediaSrcByFie
   return sources.some(isImageLike) ? sources : [];
 }
 
-function MediaValue({ source, accessToken, showName = false }: { source: string; accessToken?: string | null; showName?: boolean }) {
+function FileName({ source, onOpenFile }: { source: string; onOpenFile?: OpenFile }) {
+  const linkStyle: CSSProperties = { color: C.purple, fontWeight: 600, overflowWrap: "anywhere" };
+  if (onOpenFile) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenFile(source)}
+        style={{ ...linkStyle, background: "none", border: 0, padding: 0, font: "inherit", fontWeight: 600, textAlign: "left", textDecoration: "underline", cursor: "pointer" }}
+      >
+        {filenameFromUrl(source)}
+      </button>
+    );
+  }
+  return (
+    <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+      {filenameFromUrl(source)}
+    </a>
+  );
+}
+
+function MediaValue({ source, accessToken, showName = false, onOpenFile }: { source: string; accessToken?: string | null; showName?: boolean; onOpenFile?: OpenFile }) {
   const { src, loading } = useAuthenticatedMediaSource(source, accessToken);
   // A source the reader is not authorised for — a SharePoint URL reached from a
   // public evaluation link — would otherwise sit in the card as a broken-image
@@ -441,20 +479,12 @@ function MediaValue({ source, accessToken, showName = false }: { source: string;
         </div>
         {loading && <span style={{ color: C.textMuted, fontSize: 12 }}>Loading secure image...</span>}
         {/* An attached photo is still a file: its name opens the original. */}
-        {showName && !source.startsWith("data:") && (
-          <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, overflowWrap: "anywhere" }}>
-            {filenameFromUrl(source)}
-          </a>
-        )}
+        {showName && !source.startsWith("data:") && <FileName source={source} onOpenFile={onOpenFile} />}
       </div>
     );
   }
 
-  return (
-    <a href={toAbsoluteSharePointUrl(source)} target="_blank" rel="noopener noreferrer" style={{ color: C.purple, fontWeight: 600, overflowWrap: "anywhere" }}>
-      {filenameFromUrl(source)}
-    </a>
-  );
+  return <FileName source={source} onOpenFile={source.startsWith("data:") ? undefined : onOpenFile} />;
 }
 
 function matrixRows(value: unknown): Record<string, unknown>[] {
@@ -596,13 +626,13 @@ function ChoicePills({ labels }: { labels: string[] }) {
   );
 }
 
-function FieldValue({ field, value, accessToken, mediaSrcByField }: { field: PreviewField; value: unknown; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]> }) {
+function FieldValue({ field, value, accessToken, mediaSrcByField, onOpenFile }: { field: PreviewField; value: unknown; accessToken?: string | null; mediaSrcByField?: Record<string, string | string[]>; onOpenFile?: OpenFile }) {
   const mediaSources = mediaSourcesForField(field, value, mediaSrcByField);
   if (mediaSources.length > 0) {
     return (
       <div style={{ display: "grid", gap: 10 }}>
         {mediaSources.map((source, index) => (
-          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} showName={field.type === "file" || field.type === "imageupload"} />
+          <MediaValue key={`${source}-${index}`} source={source} accessToken={accessToken} showName={field.type === "file" || field.type === "imageupload"} onOpenFile={onOpenFile} />
         ))}
       </div>
     );
@@ -627,7 +657,18 @@ function fallbackSections(fallbackData: Record<string, unknown> | undefined): Pr
   }];
 }
 
-export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToken, mediaSrcByField, fallbackData, compact = false }: ReadOnlySubmissionPreviewProps) {
+export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToken, mediaSrcByField, fallbackData, compact = false, loadFile }: ReadOnlySubmissionPreviewProps) {
+  const [previewRequest, setPreviewRequest] = useState<FilePreviewRequest | null>(null);
+  const load = useMemo(
+    () => loadFile ?? (accessToken ? (source: string) => loadSharePointFile(source, accessToken) : undefined),
+    [accessToken, loadFile],
+  );
+  const openFile = useCallback((source: string) => {
+    if (!load) return;
+    setPreviewRequest({ fileName: filenameFromUrl(source), load: () => load(source) });
+  }, [load]);
+  const onOpenFile = load ? openFile : undefined;
+
   const sections = collectPreviewSections(surveyJson, data);
   const displaySections = sections.length > 0 ? sections : fallbackSections(fallbackData ?? data ?? undefined);
 
@@ -652,13 +693,14 @@ export default function ReadOnlySubmissionPreview({ surveyJson, data, accessToke
                   {field.title}
                 </div>
                 <div style={{ fontSize: 15, lineHeight: 1.5, minWidth: 0 }}>
-                  <FieldValue field={field} value={data?.[field.dataKey]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} />
+                  <FieldValue field={field} value={data?.[field.dataKey]} accessToken={accessToken} mediaSrcByField={mediaSrcByField} onOpenFile={onOpenFile} />
                 </div>
               </div>
             ))}
           </div>
         </section>
       ))}
+      <FilePreviewDialog request={previewRequest} onClose={() => setPreviewRequest(null)} />
     </div>
   );
 }
