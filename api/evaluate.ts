@@ -10,6 +10,7 @@ import {
 } from "./_utils/workflowEmail.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { denyLayerItemAccess } from "./_utils/layerItemAccess.js";
+import { findReviewFile, REVIEW_FILE_MAX_BYTES, reviewFileContentType, reviewFileName } from "./_utils/reviewFiles.js";
 import { linkTokenField, mintLinkToken, readLinkToken } from "./_utils/linkToken.js";
 import { reissueReviewLink } from "./_utils/linkReissue.js";
 import { resolveLayerRecipients, type LayerNotifyConfig } from "./_utils/layerRecipients.js";
@@ -50,6 +51,7 @@ interface ApiRequest {
 interface ApiResponse {
   status(code: number): ApiResponse;
   json(data: Record<string, unknown>): void;
+  send(body: Buffer): void;
   setHeader(name: string, value: string): void;
   end(): void;
 }
@@ -374,6 +376,49 @@ async function buildMediaSrcByField(surveyJson: unknown, fields: Record<string, 
   return result;
 }
 
+/**
+ * One attached file, for a public reviewer to preview in the page.
+ *
+ * Reached only after the link has been checked against the record, and only
+ * for a file the link is already shown (see _utils/reviewFiles.ts). Served as a
+ * download with a type picked from its name, so a file can never be opened as
+ * a page on this site.
+ */
+async function sendReviewFile(
+  res: ApiResponse,
+  requested: string,
+  visibleFields: Record<string, unknown>,
+  context: { layerNumber: number; responseItemId: number },
+) {
+  const candidates = Object.values(visibleFields).flatMap(mediaSourcesFromValue);
+  const serverPath = findReviewFile(requested, candidates, serverRelativePath);
+  if (!serverPath) {
+    logWarn("api:evaluate:get", "Refused a file that is not part of this review", context);
+    return res.status(404).json({ error: "This file is not part of this review." });
+  }
+
+  const spToken = await getSharePointToken();
+  const upstream = await fetch(sharePointFileValueUrl(serverPath), {
+    headers: { Authorization: `Bearer ${spToken}`, Accept: "*/*" },
+  });
+  if (!upstream.ok) {
+    logWarn("api:evaluate:get", "Could not load a review file", { ...context, status: upstream.status });
+    return res.status(502).json({ error: "This file could not be loaded. Please try again later." });
+  }
+
+  const tooLarge = { error: "This file is too large to preview here.", tooLarge: true };
+  if (Number(upstream.headers.get("content-length") || 0) > REVIEW_FILE_MAX_BYTES) return res.status(413).json(tooLarge);
+  const body = Buffer.from(await upstream.arrayBuffer());
+  if (body.length > REVIEW_FILE_MAX_BYTES) return res.status(413).json(tooLarge);
+
+  const fileName = reviewFileName(serverPath);
+  res.setHeader("Content-Type", reviewFileContentType(fileName));
+  res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "private, no-store");
+  return res.status(200).send(body);
+}
+
 async function handleGet(req: ApiRequest, res: ApiResponse) {
   const { token } = req.query as { token?: string };
   if (!token || typeof token !== "string") {
@@ -552,6 +597,13 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
           visibleFields.EvaluationData = JSON.stringify(visibleEval);
         } catch { /* invalid JSON, skip */ }
       }
+    }
+
+    // A request for one attached file rides on the same checks as the page
+    // itself, and may only name a file among the values just gathered.
+    const requestedFile = firstQueryValue(req.query.file);
+    if (requestedFile) {
+      return sendReviewFile(res, requestedFile, visibleFields, { layerNumber: foundLayerNumber, responseItemId });
     }
 
     let surveyJson: unknown = null;

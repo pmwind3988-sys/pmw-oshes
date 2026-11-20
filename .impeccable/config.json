@@ -13,6 +13,24 @@
         "rule": "overused-font",
         "value": "plus jakarta sans",
         "createdAt": "2026-11-16T08:36:55.197Z"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "api/evaluate.ts"
+        ],
+        "createdAt": "2026-11-20T02:52:57.505Z",
+        "reason": "Claude: L227 is a regex in server code that extracts <img src> from stored HTML, not markup"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/builder/ReadOnlySubmissionPreview.tsx"
+        ],
+        "createdAt": "2026-11-20T02:55:35.427Z",
+        "reason": "Claude: L326 is a regex extracting <img src> from stored HTML, not markup"
       }
     ]
   }
