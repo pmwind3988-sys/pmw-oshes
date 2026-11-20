@@ -23,6 +23,7 @@ import {
   ChevronDown,
   FileText,
   ImageIcon,
+  Mail,
   Trash2 as DeleteForeverIcon,
   UserCog,
 } from "../ui/Icons";
@@ -57,6 +58,8 @@ import { StatusPill } from "./PortalPills";
 import WithdrawDialog from "./WithdrawDialog";
 import DeleteRecordDialog from "./DeleteRecordDialog";
 import ReassignDialog from "./ReassignDialog";
+import ResendEmailDialog from "./ResendEmailDialog";
+import { canResendLayerEmail } from "../../utils/resendLayerEmail";
 import PdfPreviewDialog, { type PdfPreview } from "./PdfPreviewDialog";
 import { AnswerTable, TimelineTab, answerValueText, recordAnswerSections } from "./RecordDetail";
 import type { PortalRecord } from "../../types";
@@ -102,6 +105,7 @@ const NEUTRAL_BUTTON_SX = { ...HEADER_BUTTON_SX, color: "text.primary", borderCo
 
 /** The icon for each ⋯ menu entry. The entries and their order come from recordMenuItems. */
 const MENU_ICON: Record<RecordMenuItem["id"], React.ReactNode> = {
+  resend: <Mail size={18} />,
   reassign: <UserCog size={18} />,
   cancel: <BlockIcon fontSize="small" />,
   delete: <DeleteForeverIcon fontSize="small" />,
@@ -169,6 +173,7 @@ function RecordView({ record }: { record: PortalRecord }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
   const [activity, setActivity] = useState<"all" | "notes" | "history">("all");
   /** Answer sections the reader has folded away. Every section starts open. */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -193,12 +198,16 @@ function RecordView({ record }: { record: PortalRecord }) {
   // that is not the current one.
   const canReassign = access.canChase && record.hasWorkflow && !record.done && !record.returned;
   const cancelLabel = withdrawLabel(record, userEmail);
-  const menuItems = recordMenuItems({ canReassign, canCancel, canDelete, cancelLabel });
+  // Resending is gated like reassigning: whoever may chase a layer may send its
+  // email again, and only while a layer is actually waiting.
+  const canResend = canReassign && canResendLayerEmail(record);
+  const menuItems = recordMenuItems({ canResend, canReassign, canCancel, canDelete, cancelLabel });
   const hasMoreActions = menuItems.length > 0;
 
   const openMoreAction = (id: RecordMenuItem["id"]) => {
     setMoreMenu(null);
-    if (id === "reassign") setReassignOpen(true);
+    if (id === "resend") setResendOpen(true);
+    else if (id === "reassign") setReassignOpen(true);
     else if (id === "cancel") setCancelOpen(true);
     else setDeleteOpen(true);
   };
@@ -844,6 +853,7 @@ function RecordView({ record }: { record: PortalRecord }) {
       </Menu>
 
       <ReassignDialog record={reassignOpen ? record : null} onClose={() => setReassignOpen(false)} />
+      <ResendEmailDialog record={resendOpen ? record : null} onClose={() => setResendOpen(false)} />
       <PdfPreviewDialog preview={pdfPreview} onClose={() => setPdfPreview(null)} />
 
       <WithdrawDialog record={cancelOpen ? record : null} onClose={() => setCancelOpen(false)} onDone={closeDrawer} />

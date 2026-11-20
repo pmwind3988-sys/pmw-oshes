@@ -66,7 +66,7 @@ export function formDisplayName(record: Pick<PortalRecord, "formName">): string 
 
 /** One entry in the record page's ⋯ menu. */
 export interface RecordMenuItem {
-  id: "reassign" | "cancel" | "delete";
+  id: "resend" | "reassign" | "cancel" | "delete";
   label: string;
   /** Destructive actions are drawn in the error colour. */
   danger?: boolean;
@@ -77,12 +77,15 @@ export interface RecordMenuItem {
  * lays out what they allow. An empty list means the menu trigger is not drawn.
  */
 export function recordMenuItems(gates: {
+  /** Optional so callers that predate resending keep their menu unchanged. */
+  canResend?: boolean;
   canReassign: boolean;
   canCancel: boolean;
   canDelete: boolean;
   cancelLabel: string;
 }): RecordMenuItem[] {
   const items: RecordMenuItem[] = [];
+  if (gates.canResend) items.push({ id: "resend", label: "Resend email" });
   if (gates.canReassign) items.push({ id: "reassign", label: "Change who signs" });
   if (gates.canCancel) items.push({ id: "cancel", label: gates.cancelLabel });
   if (gates.canDelete) items.push({ id: "delete", label: "Delete", danger: true });
