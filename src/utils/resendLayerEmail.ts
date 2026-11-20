@@ -15,6 +15,7 @@ import { appBaseUrl } from "../config/appBaseUrl";
 import { ensureWorkflowColumns, sendSpEmail } from "./formBuilderSP";
 import { buildLayerReviewLink } from "./layerReviewLink";
 import { parseValidEmailList } from "./layerRecipients";
+import { layerRecipients } from "./layerAssignees";
 import { ensureLinkToken } from "./linkToken";
 import { writeAuditEntry } from "./portalAudit";
 
@@ -71,9 +72,16 @@ async function readLayerFields(
 }
 
 /**
- * Who the layer's email normally goes to: the notify list a shared layer keeps,
- * then its assignee list, then the single holder — the same order the server
- * reads them in. Falls back to the holder the portal already shows.
+ * Who the layer's email normally goes to, by the form builder's settings for
+ * this layer — the same rule the original notice used (`layerRecipients`):
+ * the holder in `L{n}_Email` (which also carries a reassignment), or the whole
+ * named roster while a shared layer is unclaimed, plus the layer's "Notify
+ * also" mailboxes, or those mailboxes alone when it is set to "Send only to
+ * these mailboxes".
+ *
+ * Only when the builder settings name nobody — a data-resolved assignee on a
+ * record whose holder was never stored — does it fall back to what the record
+ * says it mailed last time.
  */
 export async function usualLayerRecipients(
   spClient: SharePointClient,
@@ -81,10 +89,14 @@ export async function usualLayerRecipients(
 ): Promise<string[]> {
   const layer = currentLayer(record);
   if (!layer) return [];
-  const fields = await readLayerFields(spClient, record, layer.step.layerNumber);
   const n = layer.step.layerNumber;
-  const stored = parseValidEmailList(fields[`L${n}_NotifyEmails`] || fields[`L${n}_Emails`] || fields[`L${n}_Email`]);
-  return stored.length ? stored : parseValidEmailList(layer.step.email || record.currentAssigneeEmail);
+  const fields = await readLayerFields(spClient, record, n);
+  const holder = fields[`L${n}_Email`] || layer.step.email || "";
+
+  const fromBuilder = layerRecipients(layer.config ?? undefined, holder);
+  if (fromBuilder.length) return parseValidEmailList(fromBuilder);
+
+  return parseValidEmailList(fields[`L${n}_NotifyEmails`] || fields[`L${n}_Emails`] || holder);
 }
 
 export async function resendLayerEmail(

@@ -147,18 +147,24 @@ export default function ResendEmailDialog({ record, onClose }: { record: PortalR
         </RadioGroup>
 
         {target === "custom" ? (
+          // Sits in the same column as the option text above it (the radio is
+          // 42px wide), with no floating label: the option already says what
+          // goes here, and the hint lines up with the field's own edge.
           <TextField
             autoFocus
             fullWidth
             multiline
             minRows={2}
-            label="Send to"
             placeholder="name@example.com, another@example.com"
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
             error={invalid.length > 0}
             helperText={helper}
-            sx={{ mt: 1.5, pl: { xs: 0, sm: 4 } }}
+            slotProps={{
+              htmlInput: { "aria-label": "Send to" },
+              formHelperText: { sx: { mx: 0, mt: 0.75 } },
+            }}
+            sx={{ mt: 1, pl: { xs: 0, sm: "42px" }, boxSizing: "border-box" }}
           />
         ) : null}
       </DialogContent>
