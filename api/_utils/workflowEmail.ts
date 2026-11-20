@@ -5,6 +5,7 @@ import {
 } from "./graphClient.js";
 import { logWarn } from "./logger.js";
 import { redirectTestMessage, type TestRunRedirect } from "./testRun.js";
+import { WORKFLOW_EMAIL_ICONS, type WorkflowEmailIconName } from "./workflowEmailIcons.js";
 
 export type WorkflowEmailDeliveryStatus = "sent" | "failed";
 
@@ -64,6 +65,9 @@ export interface WorkflowEmailAttachment {
   contentType: string;
   /** Base64 payload, without the data: URI prefix. */
   contentBytes: string;
+  /** Set for an image the body shows through `cid:<contentId>`. */
+  contentId?: string;
+  isInline?: boolean;
 }
 
 export interface WorkflowEmailContext {
@@ -260,6 +264,7 @@ export async function sendGraphEmail(
               name: attachment.name,
               contentType: attachment.contentType,
               contentBytes: attachment.contentBytes,
+              ...(attachment.isInline ? { isInline: true, contentId: attachment.contentId } : {}),
             })),
           } : {}),
         },
@@ -494,264 +499,282 @@ function formatSubmittedAt(value: string | undefined): string {
   return `${formatted} (MYT)`;
 }
 
-export interface WorkflowEmailDetail {
+export interface WorkflowEmailFact {
+  icon: WorkflowEmailIconName;
   label: string;
-  value: string | number;
+  value: string;
 }
 
 export interface WorkflowEmailTemplateParams {
   preheader: string;
-  statusLabel: string;
+  /** Shown big under the hero icon: two or three words. */
   title: string;
-  subtitle: string;
-  /**
-   * Shown as a badge under the subtitle. Blank omits the badge entirely, so a
-   * form that issues no reference is not given an empty box.
-   */
+  heroIcon: WorkflowEmailIconName;
+  /** Shown as a badge under the title. Blank omits the badge entirely. */
   referenceNo?: string;
-  progress?: { current: number; total: number };
-  details: WorkflowEmailDetail[];
-  instructions?: string[];
-  primaryAction?: { href: string; label: string };
-  /** Renders the copy-link card a public step needs before its button. */
-  shareLink?: { url: string; href: string };
-  secondaryAction?: { href: string; label: string };
-  note?: string;
+  /** Step tracker. Drawn for 2–6 steps; other counts fall back to a text line. */
+  progress?: { current: number; total: number; currentLabel: string; currentTag: string; currentIcon: WorkflowEmailIconName };
+  facts: WorkflowEmailFact[];
+  /** Public layers: copy → send → sign strip, the link box and the caution note. */
+  share?: { url: string; copyHref: string; openHref: string; openLabel: string };
+  /** Signed-in layers: the one button and its sign-in hint. */
+  primaryAction?: { href: string; label: string; hint: string };
 }
 
-const EMAIL_FONT_STACK =
-  "Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif";
-const EMAIL_MONO_STACK =
-  "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
+export interface RenderedWorkflowEmail {
+  html: string;
+  /** Inline images the html points at with `cid:`. */
+  attachments: WorkflowEmailAttachment[];
+}
+
+const EMAIL_FONT_STACK = "'Segoe UI',Arial,Helvetica,sans-serif";
+const EMAIL_MONO_STACK = "Consolas,'Courier New',monospace";
+const EMAIL_ACCENT = "#0067C0";
+const EMAIL_DONE = "#107C41";
+const TABLE_ATTRS = `role="presentation" cellpadding="0" cellspacing="0" border="0"`;
+
+function spacer(height: number): string {
+  return `<tr><td height="${height}" style="height:${height}px;font-size:0;line-height:0">&nbsp;</td></tr>`;
+}
 
 /**
- * Shared shell for every workflow email. Table-based and inline-styled because
- * Outlook ignores most of anything else; the `@media` block only has to sharpen
- * what already reads acceptably at 584px.
+ * Shared shell for every workflow email, built to classic Outlook's rules:
+ * Outlook draws mail with Word, which ignores flex, grid, positioning, shadows,
+ * web fonts, `max-width` and SVG, and squares off rounded corners. So the layout
+ * is nested tables with sizes in attributes, corners are small enough that a
+ * square one still looks intended, icons are inline PNGs (cid:) that show
+ * without the "download pictures" prompt, and a ghost table pins the width to
+ * 600px in Outlook while other clients stay fluid down to phone width.
  */
-export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string {
-  const detailRows = params.details
-    .filter((detail) => String(detail.value).trim())
-    .map((detail) => `<tr>
-              <td class="stack" style="padding:10px 0 0;font-size:12px;line-height:18px;color:#6B7280;width:150px;vertical-align:top">${escapeHtml(detail.label)}</td>
-              <td class="stack" style="padding:10px 0;font-size:14px;line-height:20px;color:#111827;font-weight:600;vertical-align:top;word-break:break-word">${escapeHtml(String(detail.value))}</td>
-            </tr>`)
-    .join("");
+export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): RenderedWorkflowEmail {
+  const used = new Set<WorkflowEmailIconName>();
+  const icon = (name: WorkflowEmailIconName, alt = "", inline = false): string => {
+    used.add(name);
+    const { size } = WORKFLOW_EMAIL_ICONS[name];
+    const display = inline ? "display:inline-block;vertical-align:-2px" : "display:block";
+    return `<img src="cid:${name}" width="${size}" height="${size}" alt="${escapeHtml(alt)}" style="${display};width:${size}px;height:${size}px;border:0;outline:none;text-decoration:none">`;
+  };
+  const tile = (size: number, background: string, content: string, extra = ""): string =>
+    `<table ${TABLE_ATTRS} align="center" style="border-collapse:collapse"><tr><td width="${size}" height="${size}" align="center" valign="middle" bgcolor="${background}" style="width:${size}px;height:${size}px;border-radius:6px;${extra}">${content}</td></tr></table>`;
 
-  // The reference is the handle people quote back, so it gets its own badge
-  // above the details rather than sitting as one grey row among nine. Tables and
-  // inline styles, like the rest of the shell, because Outlook drops the
-  // alternatives.
-  const referenceHtml = (params.referenceNo ?? "").trim()
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;background:#EDF7FE;border:1px solid #D7ECFA;border-radius:8px">
-              <tr><td style="padding:9px 14px">
-                <div style="font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.08em">Reference no.</div>
-                <div style="margin-top:2px;font-size:20px;line-height:26px;font-weight:800;color:#005A9E;letter-spacing:0.02em">${escapeHtml(params.referenceNo!.trim())}</div>
-              </td></tr>
-            </table>`
+  const referenceNo = (params.referenceNo ?? "").trim();
+  const referenceHtml = referenceNo
+    ? `${spacer(14)}<tr><td align="center">
+              <table ${TABLE_ATTRS} style="border-collapse:collapse"><tr>
+                <td bgcolor="#F1F5F9" style="padding:6px 14px;border-radius:4px;font-size:14px;line-height:20px;font-weight:700;color:#0B4A80;white-space:nowrap">${icon("ref", "", true)}&nbsp;${escapeHtml(referenceNo)}</td>
+              </tr></table>
+            </td></tr>`
     : "";
 
-  const progressHtml = params.progress && params.progress.total > 1 && params.progress.total <= 12
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px"><tr>${
-      Array.from({ length: params.progress.total }, (_, index) => {
-        const done = index + 1 <= params.progress!.current;
-        return `<td style="padding-right:${index + 1 === params.progress!.total ? 0 : 4}px"><div style="height:6px;border-radius:999px;background:${done ? "#0078D4" : "#E1E8F0"};font-size:0;line-height:0">&nbsp;</div></td>`;
-      }).join("")
-    }</tr></table>`
+  let progressHtml = "";
+  const progress = params.progress;
+  if (progress && progress.total >= 2 && progress.total <= 6) {
+    const width = Math.floor(100 / progress.total);
+    const columns = Array.from({ length: progress.total }, (_, index) => {
+      const step = index + 1;
+      const done = step < progress.current;
+      const current = step === progress.current;
+      const badge = done
+        ? tile(40, EMAIL_DONE, icon("step-done", "Done"))
+        : current
+          ? tile(40, EMAIL_ACCENT, icon(progress.currentIcon))
+          : tile(38, "#FFFFFF", String(step), "border:1px solid #CBD5E1;font-size:15px;line-height:18px;font-weight:700;color:#5B6573");
+      const name = current ? progress.currentLabel : `Step ${step}`;
+      const tag = done ? "Done" : current ? progress.currentTag : "Waiting";
+      const colour = done ? "#0E6B38" : current ? "#0B4A80" : "#5B6573";
+      const tagColour = done ? "#0E6B38" : current ? EMAIL_ACCENT : "#5B6573";
+      const bar = done ? EMAIL_DONE : current ? EMAIL_ACCENT : "#E1E8F0";
+      return `<td width="${width}%" align="center" valign="top" style="padding:0 4px">
+                  <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse">
+                    <tr><td align="center">${badge}</td></tr>
+                    <tr><td align="center" style="padding-top:8px;font-size:13px;line-height:18px;font-weight:${current ? 700 : 600};color:${colour}">${escapeHtml(name)}</td></tr>
+                    <tr><td align="center" style="font-size:12px;line-height:16px;font-weight:${current ? 700 : 400};color:${tagColour}">${escapeHtml(tag)}</td></tr>
+                    <tr><td style="padding-top:8px"><table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse"><tr><td height="4" bgcolor="${bar}" style="height:4px;font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>
+                  </table>
+                </td>`;
+    }).join("");
+    progressHtml = `${spacer(24)}<tr><td><table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse;table-layout:fixed"><tr>${columns}</tr></table></td></tr>`;
+  } else if (progress && progress.total > 6) {
+    progressHtml = `${spacer(16)}<tr><td align="center" style="font-size:13px;line-height:18px;font-weight:600;color:#5B6573">Step ${progress.current} of ${progress.total}</td></tr>`;
+  }
+
+  const facts = params.facts.filter((fact) => fact.value.trim());
+  const factsHtml = facts.length
+    ? `${spacer(24)}<tr><td style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1;padding:12px 0">
+              <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse">
+                ${facts.map((fact, index) => `${index ? `<tr><td colspan="3" height="12" style="height:12px;font-size:0;line-height:0">&nbsp;</td></tr>` : ""}<tr>
+                  <td width="36" height="36" align="center" valign="middle" bgcolor="#F1F5F9" style="width:36px;height:36px;border-radius:4px">${icon(fact.icon, fact.label)}</td>
+                  <td width="14" style="width:14px;font-size:0;line-height:0">&nbsp;</td>
+                  <td valign="middle" style="font-size:15px;line-height:22px;font-weight:600;color:#111827;word-break:break-word">${escapeHtml(fact.value)}</td>
+                </tr>`).join("")}
+              </table>
+            </td></tr>`
     : "";
 
-  const instructionsHtml = params.instructions?.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;background:#F7FAFF;border:1px solid #E1E8F0;border-radius:12px">
-              <tr><td style="padding:18px 20px 6px;font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.06em">What you need to do</td></tr>
-              <tr><td style="padding:0 20px 18px">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                  ${params.instructions.map((step, index) => `<tr>
-                    <td style="padding:8px 10px 0 0;width:24px;vertical-align:top"><div style="width:22px;height:22px;border-radius:999px;background:#0078D4;color:#FFFFFF;font-size:12px;line-height:22px;font-weight:800;text-align:center">${index + 1}</div></td>
-                    <td style="padding:8px 0 0;font-size:14px;line-height:21px;color:#243B53">${escapeHtml(step)}</td>
-                  </tr>`).join("")}
-                </table>
-              </td></tr>
-            </table>`
-    : "";
+  // Outlook ignores padding on <a>, so the button's size comes from the cell's
+  // mso-padding-alt there and from the link's own padding everywhere else.
+  const button = (href: string, label: string): string =>
+    `<tr><td><table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse"><tr>
+              <td align="center" bgcolor="${EMAIL_ACCENT}" style="border-radius:6px;mso-padding-alt:15px 24px"><a href="${escapeHtml(href)}" style="display:block;padding:15px 24px;font-size:16px;line-height:22px;font-weight:700;color:#FFFFFF;text-decoration:none">${escapeHtml(label)}</a></td>
+            </tr></table></td></tr>`;
 
-  const shareHtml = params.shareLink
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0">
-              <tr><td style="padding:0 0 8px;font-size:12px;line-height:16px;font-weight:800;color:#0B4A80;text-transform:uppercase;letter-spacing:0.06em">Shareable review link</td></tr>
-              <tr><td style="padding:14px 16px;background:#F1F7FE;border:1px dashed #A9CDF0;border-radius:12px">
-                <a href="${escapeHtml(params.shareLink.url)}" style="font-family:${EMAIL_MONO_STACK};font-size:12px;line-height:19px;color:#0B4A80;text-decoration:none;word-break:break-all">${escapeHtml(params.shareLink.url)}</a>
-              </td></tr>
-            </table>`
-    : "";
+  let actionHtml = "";
+  if (params.share) {
+    const step = (name: WorkflowEmailIconName, label: string): string => `<td width="30%" align="center" valign="top">
+                  ${tile(38, "#FFFFFF", icon(name), "border:1px solid #D7E3F0")}
+                  <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse"><tr><td align="center" style="padding-top:8px;font-size:13px;line-height:18px;font-weight:600;color:#243B53">${label}</td></tr></table>
+                </td>`;
+    const arrow = `<td width="5%" align="center" valign="top" style="padding-top:10px;font-size:18px;line-height:18px;color:#94A3B8">&#8594;</td>`;
+    actionHtml = `${spacer(24)}<tr><td bgcolor="#F7FAFF" style="padding:16px 12px;border:1px solid #E1E8F0;border-radius:6px">
+              <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse;table-layout:fixed"><tr>
+                ${step("how-copy", "Copy link")}${arrow}${step("how-send", "Send to signer")}${arrow}${step("how-sign", "They sign")}
+              </tr></table>
+            </td></tr>
+            ${spacer(24)}<tr><td bgcolor="#F1F7FE" style="padding:12px 14px;border:1px dashed #A9CDF0;border-radius:6px;font-family:${EMAIL_MONO_STACK};font-size:12px;line-height:18px;word-break:break-all"><a href="${escapeHtml(params.share.url)}" style="color:#0B4A80;text-decoration:none">${escapeHtml(params.share.url)}</a></td></tr>
+            ${spacer(12)}${button(params.share.copyHref, "Copy link to share")}
+            <tr><td align="center" style="padding:12px 0;font-size:14px;line-height:20px;font-weight:600"><a href="${escapeHtml(params.share.openHref)}" style="color:${EMAIL_ACCENT};text-decoration:underline">${escapeHtml(params.share.openLabel)}</a></td></tr>
+            <tr><td bgcolor="#FFF7ED" style="padding:10px 14px;border:1px solid #FED7AA;border-radius:6px">
+              <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse"><tr>
+                <td width="18" valign="top" style="width:18px;padding-top:1px">${icon("caution", "Caution")}</td>
+                <td width="10" style="width:10px;font-size:0;line-height:0">&nbsp;</td>
+                <td valign="top" style="font-size:13px;line-height:19px;color:#7C2D12"><b>No sign-in needed</b> — anyone with this link can sign. Send it to one person only.</td>
+              </tr></table>
+            </td></tr>`;
+  } else if (params.primaryAction) {
+    actionHtml = `${spacer(24)}${button(params.primaryAction.href, params.primaryAction.label)}
+            ${spacer(12)}<tr><td align="center" style="font-size:13px;line-height:18px;color:#5B6573">${icon("lock", "", true)}&nbsp;${escapeHtml(params.primaryAction.hint)}</td></tr>`;
+  }
 
-  const primaryHtml = params.primaryAction
-    ? `<tr><td align="center" style="padding:22px 0 0">
-                <a class="btn" href="${escapeHtml(params.primaryAction.href)}" style="display:inline-block;background:#0078D4;color:#FFFFFF;padding:14px 30px;border-radius:10px;text-decoration:none;font-size:15px;line-height:20px;font-weight:700;box-shadow:0 2px 6px rgba(0,120,212,0.28)">${escapeHtml(params.primaryAction.label)}</a>
-              </td></tr>`
-    : "";
-
-  const secondaryHtml = params.secondaryAction
-    ? `<tr><td align="center" style="padding:12px 0 0;font-size:13px;line-height:19px;color:#6B7280">
-                <a href="${escapeHtml(params.secondaryAction.href)}" style="color:#0078D4;text-decoration:underline;font-weight:600">${escapeHtml(params.secondaryAction.label)}</a>
-              </td></tr>`
-    : "";
-
-  const noteHtml = params.note
-    ? `<tr><td style="padding:22px 0 0;font-size:12px;line-height:19px;color:#6B7280">${escapeHtml(params.note)}</td></tr>`
-    : "";
-
-  return `<!DOCTYPE html>
-<html lang="en">
+  const html = `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
+<meta name="x-apple-disable-message-reformatting">
 <title>${escapeHtml(params.title)}</title>
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<style>table,td,a,span,h1,b{font-family:'Segoe UI',Arial,sans-serif !important;}</style>
+<![endif]-->
 <style>
   @media only screen and (max-width:600px) {
-    .shell { padding:16px 10px !important; }
-    .pad { padding:22px 20px !important; }
-    .title { font-size:20px !important; line-height:27px !important; }
-    .stack { display:block !important; width:100% !important; padding-bottom:0 !important; }
-    .btn { display:block !important; width:auto !important; }
+    .shell { padding:16px 8px !important; }
+    .pad { padding-left:18px !important; padding-right:18px !important; }
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:#F3F6FA;font-family:${EMAIL_FONT_STACK};-webkit-font-smoothing:antialiased">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${escapeHtml(params.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F3F6FA">
+<body style="margin:0;padding:0;background:#EEF2F6;font-family:${EMAIL_FONT_STACK};-webkit-font-smoothing:antialiased">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">${escapeHtml(params.preheader)}</div>
+<table ${TABLE_ATTRS} width="100%" bgcolor="#EEF2F6" style="background:#EEF2F6;border-collapse:collapse">
   <tr>
     <td class="shell" align="center" style="padding:32px 16px">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#FFFFFF;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(17,24,39,0.06),0 12px 32px rgba(17,24,39,0.08)">
-        <tr><td style="height:4px;background:#0078D4;font-size:0;line-height:0">&nbsp;</td></tr>
+      <!--[if mso]><table ${TABLE_ATTRS} width="600" align="center"><tr><td width="600"><![endif]-->
+      <table ${TABLE_ATTRS} width="100%" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #DDE3EA;border-radius:6px;border-collapse:separate">
+        <tr><td height="4" bgcolor="${EMAIL_ACCENT}" style="height:4px;font-size:0;line-height:0">&nbsp;</td></tr>
         <tr>
-          <td class="pad" style="padding:22px 28px;border-bottom:1px solid #E5EAF1">
-            <div style="font-size:12px;line-height:16px;color:#0B4A80;font-weight:800;text-transform:uppercase;letter-spacing:0.08em">PMW OSHES Form</div>
-            <div style="margin-top:4px;font-size:13px;line-height:18px;color:#6B7280">Automated workflow notification</div>
+          <td class="pad" style="padding:16px 32px;border-bottom:1px solid #E5EAF1">
+            <table ${TABLE_ATTRS} style="border-collapse:collapse"><tr>
+              <td width="18" valign="middle" style="width:18px">${icon("brand")}</td>
+              <td width="8" style="width:8px;font-size:0;line-height:0">&nbsp;</td>
+              <td valign="middle" style="font-size:12px;line-height:16px;font-weight:700;letter-spacing:1px;color:#0B4A80">PMW OSHES</td>
+            </tr></table>
           </td>
         </tr>
         <tr>
-          <td class="pad" style="padding:28px">
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px">
-              <tr><td style="padding:6px 12px;font-size:11px;line-height:14px;font-weight:800;color:#1E40AF;text-transform:uppercase;letter-spacing:0.06em">${escapeHtml(params.statusLabel)}</td></tr>
-            </table>
-            <h1 class="title" style="margin:0 0 8px;font-size:23px;line-height:30px;color:#111827;font-weight:750">${escapeHtml(params.title)}</h1>
-            <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:#4B5563">${escapeHtml(params.subtitle)}</p>
-            ${referenceHtml}
-            ${progressHtml}
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #E5EAF1;border-bottom:1px solid #E5EAF1">
-              ${detailRows}
-            </table>
-            ${instructionsHtml}
-            ${shareHtml}
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              ${primaryHtml}
-              ${secondaryHtml}
-              ${noteHtml}
+          <td class="pad" align="center" style="padding:32px 32px 28px">
+            <table ${TABLE_ATTRS} width="100%" style="border-collapse:collapse">
+              <tr><td align="center">${tile(64, "#E6F0FA", icon(params.heroIcon), "border-radius:8px")}</td></tr>
+              ${spacer(14)}<tr><td align="center"><h1 style="margin:0;font-size:26px;line-height:32px;font-weight:700;color:#111827">${escapeHtml(params.title)}</h1></td></tr>
+              ${referenceHtml}
+              ${progressHtml}
+              ${factsHtml}
+              ${actionHtml}
             </table>
           </td>
         </tr>
         <tr>
-          <td class="pad" style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#6B7280">
-            This is an automated notification. Attachments, comments and the full audit history stay in PMW OSHES Forms.
-          </td>
+          <td class="pad" align="center" bgcolor="#F8FAFC" style="padding:14px 32px;border-top:1px solid #E5EAF1;font-size:12px;line-height:18px;color:#5B6573">Automated message from PMW OSHES · Files and history are in the portal</td>
         </tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td>
   </tr>
 </table>
 </body>
 </html>`;
+
+  const attachments: WorkflowEmailAttachment[] = [...used].map((name) => ({
+    name: `${name}.png`,
+    contentType: "image/png",
+    contentBytes: WORKFLOW_EMAIL_ICONS[name].data,
+    contentId: name,
+    isInline: true,
+  }));
+  return { html, attachments };
 }
 
 export function buildWorkflowActionEmail(
   params: WorkflowActionEmailParams,
 ): WorkflowEmailMessage {
   const isEvaluation = params.layerType === "evaluation";
-  const actionNoun = isEvaluation ? "evaluation review" : "approval";
-  const actionVerb = isEvaluation ? "review" : "approve";
-  const openLabel = isEvaluation ? "Open evaluation" : "Open approval";
+  const actionNoun = isEvaluation ? "evaluation" : "approval";
   const isPublic = params.authMode
     ? params.authMode === "public"
     : isPublicReviewLink(params.reviewLink);
   const submissionId = `#${params.responseItemId}`;
 
-  // The reference gets the badge under the subtitle and the subject suffix, so
-  // it is deliberately *not* repeated as a detail row. Both disappear on forms
-  // that do not issue references.
+  // The reference is the ID people search their mailbox for, so it rides in the
+  // subject and the badge. Both disappear on forms that do not issue references.
   const referenceNo = (params.referenceNo ?? "").trim();
-  const referenceSuffix = referenceNo ? ` [${referenceNo}]` : "";
+  const referenceSuffix = referenceNo ? ` · ${referenceNo}` : "";
+  const subjectLead = isPublic ? "Share to sign" : isEvaluation ? "To evaluate" : "To approve";
 
-  const details: WorkflowEmailDetail[] = [
-    { label: "Form", value: params.formTitle },
-    { label: "Submission ID", value: submissionId },
-    { label: "Submitted by", value: params.submittedBy },
-    { label: "Submitted on", value: formatSubmittedAt(params.submittedAt) },
-    { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers}` },
-    { label: "Step type", value: isEvaluation ? "Evaluation" : "Approval" },
-    {
-      label: "Action needed",
-      value: isEvaluation ? "Complete the evaluation" : "Approve or reject",
+  const rendered = renderWorkflowEmail({
+    // The line the inbox shows next to the subject.
+    preheader: isPublic
+      ? `${params.formTitle} ${referenceNo || submissionId}: pass the ${actionNoun} link to the signer.`
+      : `${params.formTitle} ${referenceNo || submissionId} is waiting for your ${actionNoun}.`,
+    title: isPublic
+      ? `Share the ${actionNoun} link`
+      : isEvaluation ? "Please evaluate" : "Please approve",
+    heroIcon: isPublic ? "hero-link" : isEvaluation ? "hero-evaluate" : "hero-approve",
+    referenceNo,
+    progress: {
+      current: params.layer,
+      total: params.totalLayers,
+      currentLabel: isEvaluation ? "Evaluate" : "Approve",
+      currentTag: isPublic ? "Now" : "Your step",
+      currentIcon: isEvaluation ? "step-evaluate" : "step-approve",
     },
-    {
-      label: "Access",
-      value: isPublic ? "Public link — no sign-in needed" : "PMW OSHES account sign-in",
-    },
-  ];
-
-  const instructions = isPublic
-    ? [
-      `Copy the review link below — use the "Copy review link" button if you would rather not select it by hand.`,
-      `Send the link to whoever must ${actionVerb} this submission. It opens without a sign-in, so they do not need a PMW OSHES account.`,
-      `They review the submission and record the decision. Whoever completes it is recorded against Layer ${params.layer}, and the workflow then moves on by itself.`,
-    ]
-    : [
-      `Open the ${isEvaluation ? "evaluation" : "approval"} with the button below and sign in with your PMW OSHES account.`,
-      "Check the submission details, earlier layers' decisions and any attachments.",
-      `Record your decision. Layer ${params.layer} of ${params.totalLayers} closes and the workflow moves to the next step automatically.`,
-    ];
+    facts: [
+      { icon: "fact-form", label: "Form", value: params.formTitle },
+      { icon: "fact-user", label: "Submitted by", value: params.submittedBy },
+      { icon: "fact-clock", label: "Submitted on", value: formatSubmittedAt(params.submittedAt) },
+    ],
+    ...(isPublic
+      ? {
+        share: {
+          url: params.reviewLink,
+          copyHref: buildShareLinkUrl(params.reviewLink),
+          openHref: params.reviewLink,
+          openLabel: "Or open it myself",
+        },
+      }
+      : {
+        primaryAction: {
+          href: params.reviewLink,
+          label: `Open ${actionNoun} →`,
+          hint: "Sign in with your PMW account",
+        },
+      }),
+  });
 
   return {
     to: toRecipientList(params.recipient),
-    subject: isPublic
-      ? `Action required: share the ${actionNoun} link for ${params.formTitle}${referenceSuffix}`
-      : `Action required: ${params.formTitle} needs your ${actionNoun}${referenceSuffix}`,
-    body: renderWorkflowEmail({
-      // The preheader is the line the inbox shows next to the subject, so it
-      // leads with the reference where there is one and only falls back to the
-      // item id where there is not.
-      preheader: isPublic
-        ? `${params.formTitle} ${referenceNo || submissionId} needs its ${actionNoun} link passed on.`
-        : `${params.formTitle} ${referenceNo || submissionId} is waiting for your ${actionNoun}.`,
-      statusLabel: "Action required",
-      referenceNo,
-      title: isPublic
-        ? `${params.formTitle} needs an ${actionNoun}`
-        : `${params.formTitle} needs your ${actionNoun}`,
-      subtitle: isPublic
-        ? `This step is reached through a link that anyone can open, so it can be passed to the right person.`
-        : `A submission is waiting for you to ${actionVerb} it.`,
-      progress: { current: params.layer, total: params.totalLayers },
-      details,
-      instructions,
-      ...(isPublic
-        ? {
-          shareLink: {
-            url: params.reviewLink,
-            href: buildShareLinkUrl(params.reviewLink),
-          },
-          primaryAction: {
-            href: buildShareLinkUrl(params.reviewLink),
-            label: "Copy review link",
-          },
-          secondaryAction: { href: params.reviewLink, label: `${openLabel} myself` },
-        }
-        : {
-          primaryAction: { href: params.reviewLink, label: openLabel },
-        }),
-      note: isPublic
-        ? "Anyone holding this link can complete the step, so share it only with the person who should sign."
-        : "Only the assigned reviewer or an authorised superuser should act on this workflow step.",
-    }),
+    subject: `${subjectLead}: ${params.formTitle}${referenceSuffix}`,
+    body: rendered.html,
+    attachments: rendered.attachments,
   };
 }
 

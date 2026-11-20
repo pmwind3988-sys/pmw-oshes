@@ -2,6 +2,7 @@ import { validateApiKey, setCorsHeaders } from "./_utils/auth.js";
 import { getGraphToken, queryListItemById } from "./_utils/graphClient.js";
 import { logError, logWarn } from "./_utils/logger.js";
 import {
+  buildWorkflowActionEmail,
   deliverWorkflowEmail,
   resolveOshesFormSender,
   sendGraphEmail,
@@ -41,6 +42,45 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+interface LayerEmailFacts {
+  formTitle: string;
+  submittedBy: string;
+  totalLayers: number;
+  layerType: "approval" | "evaluation";
+  reviewLink: string;
+  authMode: "365" | "public";
+  submittedAt?: string;
+  referenceNo?: string;
+}
+
+/**
+ * The facts of a layer notice from the signed-in browser. The server draws the
+ * email from them with the same template as every other layer email, so the
+ * browser cannot send a different design. Anything malformed returns null and
+ * the caller's own subject and body are used instead.
+ */
+function readLayerEmailFacts(value: unknown): LayerEmailFacts | null {
+  if (!isRecord(value)) return null;
+  const text = (field: unknown) => (typeof field === "string" ? field.trim() : "");
+  const formTitle = text(value.formTitle);
+  const reviewLink = text(value.reviewLink);
+  const totalLayers = value.totalLayers;
+  if (!formTitle || !/^https?:\/\//i.test(reviewLink)) return null;
+  if (typeof totalLayers !== "number" || !Number.isInteger(totalLayers) || totalLayers < 1) return null;
+  if (value.layerType !== "approval" && value.layerType !== "evaluation") return null;
+  if (value.authMode !== "365" && value.authMode !== "public") return null;
+  return {
+    formTitle,
+    submittedBy: text(value.submittedBy),
+    totalLayers,
+    layerType: value.layerType,
+    reviewLink,
+    authMode: value.authMode,
+    submittedAt: text(value.submittedAt) || undefined,
+    referenceNo: text(value.referenceNo) || undefined,
+  };
+}
+
 interface ApiRequest {
   body: Record<string, unknown>;
   method: string;
@@ -63,7 +103,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   if (!auth.valid) return res.status(401).json({ error: auth.reason });
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { to, subject, body, workflow, row, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
+  const { to, subject, body, workflow, layerEmail, row, sendToConfiguredSender, attachments, testTicket, slug } = req.body as Record<string, unknown>;
   const configuredSender = resolveOshesFormSender();
 
   // A manual-paper workflow has no online reviewer to address, so it is sent to the
@@ -90,12 +130,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments.map(normalizeAttachment).filter((attachment): attachment is WorkflowEmailAttachment => attachment !== null)
       : [];
-    const message = {
-      to: recipients,
-      subject,
-      body,
-      ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
-    };
     // The context is rebuilt field by field rather than cast from the request:
     // `WorkflowEmailContext.testRun` must only ever be set by this server.
     const workflowFields = isRecord(workflow) ? workflow : null;
@@ -110,6 +144,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           layer: workflowFields.layer,
         }
         : null;
+    // A layer notice is drawn here from its facts; only a manual-paper send to
+    // the configured mailbox keeps the caller's own body.
+    const layerFacts = context && sendToConfiguredSender !== true ? readLayerEmailFacts(layerEmail) : null;
+    const message = layerFacts && context
+      ? buildWorkflowActionEmail({
+        ...layerFacts,
+        recipient: recipients,
+        responseItemId: context.responseItemId,
+        layer: context.layer,
+      })
+      : {
+        to: recipients,
+        subject,
+        body,
+        ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
+      };
 
     // Whether this mail belongs to a test run is read off the response row the
     // caller names — never taken from the request — so a decision made from an

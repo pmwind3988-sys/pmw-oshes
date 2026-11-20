@@ -1377,6 +1377,22 @@ interface EmailParams {
     layer: number;
   };
   /**
+   * The facts of a layer notice. When present the server draws the email
+   * itself from its one layer-email template (with its inline icons), so a
+   * signed-in submission and a public one send the same design; `subject` and
+   * `body` stay as a fallback for a server that predates this field.
+   */
+  layerEmail?: {
+    formTitle: string;
+    submittedBy: string;
+    totalLayers: number;
+    layerType: 'approval' | 'evaluation';
+    reviewLink: string;
+    authMode: '365' | 'public';
+    submittedAt?: string;
+    referenceNo?: string;
+  };
+  /**
    * The response row a mail that is not a layer notice is about (the
    * submitter's approved / not approved notice). The server reads it back to
    * decide whether the mail belongs to a test run; nothing is logged against a
@@ -1397,7 +1413,7 @@ interface EmailParams {
 /**
  * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
  */
-export async function sendSpEmail(_token: string, { to, subject, body, workflow, row, testRun }: EmailParams): Promise<void> {
+export async function sendSpEmail(_token: string, { to, subject, body, workflow, layerEmail, row, testRun }: EmailParams): Promise<void> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -1413,6 +1429,7 @@ export async function sendSpEmail(_token: string, { to, subject, body, workflow,
       subject,
       body,
       workflow,
+      ...(layerEmail ? { layerEmail } : {}),
       row,
       ...(testRun ? { testTicket: testRun.ticket, slug: testRun.slug } : {}),
     }),
@@ -1689,6 +1706,16 @@ export async function triggerApprovalNotification(
   const submittedAtIso = action === 'submit' ? new Date().toISOString() : '';
   const submittedOn = submittedAtIso ? formatEmailTimestamp(submittedAtIso) : '';
   const isPublicStep = nextLayerAuthMode === 'public';
+  const layerEmailFacts: EmailParams['layerEmail'] = {
+    formTitle,
+    submittedBy,
+    totalLayers,
+    layerType: nextLayerType,
+    reviewLink: requestLink,
+    authMode: isPublicStep ? 'public' : '365',
+    ...(submittedAtIso ? { submittedAt: submittedAtIso } : {}),
+    ...(referenceNo ? { referenceNo } : {}),
+  };
   const openLabel = nextLayerType === 'evaluation' ? 'Open evaluation' : 'Open approval';
   // A public step is usually addressed to a shared mailbox whose watchers are
   // not the ones who sign — the link opens without an account so it can be
@@ -1774,6 +1801,7 @@ export async function triggerApprovalNotification(
             responseItemId,
             layer,
           },
+          layerEmail: layerEmailFacts,
           body: emailBody({
             title: isPublicStep
               ? `${formTitle} needs an ${nextActionNoun}`
@@ -1822,6 +1850,7 @@ export async function triggerApprovalNotification(
             responseItemId,
             layer: displayNextLayerNumber,
           },
+          layerEmail: layerEmailFacts,
           body: emailBody({
             title: isPublicStep
               ? `${formTitle} is ready for its ${nextActionNoun}`
